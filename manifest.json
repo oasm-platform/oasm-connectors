@@ -1,0 +1,31 @@
+{
+  "generatedAt": "2026-08-22T02:52:27.8828565Z",
+  "connectors": [
+    {
+      "name": "nuclei",
+      "version": "3.3.0",
+      "image": "ghcr.io/open-asm/connector-nuclei:3.3.0",
+      "capabilities": [
+        "vulnerabilities"
+      ],
+      "inputsSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "type": "object"
+      },
+      "resourceDefaults": {
+        "cpu": "500m",
+        "memory": "512Mi",
+        "timeoutSeconds": 600
+      }
+    }
+  ]
+}

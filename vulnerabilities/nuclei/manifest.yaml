@@ -1,0 +1,17 @@
+# connector image (SDK+tool) — built from ./Dockerfile, not upstream image
+name: nuclei
+version: 3.3.0
+image: ghcr.io/open-asm/connector-nuclei:3.3.0
+capabilities: [vulnerabilities]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+  additionalProperties: false
+resourceDefaults:
+  cpu: 500m
+  memory: 512Mi
+  timeoutSeconds: 600
