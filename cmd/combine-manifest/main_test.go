@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -72,5 +74,69 @@ func TestRunDetectsDuplicateNames(t *testing.T) {
 	writeManifest(t, filepath.Join(root, "discovery", "a"), validYAML)
 	if err := run(root, out); err == nil {
 		t.Fatal("expected duplicate-name error")
+	}
+}
+
+// pngBytes is a small non-empty payload with PNG magic for realism; content
+// beyond the magic bytes is irrelevant to the embedding logic.
+var pngBytes = append([]byte{0x89}, []byte("PNG\r\n\x1a\nfake-image-data")...)
+
+func TestRunEmbedsLogoBase64(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "vulnerabilities", "nuclei")
+	writeManifest(t, dir, validYAML)
+	logoPath := filepath.Join(dir, "logo.png")
+	if err := os.WriteFile(logoPath, pngBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(root, "manifest.json")
+	if err := run(root, out); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Connectors []map[string]any `json:"connectors"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Connectors) != 1 {
+		t.Fatalf("expected 1 connector, got %d", len(doc.Connectors))
+	}
+	want := base64.StdEncoding.EncodeToString(pngBytes)
+	got, ok := doc.Connectors[0]["logo"].(string)
+	if !ok {
+		t.Fatalf("connector object has no string \"logo\" key: %v", doc.Connectors[0])
+	}
+	if got != want {
+		t.Fatalf("logo mismatch:\n got  %q\n want %q", got, want)
+	}
+}
+
+func TestRunOmitsLogoWhenMissing(t *testing.T) {
+	root := t.TempDir()
+	writeManifest(t, filepath.Join(root, "vulnerabilities", "nuclei"), validYAML)
+	out := filepath.Join(root, "manifest.json")
+	if err := run(root, out); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Connectors []map[string]any `json:"connectors"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Connectors) != 1 {
+		t.Fatalf("expected 1 connector, got %d", len(doc.Connectors))
+	}
+	if v, present := doc.Connectors[0]["logo"]; present {
+		t.Fatalf("expected no \"logo\" key when logo.png absent, got %q", v)
 	}
 }

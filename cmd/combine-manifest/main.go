@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -27,6 +28,10 @@ type Manifest struct {
 	Capabilities     []string       `yaml:"capabilities"  json:"capabilities"`
 	InputsSchema     map[string]any `yaml:"inputsSchema,omitempty"     json:"inputsSchema,omitempty"`
 	ResourceDefaults map[string]any `yaml:"resourceDefaults,omitempty" json:"resourceDefaults,omitempty"`
+	// Logo is the base64-encoded logo.png sitting next to manifest.yaml.
+	// yaml:"-" keeps "logo:" in manifest.yaml an unknown-field error; the
+	// image itself never lives in YAML.
+	Logo string `yaml:"-" json:"logo,omitempty"`
 }
 
 var (
@@ -110,6 +115,13 @@ func loadManifest(path string) (*Manifest, error) {
 	}
 	if err := validate(&m, path); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if logoPath := filepath.Join(filepath.Dir(path), "logo.png"); fileExists(logoPath) {
+		logo, err := os.ReadFile(logoPath)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", logoPath, err)
+		}
+		m.Logo = base64.StdEncoding.EncodeToString(logo)
 	}
 	return &m, nil
 }

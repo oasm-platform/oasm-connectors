@@ -1,0 +1,51 @@
+version: '3'
+
+vars:
+  GO:
+    sh: echo ${GO:-go}
+  PROTO_DIR:
+    sh: echo ${PROTO_DIR:-proto}
+
+tasks:
+  proto:
+    desc: generate protobuf stubs (requires buf or protoc)
+    # ponytail: no proto files yet, stub target — keep mkdir until real buf/protoc generation is wired
+    cmds:
+      - 'echo "proto: ponytail - no proto files yet, stub target"'
+      - 'mkdir -p {{.PROTO_DIR}}'
+    silent: true
+
+  test:
+    desc: run all tests
+    cmds:
+      - '{{.GO}} test ./... -v -count=1'
+
+  build:
+    desc: compile check
+    cmds:
+      - '{{.GO}} build ./...'
+
+  vet:
+    desc: go vet
+    cmds:
+      - '{{.GO}} vet ./...'
+
+  fmt:
+    desc: format
+    cmds:
+      - '{{.GO}} fmt ./...'
+
+  tidy:
+    desc: tidy modules
+    cmds:
+      - '{{.GO}} mod tidy'
+
+  manifest:
+    desc: regenerate manifest.json from <category>/<connector>/manifest.yaml
+    cmds:
+      - '{{.GO}} run ./cmd/combine-manifest -root .'
+
+  default:
+    desc: default task (runs test)
+    deps: [test]
+    silent: true

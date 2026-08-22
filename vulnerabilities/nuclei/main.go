@@ -10,8 +10,7 @@ import (
 )
 
 func main() {
-	adapter := &NucleiAdapter{}
-	_ = os.Getenv("NUCLEI_BIN") // ponytail: BinPath wiring when exec is added; kept for parity with spec sketch
+	adapter := &NucleiAdapter{} // binary path comes from NUCLEI_BIN at Execute time
 	conn := sdkconn.New(adapter)
 	rt := runtime.New(conn)
 	// ponytail: real main would Dial worker via transport.Dial + lifecycle Connect/Ready/Run with signal handling
