@@ -24,6 +24,8 @@ func writeManifest(t *testing.T, dir, content string) string {
 const validYAML = `name: nuclei
 version: 3.3.0
 image: ghcr.io/open-asm/connector-nuclei:3.3.0
+shortDescription: "Fast template-based vulnerability scanner"
+description: "Runs ProjectDiscovery Nuclei template-based scans against a target URL."
 capabilities: [vulnerabilities]
 `
 
@@ -56,6 +58,72 @@ func TestValidateRejectsBadName(t *testing.T) {
 	m := &Manifest{Name: "Bad_Name!", Version: "1.0.0", Image: "x", Capabilities: []string{"c"}}
 	if err := validate(m, "test"); err == nil {
 		t.Fatal("expected error for bad name")
+	}
+}
+
+func TestValidateRejectsMissingDescription(t *testing.T) {
+	m := &Manifest{Name: "nuclei", Version: "3.3.0", Image: "x",
+		ShortDescription: "short", Capabilities: []string{"vulnerabilities"}}
+	err := validate(m, "test")
+	if err == nil {
+		t.Fatal("expected error for missing description")
+	}
+	if !strings.Contains(err.Error(), "description required") {
+		t.Fatalf("expected error mentioning description required, got %q", err.Error())
+	}
+}
+
+func TestValidateRejectsMissingShortDescription(t *testing.T) {
+	m := &Manifest{Name: "nuclei", Version: "3.3.0", Image: "x",
+		Description: "long description", Capabilities: []string{"vulnerabilities"}}
+	err := validate(m, "test")
+	if err == nil {
+		t.Fatal("expected error for missing shortDescription")
+	}
+	if !strings.Contains(err.Error(), "shortDescription required") {
+		t.Fatalf("expected error mentioning shortDescription required, got %q", err.Error())
+	}
+}
+
+// TestLoadAndRunEmitDescriptions proves loadManifest parses both description
+// fields and run() emits them as JSON keys on each connector object.
+func TestLoadAndRunEmitDescriptions(t *testing.T) {
+	root := t.TempDir()
+	writeManifest(t, filepath.Join(root, "vulnerabilities", "nuclei"), validYAML)
+
+	m, err := loadManifest(filepath.Join(root, "vulnerabilities", "nuclei", "manifest.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.ShortDescription != "Fast template-based vulnerability scanner" {
+		t.Fatalf("ShortDescription not parsed: %q", m.ShortDescription)
+	}
+	if m.Description != "Runs ProjectDiscovery Nuclei template-based scans against a target URL." {
+		t.Fatalf("Description not parsed: %q", m.Description)
+	}
+
+	out := filepath.Join(root, "manifest.json")
+	if err := run(root, out); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Connectors []map[string]any `json:"connectors"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Connectors) != 1 {
+		t.Fatalf("expected 1 connector, got %d", len(doc.Connectors))
+	}
+	for _, key := range []string{"description", "shortDescription"} {
+		v, ok := doc.Connectors[0][key].(string)
+		if !ok || v == "" {
+			t.Fatalf("connector object missing non-empty %q key: %v", key, doc.Connectors[0])
+		}
 	}
 }
 

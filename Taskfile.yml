@@ -20,11 +20,6 @@ tasks:
     cmds:
       - '{{.GO}} test ./... -v -count=1'
 
-  build:
-    desc: compile check
-    cmds:
-      - '{{.GO}} build ./...'
-
   vet:
     desc: go vet
     cmds:

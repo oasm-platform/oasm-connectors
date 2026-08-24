@@ -25,6 +25,8 @@ type Manifest struct {
 	Name             string         `yaml:"name"          json:"name"`
 	Version          string         `yaml:"version"       json:"version"`
 	Image            string         `yaml:"image"         json:"image"`
+	ShortDescription string         `yaml:"shortDescription" json:"shortDescription"`
+	Description      string         `yaml:"description"      json:"description"`
 	Capabilities     []string       `yaml:"capabilities"  json:"capabilities"`
 	InputsSchema     map[string]any `yaml:"inputsSchema,omitempty"     json:"inputsSchema,omitempty"`
 	ResourceDefaults map[string]any `yaml:"resourceDefaults,omitempty" json:"resourceDefaults,omitempty"`
@@ -51,6 +53,12 @@ func validate(m *Manifest, path string) error {
 	}
 	if m.Image == "" {
 		return fmt.Errorf("image required")
+	}
+	if m.ShortDescription == "" {
+		return fmt.Errorf("shortDescription required")
+	}
+	if m.Description == "" {
+		return fmt.Errorf("description required")
 	}
 	if len(m.Capabilities) == 0 {
 		return fmt.Errorf("at least one capability required")

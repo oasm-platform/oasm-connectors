@@ -2,6 +2,8 @@
 name: nuclei
 version: 3.3.0
 image: ghcr.io/open-asm/connector-nuclei:3.3.0
+shortDescription: "Fast template-based vulnerability scanner"
+description: "Runs ProjectDiscovery Nuclei template-based scans against a target URL to detect known vulnerabilities, misconfigurations, and exposed secrets."
 capabilities: [vulnerabilities]
 inputsSchema:
   type: object

@@ -1,0 +1,18 @@
+name: wpscan
+version: 3.8.25
+image: ghcr.io/open-asm/connector-wpscan:3.8.25
+shortDescription: "WordPress vulnerability scanner"
+description: "Scans WordPress sites using WPScan to enumerate vulnerable plugins and themes, detect known CVEs, misconfigurations, and weak credentials."
+capabilities: [vulnerabilities]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+  additionalProperties: false
+resourceDefaults:
+  cpu: 500m
+  memory: 512Mi
+  timeoutSeconds: 600
