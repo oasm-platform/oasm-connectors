@@ -22,9 +22,14 @@ import (
 // Manifest mirrors manifest.yaml. Unknown fields are rejected (parity with
 // additionalProperties:false in the old TS schema).
 type Manifest struct {
-	Name             string         `yaml:"name"          json:"name"`
+	Name string `yaml:"name"          json:"name"`
+	// Slug is the system-wide unique identifier (lowercase, [a-z0-9-]).
+	// Name is the human display name and may contain spaces/uppercase.
+	Slug             string         `yaml:"slug"          json:"slug"`
 	Version          string         `yaml:"version"       json:"version"`
 	Image            string         `yaml:"image"         json:"image"`
+	Author           string         `yaml:"author"        json:"author"`
+	License          string         `yaml:"license"       json:"license"`
 	ShortDescription string         `yaml:"shortDescription" json:"shortDescription"`
 	Description      string         `yaml:"description"      json:"description"`
 	Capabilities     []string       `yaml:"capabilities"  json:"capabilities"`
@@ -45,8 +50,14 @@ var (
 )
 
 func validate(m *Manifest, path string) error {
-	if !nameRe.MatchString(m.Name) {
-		return fmt.Errorf("invalid name %q (must match ^[a-z0-9-]+$)", m.Name)
+	if strings.TrimSpace(m.Name) == "" {
+		return fmt.Errorf("name required")
+	}
+	if m.Slug == "" {
+		return fmt.Errorf("slug required")
+	}
+	if !nameRe.MatchString(m.Slug) {
+		return fmt.Errorf("invalid slug %q (must match ^[a-z0-9-]+$)", m.Slug)
 	}
 	if m.Version == "" {
 		return fmt.Errorf("version required")
@@ -67,6 +78,12 @@ func validate(m *Manifest, path string) error {
 		if c == "" {
 			return fmt.Errorf("empty capability")
 		}
+	}
+	if m.Author == "" {
+		return fmt.Errorf("author required")
+	}
+	if m.License == "" {
+		return fmt.Errorf("license required")
 	}
 	return nil
 }
@@ -151,10 +168,10 @@ func run(root, out string) error {
 		if err != nil {
 			return err
 		}
-		if prev, dup := seen[m.Name]; dup {
-			return fmt.Errorf("duplicate connector name %q in %s and %s", m.Name, prev, p)
+		if prev, dup := seen[m.Slug]; dup {
+			return fmt.Errorf("duplicate connector slug %q in %s and %s", m.Slug, prev, p)
 		}
-		seen[m.Name] = p
+		seen[m.Slug] = p
 		connectors = append(connectors, m)
 	}
 	sort.Slice(connectors, func(i, j int) bool { return connectors[i].Name < connectors[j].Name })

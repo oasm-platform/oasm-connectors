@@ -1,10 +1,13 @@
 {
-  "generatedAt": "2026-08-24T03:39:19.1926635Z",
+  "generatedAt": "2026-08-24T13:35:57.223098Z",
   "connectors": [
     {
-      "name": "nuclei",
+      "name": "Nuclei",
+      "slug": "nuclei",
       "version": "3.3.0",
       "image": "ghcr.io/open-asm/connector-nuclei:3.3.0",
+      "author": "oasm",
+      "license": "free",
       "shortDescription": "Fast template-based vulnerability scanner",
       "description": "Runs ProjectDiscovery Nuclei template-based scans against a target URL to detect known vulnerabilities, misconfigurations, and exposed secrets.",
       "capabilities": [
@@ -32,8 +35,11 @@
     },
     {
       "name": "wpscan",
+      "slug": "wpscan",
       "version": "3.8.25",
       "image": "ghcr.io/open-asm/connector-wpscan:3.8.25",
+      "author": "oasm",
+      "license": "free",
       "shortDescription": "WordPress vulnerability scanner",
       "description": "Scans WordPress sites using WPScan to enumerate vulnerable plugins and themes, detect known CVEs, misconfigurations, and weak credentials.",
       "capabilities": [

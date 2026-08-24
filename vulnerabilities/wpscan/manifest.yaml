@@ -1,8 +1,11 @@
-name: wpscan
+name: WPScan - WordPress Security Scanner
+slug: wpscan
 version: 3.8.25
 image: ghcr.io/open-asm/connector-wpscan:3.8.25
-shortDescription: "WordPress vulnerability scanner"
-description: "Scans WordPress sites using WPScan to enumerate vulnerable plugins and themes, detect known CVEs, misconfigurations, and weak credentials."
+author: 'oasm'
+license: free
+shortDescription: 'WordPress vulnerability scanner'
+description: 'Scans WordPress sites using WPScan to enumerate vulnerable plugins and themes, detect known CVEs, misconfigurations, and weak credentials.'
 capabilities: [vulnerabilities]
 inputsSchema:
   type: object
