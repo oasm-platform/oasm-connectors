@@ -6,26 +6,41 @@ OASM Connectors is the execution edge of the [OASM (Open Attack Surface Manageme
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    subgraph BT["Build time — task manifest"]
+        MY["&lt;category&gt;/&lt;connector&gt;/manifest.yaml<br>+ logo.png"] --> CM["cmd/combine-manifest<br>validate · base64(logo.png) · sort"]
+        CM --> MJ["manifest.json"]
+    end
+
+    subgraph CC["Connector container"]
+        direction LR
+        SDK["Connector SDK<br>runtime.Runtime · Adapter.Execute"] --> TOOL["Security tool<br>e.g. nuclei -target &lt;uri&gt; -jsonl"]
+    end
+
+    subgraph PLT["Core platform"]
+        direction LR
+        CORE["Core"]
+        WK["Worker"]
+        DR["DockerRuntime"]
+    end
+
+    MJ -- "Core reads" --> CORE
+    CORE -- "ExecutionCommand spec{image, inputs}" --> WK
+    WK -- "pull ghcr.io/open-asm/connector-*" --> DR
+    DR -- "docker.sock" --> SDK
+    TOOL -. "JSONL findings" .-> SDK
+    SDK -. "gRPC bidi stream<br>WORKER_URL / WORKER_TOKEN" .-> WK
+    WK -. "persist findings" .-> CORE
 ```
-┌──────┐      manifest.json       ┌────────┐  ExecutionCommand{spec{image,inputs}}   ┌───────────────┐  docker.sock  ┌─────────────────────────┐
-│ Core │ ────────────────────────>│ Worker │ ──────────────────────────────────────> │ DockerRuntime │ ───────────> │ Connector Container     │
-│      │  aggregated, generated   │        │                                         │               │              │  ┌───────────────────┐  │
-│      │  from <cat>/<conn>/     │        │  image: ghcr.io/open-asm/connector-xxx  │  pull & run   │              │  │ Connector SDK     │  │
-│      │  manifest.yaml + logo.png│        │  inputs: {target: "https://..."}       │               │              │  │  runtime.Runtime  │  │
-└──────┘                          └───┬────┘                                         └───────────────┘              │  │  Adapter.Execute  │──┼──> tool (e.g. nuclei -target <uri> -jsonl)
-                                      │  stream back (gRPC bidi)                                                       │  │  Emit JSONL ──────┼──> Worker ──> Core persist
-                                      │<──────────────────────────────────────────────────────────────────────────────│  └───────────────────┘  │
-                                      └───────────────────────────────────────────────────────────────────────────────└─────────────────────────┘
 
 Flow:
-  1. At build time cmd/combine-manifest discovers every <category>/<connector>/manifest.yaml,
-     validates it, base64-encodes the sibling logo.png, sorts by name, and writes manifest.json.
-  2. Core reads manifest.json to know which connectors exist, their images, capabilities, and JSON Schemas.
-  3. Core sends an ExecutionCommand to Worker containing spec{image, inputs}.
-  4. Worker pulls the image and starts it via DockerRuntime over docker.sock.
-  5. Inside the container the SDK runtime dials Worker (WORKER_URL, WORKER_TOKEN) and
-     dispatches work to Adapter.Execute; findings stream back over gRPC and are persisted by Core.
-```
+
+1. At build time `cmd/combine-manifest` discovers every `<category>/<connector>/manifest.yaml`, validates it, base64-encodes the sibling `logo.png`, sorts by name, and writes `manifest.json`.
+2. Core reads `manifest.json` to know which connectors exist, their images, capabilities, and JSON Schemas.
+3. Core sends an ExecutionCommand to Worker containing spec{image, inputs}.
+4. Worker pulls the image and starts it via DockerRuntime over docker.sock.
+5. Inside the container the SDK runtime dials Worker (`WORKER_URL`, `WORKER_TOKEN`) and dispatches work to Adapter.Execute; findings stream back over gRPC and are persisted by Core.
 
 > `ponytail:` `sdk/runtime.Runtime.Run` currently blocks on `ctx.Done()` — the real Worker bidi dial and command/event multiplexing lands when the Worker proto is finalized. `proto/` and `task proto` are stubs until then.
 
