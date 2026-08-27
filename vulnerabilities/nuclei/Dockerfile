@@ -1,11 +1,13 @@
-# connector image (SDK+tool) — built from ./Dockerfile, not upstream image
+# connector image (SDK+tool) — build context: repo root
 FROM projectdiscovery/nuclei:3.3.0 AS tool
-FROM golang:1.22-alpine AS builder
+FROM golang:1.26-alpine AS builder
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o /out/connector ./vulnerabilities/nuclei
+COPY sdk/go.mod sdk/go.sum sdk/
+COPY vulnerabilities/nuclei/go.mod vulnerabilities/nuclei/go.sum vulnerabilities/nuclei/
+RUN cd vulnerabilities/nuclei && GOWORK=off go mod download
+COPY sdk/ sdk/
+COPY vulnerabilities/nuclei/ vulnerabilities/nuclei/
+RUN cd vulnerabilities/nuclei && CGO_ENABLED=0 GOWORK=off go build -trimpath -o /out/connector .
 FROM alpine:3.20
 COPY --from=tool /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /out/connector /usr/local/bin/connector
