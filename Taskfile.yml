@@ -5,6 +5,11 @@ vars:
     sh: echo ${GO:-go}
   PROTO_DIR:
     sh: echo ${PROTO_DIR:-proto}
+  MODULES:
+    - '.'
+    - './sdk'
+    - './vulnerabilities/nuclei'
+    - './vulnerabilities/wpscan'
 
 tasks:
   proto:
@@ -18,22 +23,30 @@ tasks:
   test:
     desc: run all tests
     cmds:
-      - '{{.GO}} test ./... -v -count=1'
+      - for:
+          var: MODULES
+        cmd: 'cd {{.ITEM}} && {{.GO}} test ./... -v -count=1'
 
   vet:
     desc: go vet
     cmds:
-      - '{{.GO}} vet ./...'
+      - for:
+          var: MODULES
+        cmd: 'cd {{.ITEM}} && {{.GO}} vet ./...'
 
   fmt:
     desc: format
     cmds:
-      - '{{.GO}} fmt ./...'
+      - for:
+          var: MODULES
+        cmd: 'cd {{.ITEM}} && {{.GO}} fmt ./...'
 
   tidy:
     desc: tidy modules
     cmds:
-      - '{{.GO}} mod tidy'
+      - for:
+          var: MODULES
+        cmd: 'cd {{.ITEM}} && GOWORK=off {{.GO}} mod tidy'
 
   manifest:
     desc: regenerate manifest.json from <category>/<connector>/manifest.yaml
