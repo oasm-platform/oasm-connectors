@@ -1,2 +1,3 @@
 *.exe
 .omo/
+vulnerabilities/nessus/nessus

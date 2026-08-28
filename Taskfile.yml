@@ -9,6 +9,7 @@ vars:
     - '.'
     - './sdk'
     - './vulnerabilities/nuclei'
+    - './vulnerabilities/nessus'
     - './vulnerabilities/wpscan'
 
 tasks:
