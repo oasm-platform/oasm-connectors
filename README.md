@@ -43,18 +43,29 @@ Flow:
 
 ## Prerequisites
 
-Go 1.22+, [Task](https://taskfile.dev) 3.x, Docker 20.10+ (only for building/running connector images). `buf`/`protoc` only when editing `.proto` files.
+Go 1.26+, [Task](https://taskfile.dev) 3.x, Docker 20.10+ (only for building/running connector images). `buf`/`protoc` only when editing `.proto` files.
 
 ## Quick Start
 
 ```bash
 git clone https://github.com/open-asm/oasm-connectors.git && cd oasm-connectors
-task build      # compile check (go build ./...)
-task test       # go test ./... -v -count=1
+go build ./...  # compile check (root module)
+task test       # go test ./... -v -count=1 (all four modules)
 task manifest   # regenerate manifest.json from all manifest.yaml files
 ```
 
 All tasks are thin wrappers over `go` — run the equivalent command directly if you prefer.
+
+### Repository layout
+
+This is a multi-module Go monorepo:
+
+- The root module owns `cmd/combine-manifest` (yaml-only).
+- `sdk/` is its own Go module, consumed by every connector.
+- Each connector under `vulnerabilities/` is its own Go module with its own `go.mod`. It pulls in the SDK through a local `replace` directive (`replace github.com/open-asm/oasm-connectors/sdk => ../../sdk`).
+- A committed `go.work` ties the four modules together so root-level tooling sees them as one workspace.
+
+A dependency added for one connector lands only in that connector's `go.mod`, never in the root module.
 
 ## Connector Contract
 
@@ -82,11 +93,12 @@ An optional `logo.png` next to `manifest.yaml` is base64-encoded into `manifest.
 ## Adding a New Connector
 
 1. Create the directory: `mkdir -p vulnerabilities/my-tool`
-2. Write `manifest.yaml` (contract above) and optionally a `logo.png`.
-3. Write a multi-stage `Dockerfile`: copy the upstream tool binary + build the Go connector, run as non-root (copy the pattern from `vulnerabilities/nuclei/Dockerfile`).
-4. Implement `sdk/connector.Adapter` — `Validate(ctx, inputs)` plus `Execute(ctx, inputs, out chan<- []byte)` that runs the tool and streams JSONL findings to `out`.
-5. Wire `main.go`: `runtime.New(connector.New(&MyAdapter{})).Run(context.Background())`.
-6. Regenerate and verify: `task manifest && task test`.
+2. Create `<category>/<name>/go.mod` modeled on `vulnerabilities/wpscan/go.mod` (module path `github.com/open-asm/oasm-connectors/vulnerabilities/my-tool`, `go 1.26`, `require github.com/open-asm/oasm-connectors/sdk v0.0.0`, `replace github.com/open-asm/oasm-connectors/sdk => ../../sdk`) and run `go mod tidy`.
+3. Write `manifest.yaml` (contract above) and optionally a `logo.png`.
+4. Write a multi-stage `Dockerfile`: copy the upstream tool binary + build the Go connector, run as non-root (copy the pattern from `vulnerabilities/nuclei/Dockerfile`).
+5. Implement `sdk/connector.Adapter` — `Validate(ctx, inputs)` plus `Execute(ctx, inputs, out chan<- []byte)` that runs the tool and streams JSONL findings to `out`.
+6. Wire `main.go`: `runtime.New(connector.New(&MyAdapter{})).Run(context.Background())`.
+7. Regenerate and verify: `task manifest && task test`.
 
 Reference implementation: [`vulnerabilities/nuclei`](vulnerabilities/nuclei) (wraps nuclei `-target <uri> -jsonl`; env: `WORKER_URL`, `WORKER_TOKEN`, `NUCLEI_BIN`).
 
@@ -95,9 +107,12 @@ Reference implementation: [`vulnerabilities/nuclei`](vulnerabilities/nuclei) (wr
 Standard `go test`, no Docker or network needed:
 
 ```bash
-go test ./... -race -count=1          # everything
-go test ./vulnerabilities/nuclei -v   # one package
+go test ./... -race -count=1                      # root module (combine-manifest)
+cd vulnerabilities/nuclei && go test ./... -v -count=1
+cd vulnerabilities/wpscan && go test ./... -v -count=1
 ```
+
+Each connector and `sdk/` is its own Go module, so test it from its own directory. `task test` runs all four modules for you.
 
 Each SDK package (`connector`, `execution`, `lifecycle`, `logging`, `transport`) plus `cmd/combine-manifest` and each connector has its own tests.
 

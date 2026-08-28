@@ -5,8 +5,10 @@ Runs [projectdiscovery/nuclei](https://github.com/projectdiscovery/nuclei) 3.3.0
 
 ## Requirements
 
-- Go 1.22+, Docker, Worker reachable at `WORKER_URL`
+- Go 1.26+, Docker, Worker reachable at `WORKER_URL`
 - Tool binary `nuclei` bundled in image via multi-stage `COPY --from=projectdiscovery/nuclei:3.3.0`
+
+This connector is its own Go module. All dependencies, including the SDK (pulled in via a local `replace` to `../../sdk`), are declared in this directory's `go.mod`, so run build and test commands from here.
 
 ## Configuration
 
@@ -30,7 +32,7 @@ docker run --rm -e WORKER_URL=http://worker:50051 ghcr.io/open-asm/connector-nuc
 ### Manual
 
 ```bash
-go run ./vulnerabilities/nuclei
+cd vulnerabilities/nuclei && go run .
 ```
 
 ## Behavior
@@ -38,13 +40,13 @@ go run ./vulnerabilities/nuclei
 - `adapter.go` — `NucleiAdapter` (tool-specific parsing stub); `Validate` + `Execute`
 - `main.go` — wires `NucleiAdapter` + SDK (`sdk/connector`, `sdk/runtime`)
 - `manifest.yaml` — source of truth for `manifest.json` (image `ghcr.io/open-asm/connector-nuclei:3.3.0` is SDK+tool bundle, not upstream)
-- `Dockerfile` — `golang:1.22-alpine` builder → `alpine:3.20` non-root; multi-stage copies `/usr/local/bin/nuclei` from `projectdiscovery/nuclei:3.3.0 AS tool`
+- `Dockerfile` — `golang:1.26-alpine` builder → `alpine:3.20` non-root; multi-stage copies `/usr/local/bin/nuclei` from `projectdiscovery/nuclei:3.3.0 AS tool`
 
 ## Testing
 
 ```bash
-go test ./vulnerabilities/nuclei -v
-go vet ./vulnerabilities/nuclei
+cd vulnerabilities/nuclei && go test ./... -v -count=1
+cd vulnerabilities/nuclei && go vet ./...
 ```
 
 ## 14-step trace
