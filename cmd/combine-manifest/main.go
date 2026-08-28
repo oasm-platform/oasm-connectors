@@ -34,6 +34,7 @@ type Manifest struct {
 	Description      string         `yaml:"description"      json:"description"`
 	Capabilities     []string       `yaml:"capabilities"  json:"capabilities"`
 	InputsSchema     map[string]any `yaml:"inputsSchema,omitempty"     json:"inputsSchema,omitempty"`
+	ConfigSchema     map[string]any `yaml:"configSchema,omitempty"    json:"configSchema,omitempty"`
 	ResourceDefaults map[string]any `yaml:"resourceDefaults,omitempty" json:"resourceDefaults,omitempty"`
 	// Logo is the base64-encoded logo.png sitting next to manifest.yaml.
 	// yaml:"-" keeps "logo:" in manifest.yaml an unknown-field error; the

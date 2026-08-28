@@ -138,3 +138,240 @@ func TestNucleiExecute_ReturnsErrorOnNonZeroExit(t *testing.T) {
 		t.Fatalf("error should contain stderr fragment, got: %v", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// buildArgs — table-driven tests for config → CLI flag mapping
+// ---------------------------------------------------------------------------
+
+func TestBuildArgs(t *testing.T) {
+	target := "https://example.com"
+
+	tests := []struct {
+		name   string
+		cfg    Config
+		expect []string
+	}{
+		{
+			name:   "empty config yields only target and jsonl",
+			cfg:    Config{},
+			expect: []string{"-target", target, "-jsonl"},
+		},
+		{
+			name:   "severity single",
+			cfg:    Config{Severity: []string{"high"}},
+			expect: []string{"-severity", "high", "-target", target, "-jsonl"},
+		},
+		{
+			name:   "severity multiple csv",
+			cfg:    Config{Severity: []string{"high", "critical"}},
+			expect: []string{"-severity", "high,critical", "-target", target, "-jsonl"},
+		},
+		{
+			name:   "tags csv",
+			cfg:    Config{Tags: []string{"cve", "xss"}},
+			expect: []string{"-tags", "cve,xss", "-target", target, "-jsonl"},
+		},
+		{
+			name:   "excludeTags csv",
+			cfg:    Config{ExcludeTags: []string{"dos"}},
+			expect: []string{"-etags", "dos", "-target", target, "-jsonl"},
+		},
+		{
+			name:   "templateIds csv",
+			cfg:    Config{TemplateIds: []string{"CVE-2021-1234", "CVE-2022-5678"}},
+			expect: []string{"-id", "CVE-2021-1234,CVE-2022-5678", "-target", target, "-jsonl"},
+		},
+		{
+			name:   "rateLimit",
+			cfg:    Config{RateLimit: intPtr(100)},
+			expect: []string{"-rl", "100", "-target", target, "-jsonl"},
+		},
+		{
+			name:   "concurrency",
+			cfg:    Config{Concurrency: intPtr(50)},
+			expect: []string{"-c", "50", "-target", target, "-jsonl"},
+		},
+		{
+			name:   "followRedirects true appends flag",
+			cfg:    Config{FollowRedirects: boolPtr(true)},
+			expect: []string{"-follow-redirects", "-target", target, "-jsonl"},
+		},
+		{
+			name:   "followRedirects false omits flag",
+			cfg:    Config{FollowRedirects: boolPtr(false)},
+			expect: []string{"-target", target, "-jsonl"},
+		},
+		{
+			name: "all fields populated",
+			cfg: Config{
+				Severity:        []string{"high", "critical"},
+				Tags:            []string{"cve"},
+				ExcludeTags:     []string{"dos"},
+				TemplateIds:     []string{"CVE-2021-1234"},
+				RateLimit:       intPtr(200),
+				Concurrency:     intPtr(40),
+				FollowRedirects: boolPtr(true),
+			},
+			expect: []string{"-severity", "high,critical", "-tags", "cve", "-etags", "dos", "-id", "CVE-2021-1234", "-rl", "200", "-c", "40", "-follow-redirects", "-target", target, "-jsonl"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := buildArgs(target, tc.cfg)
+			if len(got) != len(tc.expect) {
+				t.Fatalf("arg count = %d, want %d\ngot:  %v\nwant: %v", len(got), len(tc.expect), got, tc.expect)
+			}
+			for i := range got {
+				if got[i] != tc.expect[i] {
+					t.Errorf("arg[%d] = %q, want %q\nfull: got %v, want %v", i, got[i], tc.expect[i], got, tc.expect)
+				}
+			}
+		})
+	}
+}
+
+func intPtr(v int) *int       { return &v }
+func boolPtr(v bool) *bool    { return &v }
+func strPtr(v string) *string { return &v }
+
+// ---------------------------------------------------------------------------
+// parseConfig — OASM_CONFIG JSON parsing tests
+// ---------------------------------------------------------------------------
+
+func TestParseConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		wantErr bool
+		check   func(t *testing.T, cfg Config)
+	}{
+		{
+			name:    "empty string yields zero config",
+			raw:     "",
+			wantErr: false,
+			check: func(t *testing.T, cfg Config) {
+				if len(cfg.Severity) != 0 || len(cfg.Tags) != 0 || cfg.RateLimit != nil || cfg.Concurrency != nil || cfg.FollowRedirects != nil {
+					t.Errorf("expected zero Config, got %+v", cfg)
+				}
+			},
+		},
+		{
+			name:    "malformed JSON yields zero config",
+			raw:     `{not valid json`,
+			wantErr: true,
+		},
+		{
+			name: "valid JSON with all fields",
+			raw:  `{"severity":["high","critical"],"tags":["cve"],"excludeTags":["dos"],"templateIds":["CVE-2021-1"],"rateLimit":100,"concurrency":30,"followRedirects":true}`,
+			check: func(t *testing.T, cfg Config) {
+				if len(cfg.Severity) != 2 || cfg.Severity[0] != "high" || cfg.Severity[1] != "critical" {
+					t.Errorf("severity = %v", cfg.Severity)
+				}
+				if len(cfg.Tags) != 1 || cfg.Tags[0] != "cve" {
+					t.Errorf("tags = %v", cfg.Tags)
+				}
+				if len(cfg.ExcludeTags) != 1 || cfg.ExcludeTags[0] != "dos" {
+					t.Errorf("excludeTags = %v", cfg.ExcludeTags)
+				}
+				if len(cfg.TemplateIds) != 1 || cfg.TemplateIds[0] != "CVE-2021-1" {
+					t.Errorf("templateIds = %v", cfg.TemplateIds)
+				}
+				if cfg.RateLimit == nil || *cfg.RateLimit != 100 {
+					t.Errorf("rateLimit = %v", cfg.RateLimit)
+				}
+				if cfg.Concurrency == nil || *cfg.Concurrency != 30 {
+					t.Errorf("concurrency = %v", cfg.Concurrency)
+				}
+				if cfg.FollowRedirects == nil || !*cfg.FollowRedirects {
+					t.Errorf("followRedirects = %v", cfg.FollowRedirects)
+				}
+			},
+		},
+		{
+			name: "valid JSON with only rateLimit",
+			raw:  `{"rateLimit":50}`,
+			check: func(t *testing.T, cfg Config) {
+				if cfg.RateLimit == nil || *cfg.RateLimit != 50 {
+					t.Errorf("rateLimit = %v", cfg.RateLimit)
+				}
+				if cfg.Concurrency != nil {
+					t.Errorf("concurrency should be nil, got %v", *cfg.Concurrency)
+				}
+			},
+		},
+		{
+			name: "empty JSON object yields zero config",
+			raw:  `{}`,
+			check: func(t *testing.T, cfg Config) {
+				if len(cfg.Severity) != 0 || len(cfg.Tags) != 0 {
+					t.Errorf("expected zero Config from {}, got %+v", cfg)
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := parseConfig(tc.raw)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tc.check != nil {
+				tc.check(t, cfg)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Execute integration: OASM_CONFIG env → buildArgs used
+// ---------------------------------------------------------------------------
+
+func TestExecute_WithOASMConfig(t *testing.T) {
+	bin := ensureFakeNuclei(t)
+	t.Setenv("NUCLEI_BIN", bin)
+	t.Setenv("FAKE_MODE", "empty")
+	t.Setenv("OASM_CONFIG", `{"severity":["critical"],"rateLimit":200}`)
+	a := &NucleiAdapter{}
+	ch := make(chan []byte, 4)
+	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	// empty mode produces no findings — just verify it ran without error
+	select {
+	case b := <-ch:
+		t.Fatalf("nothing should be emitted in empty mode, got: %s", b)
+	default:
+	}
+}
+
+func TestExecute_EmptyOASMConfig(t *testing.T) {
+	bin := ensureFakeNuclei(t)
+	t.Setenv("NUCLEI_BIN", bin)
+	t.Setenv("FAKE_MODE", "empty")
+	t.Setenv("OASM_CONFIG", "")
+	a := &NucleiAdapter{}
+	ch := make(chan []byte, 4)
+	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+}
+
+func TestExecute_MalformedOASMConfig(t *testing.T) {
+	bin := ensureFakeNuclei(t)
+	t.Setenv("NUCLEI_BIN", bin)
+	t.Setenv("FAKE_MODE", "empty")
+	t.Setenv("OASM_CONFIG", "not-json!!!")
+	a := &NucleiAdapter{}
+	ch := make(chan []byte, 4)
+	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+}

@@ -1,21 +1,42 @@
 # connector image (SDK+tool) — built from ./Dockerfile, not upstream image
 name: Nuclei
 slug: nuclei
-version: 3.3.0
-image: ghcr.io/open-asm/connector-nuclei:3.3.0
+version: 3.4.0
+image: ghcr.io/open-asm/connector-nuclei:3.4.0
 author: 'oasm'
 license: free
 shortDescription: 'Fast template-based vulnerability scanner'
 description: 'Runs ProjectDiscovery Nuclei template-based scans against a target URL to detect known vulnerabilities, misconfigurations, and exposed secrets.'
 capabilities: [vulnerabilities]
-inputsSchema:
+configSchema:
   type: object
-  required: [target]
-  properties:
-    target:
-      type: string
-      format: uri
   additionalProperties: false
+  properties:
+    severity:
+      type: array
+      items:
+        type: string
+        enum: [info, low, medium, high, critical]
+    tags:
+      type: array
+      items:
+        type: string
+    excludeTags:
+      type: array
+      items:
+        type: string
+    templateIds:
+      type: array
+      items:
+        type: string
+    rateLimit:
+      type: integer
+      default: 150
+    concurrency:
+      type: integer
+      default: 25
+    followRedirects:
+      type: boolean
 resourceDefaults:
   cpu: 500m
   memory: 512Mi
