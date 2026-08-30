@@ -1,0 +1,21 @@
+name: Nessus
+slug: nessus
+version: 0.1.0
+image: ghcr.io/open-asm/connector-nessus:0.1.0
+author: 'oasm'
+license: free
+shortDescription: 'Tenable Nessus vulnerability scanner'
+description: 'Connects to a Tenable Nessus instance, creates and runs a scan against a target, and streams the discovered vulnerabilities back to the Worker as JSONL findings.'
+capabilities: [vulnerabilities]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+  additionalProperties: false
+resourceDefaults:
+  cpu: 500m
+  memory: 512Mi
+  timeoutSeconds: 600
