@@ -10,9 +10,7 @@
       "license": "free",
       "shortDescription": "Tenable Nessus vulnerability scanner",
       "description": "Connects to a Tenable Nessus instance, creates and runs a scan against a target, and streams the discovered vulnerabilities back to the Worker as JSONL findings.",
-      "capabilities": [
-        "vulnerabilities"
-      ],
+      "capabilities": ["vulnerabilities"],
       "inputsSchema": {
         "additionalProperties": false,
         "properties": {
@@ -21,9 +19,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "target"
-        ],
+        "required": ["target"],
         "type": "object"
       },
       "resourceDefaults": {
@@ -35,26 +31,53 @@
     {
       "name": "Nuclei",
       "slug": "nuclei",
-      "version": "3.3.0",
-      "image": "ghcr.io/open-asm/connector-nuclei:3.3.0",
+      "version": "3.4.0",
+      "image": "ghcr.io/open-asm/connector-nuclei:3.4.0",
       "author": "oasm",
       "license": "free",
       "shortDescription": "Fast template-based vulnerability scanner",
       "description": "Runs ProjectDiscovery Nuclei template-based scans against a target URL to detect known vulnerabilities, misconfigurations, and exposed secrets.",
-      "capabilities": [
-        "vulnerabilities"
-      ],
-      "inputsSchema": {
+      "capabilities": ["vulnerabilities"],
+      "configSchema": {
         "additionalProperties": false,
         "properties": {
-          "target": {
-            "format": "uri",
-            "type": "string"
+          "concurrency": {
+            "default": 25,
+            "type": "integer"
+          },
+          "excludeTags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "followRedirects": {
+            "type": "boolean"
+          },
+          "rateLimit": {
+            "default": 150,
+            "type": "integer"
+          },
+          "severity": {
+            "items": {
+              "enum": ["info", "low", "medium", "high", "critical"],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "templateIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
-        "required": [
-          "target"
-        ],
         "type": "object"
       },
       "resourceDefaults": {
@@ -73,22 +96,7 @@
       "license": "free",
       "shortDescription": "WordPress vulnerability scanner",
       "description": "Scans WordPress sites using WPScan to enumerate vulnerable plugins and themes, detect known CVEs, misconfigurations, and weak credentials.",
-      "capabilities": [
-        "vulnerabilities"
-      ],
-      "inputsSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "target": {
-            "format": "uri",
-            "type": "string"
-          }
-        },
-        "required": [
-          "target"
-        ],
-        "type": "object"
-      },
+      "capabilities": ["vulnerabilities"],
       "resourceDefaults": {
         "cpu": "500m",
         "memory": "512Mi",

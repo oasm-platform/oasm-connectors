@@ -7,12 +7,69 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 )
 
 // NucleiAdapter implements Validate/Execute for nuclei as a thin wrapper:
 // receive input -> exec nuclei -> stream JSONL findings back through the SDK channel.
 // Input validation is the worker node layer's responsibility, upstream of here.
 type NucleiAdapter struct{}
+
+// Config holds nuclei scan configuration parsed from the OASM_CONFIG env var.
+// Fields map to nuclei CLI flags; pointers distinguish "absent" from zero-value.
+type Config struct {
+	Severity        []string `json:"severity"`
+	Tags            []string `json:"tags"`
+	ExcludeTags     []string `json:"excludeTags"`
+	TemplateIds     []string `json:"templateIds"`
+	RateLimit       *int     `json:"rateLimit"`
+	Concurrency     *int     `json:"concurrency"`
+	FollowRedirects *bool    `json:"followRedirects"`
+}
+
+// parseConfig unmarshals a JSON string into Config. An empty or malformed
+// string returns a zero Config (no error for empty; error for malformed).
+func parseConfig(raw string) (Config, error) {
+	if strings.TrimSpace(raw) == "" {
+		return Config{}, nil
+	}
+	var cfg Config
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
+}
+
+// buildArgs maps a Config to nuclei CLI flags, always ending with -target and -jsonl.
+func buildArgs(target string, cfg Config) []string {
+	var args []string
+
+	if len(cfg.Severity) > 0 {
+		args = append(args, "-severity", strings.Join(cfg.Severity, ","))
+	}
+	if len(cfg.Tags) > 0 {
+		args = append(args, "-tags", strings.Join(cfg.Tags, ","))
+	}
+	if len(cfg.ExcludeTags) > 0 {
+		args = append(args, "-etags", strings.Join(cfg.ExcludeTags, ","))
+	}
+	if len(cfg.TemplateIds) > 0 {
+		args = append(args, "-id", strings.Join(cfg.TemplateIds, ","))
+	}
+	if cfg.RateLimit != nil {
+		args = append(args, "-rl", strconv.Itoa(*cfg.RateLimit))
+	}
+	if cfg.Concurrency != nil {
+		args = append(args, "-c", strconv.Itoa(*cfg.Concurrency))
+	}
+	if cfg.FollowRedirects != nil && *cfg.FollowRedirects {
+		args = append(args, "-follow-redirects")
+	}
+
+	args = append(args, "-target", target, "-jsonl")
+	return args
+}
 
 // Validate is intentionally a no-op: inputs are validated upstream by the
 // worker node against the connector's inputsSchema.
@@ -28,11 +85,16 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 	if target == "" {
 		return fmt.Errorf("target required")
 	}
+
+	// Read optional OASM_CONFIG env — empty/invalid → zero Config (nuclei defaults).
+	cfg, _ := parseConfig(os.Getenv("OASM_CONFIG"))
+
 	bin := os.Getenv("NUCLEI_BIN")
 	if bin == "" {
 		bin = "nuclei"
 	}
-	cmd := exec.CommandContext(ctx, bin, "-target", target, "-jsonl")
+	args := buildArgs(target, cfg)
+	cmd := exec.CommandContext(ctx, bin, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("stdout pipe: %w", err)

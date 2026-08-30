@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 vars:
   GO:
@@ -6,11 +6,11 @@ vars:
   PROTO_DIR:
     sh: echo ${PROTO_DIR:-proto}
   MODULES:
-    - '.'
-    - './sdk'
-    - './vulnerabilities/nuclei'
-    - './vulnerabilities/nessus'
-    - './vulnerabilities/wpscan'
+    - "."
+    - "./sdk"
+    - "./vulnerabilities/nuclei"
+    - "./vulnerabilities/nessus"
+    - "./vulnerabilities/wpscan"
 
 tasks:
   proto:
@@ -18,7 +18,7 @@ tasks:
     # ponytail: no proto files yet, stub target — keep mkdir until real buf/protoc generation is wired
     cmds:
       - 'echo "proto: ponytail - no proto files yet, stub target"'
-      - 'mkdir -p {{.PROTO_DIR}}'
+      - "mkdir -p {{.PROTO_DIR}}"
     silent: true
 
   test:
@@ -26,33 +26,33 @@ tasks:
     cmds:
       - for:
           var: MODULES
-        cmd: 'cd {{.ITEM}} && {{.GO}} test ./... -v -count=1'
+        cmd: "cd {{.ITEM}} && {{.GO}} test ./... -v -count=1"
 
   vet:
     desc: go vet
     cmds:
       - for:
           var: MODULES
-        cmd: 'cd {{.ITEM}} && {{.GO}} vet ./...'
+        cmd: "cd {{.ITEM}} && {{.GO}} vet ./..."
 
   fmt:
     desc: format
     cmds:
       - for:
           var: MODULES
-        cmd: 'cd {{.ITEM}} && {{.GO}} fmt ./...'
+        cmd: "cd {{.ITEM}} && {{.GO}} fmt ./..."
 
   tidy:
     desc: tidy modules
     cmds:
       - for:
           var: MODULES
-        cmd: 'cd {{.ITEM}} && GOWORK=off {{.GO}} mod tidy'
+        cmd: "cd {{.ITEM}} && GOWORK=off {{.GO}} mod tidy"
 
   manifest:
     desc: regenerate manifest.json from <category>/<connector>/manifest.yaml
     cmds:
-      - '{{.GO}} run ./cmd/combine-manifest -root .'
+      - "{{.GO}} run ./cmd/combine-manifest -root ."
 
   default:
     desc: default task (runs test)
