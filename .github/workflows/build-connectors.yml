@@ -10,7 +10,7 @@ on:
       dry_run:
         description: 'Build and test only — do NOT push images'
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
