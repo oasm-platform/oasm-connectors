@@ -1,8 +1,8 @@
 # connector image (SDK+tool) — built from ./Dockerfile, not upstream image
 name: Nuclei
 slug: nuclei
-version: 3.4.0
-image: ghcr.io/open-asm/connector-nuclei:3.4.0
+version: 3.4.1
+image: ghcr.io/open-asm/connector-nuclei:3.4.1
 author: 'oasm'
 license: free
 shortDescription: 'Fast template-based vulnerability scanner'

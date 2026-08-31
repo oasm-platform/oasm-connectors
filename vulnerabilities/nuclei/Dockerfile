@@ -1,5 +1,5 @@
 # connector image (SDK+tool) — build context: repo root
-FROM projectdiscovery/nuclei:3.3.0 AS tool
+FROM projectdiscovery/nuclei:v3.4.1 AS tool
 FROM golang:1.26-alpine AS builder
 WORKDIR /src
 COPY sdk/go.mod sdk/go.sum sdk/
