@@ -1,8 +1,8 @@
-module github.com/open-asm/oasm-connectors/vulnerabilities/wpscan
+module github.com/oasm-platform/oasm-connectors/vulnerabilities/wpscan
 
 go 1.26
 
-require github.com/open-asm/oasm-connectors/sdk v0.0.0
+require github.com/oasm-platform/oasm-connectors/sdk v0.0.0
 
 require (
 	golang.org/x/net v0.55.0 // indirect
@@ -13,4 +13,4 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 )
 
-replace github.com/open-asm/oasm-connectors/sdk => ../../sdk
+replace github.com/oasm-platform/oasm-connectors/sdk => ../../sdk

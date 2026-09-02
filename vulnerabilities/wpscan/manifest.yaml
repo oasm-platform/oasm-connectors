@@ -1,7 +1,7 @@
 name: WPScan - WordPress Security Scanner
 slug: wpscan
 version: 3.8.25
-image: ghcr.io/open-asm/connector-wpscan:3.8.25
+image: ghcr.io/oasm-platform/connector-wpscan:3.8.25
 author: 'oasm'
 license: free
 shortDescription: 'WordPress vulnerability scanner'

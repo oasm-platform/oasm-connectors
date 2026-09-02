@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-08-31T03:23:43.9989536Z",
+  "generatedAt": "2026-09-02T12:39:44.430797Z",
   "connectors": [
     {
       "name": "Nessus",
       "slug": "nessus",
       "version": "0.1.0",
-      "image": "ghcr.io/open-asm/connector-nessus:0.1.0",
+      "image": "ghcr.io/oasm-platform/connector-nessus:0.1.0",
       "author": "oasm",
       "license": "free",
       "shortDescription": "Tenable Nessus vulnerability scanner",
@@ -36,7 +36,7 @@
       "name": "Nuclei",
       "slug": "nuclei",
       "version": "3.4.1",
-      "image": "ghcr.io/open-asm/connector-nuclei:3.4.1",
+      "image": "ghcr.io/oasm-platform/connector-nuclei:3.4.1",
       "author": "oasm",
       "license": "free",
       "shortDescription": "Fast template-based vulnerability scanner",
@@ -103,7 +103,7 @@
       "name": "WPScan - WordPress Security Scanner",
       "slug": "wpscan",
       "version": "3.8.25",
-      "image": "ghcr.io/open-asm/connector-wpscan:3.8.25",
+      "image": "ghcr.io/oasm-platform/connector-wpscan:3.8.25",
       "author": "oasm",
       "license": "free",
       "shortDescription": "WordPress vulnerability scanner",

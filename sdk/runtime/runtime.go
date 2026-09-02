@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/open-asm/oasm-connectors/sdk/connector"
-	"github.com/open-asm/oasm-connectors/sdk/env"
-	"github.com/open-asm/oasm-connectors/sdk/logging"
-	pb "github.com/open-asm/oasm-connectors/sdk/proto/gen"
-	"github.com/open-asm/oasm-connectors/sdk/transport"
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
+	"github.com/oasm-platform/oasm-connectors/sdk/env"
+	"github.com/oasm-platform/oasm-connectors/sdk/logging"
+	pb "github.com/oasm-platform/oasm-connectors/sdk/proto/gen"
+	"github.com/oasm-platform/oasm-connectors/sdk/transport"
 )
 
 // Runtime owns a Connector and runs until the context is cancelled.

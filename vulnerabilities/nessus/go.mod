@@ -1,9 +1,9 @@
-module github.com/open-asm/oasm-connectors/vulnerabilities/nessus
+module github.com/oasm-platform/oasm-connectors/vulnerabilities/nessus
 
 go 1.26
 
 require (
-	github.com/open-asm/oasm-connectors/sdk v0.0.0
+	github.com/oasm-platform/oasm-connectors/sdk v0.0.0
 	github.com/tencat-dev/nessus-client-go v0.1.4
 )
 
@@ -25,4 +25,4 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 )
 
-replace github.com/open-asm/oasm-connectors/sdk => ../../sdk
+replace github.com/oasm-platform/oasm-connectors/sdk => ../../sdk

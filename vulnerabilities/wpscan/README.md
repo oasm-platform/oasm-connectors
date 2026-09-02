@@ -20,6 +20,16 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 
 `inputsSchema` (see `manifest.yaml`): `{target: string (uri)}`.
 
+## Example config profile
+
+```yaml
+# Connector profile submitted to the Worker (ExecutionCommand spec)
+slug: wpscan
+image: ghcr.io/open-asm/connector-wpscan:3.8.25
+inputs:
+  target: https://example.com
+```
+
 ## Deployment
 
 ### Docker

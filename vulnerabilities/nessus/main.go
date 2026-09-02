@@ -4,8 +4,8 @@ import (
 	"context"
 	"log"
 
-	sdkconn "github.com/open-asm/oasm-connectors/sdk/connector"
-	"github.com/open-asm/oasm-connectors/sdk/runtime"
+	sdkconn "github.com/oasm-platform/oasm-connectors/sdk/connector"
+	"github.com/oasm-platform/oasm-connectors/sdk/runtime"
 )
 
 func main() {

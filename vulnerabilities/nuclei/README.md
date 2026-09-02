@@ -20,6 +20,22 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 
 `inputsSchema` (see `manifest.yaml`): `{target: string (uri)}`.
 
+## Example config profile
+
+```yaml
+# Connector profile submitted to the Worker (ExecutionCommand spec)
+slug: nuclei
+image: ghcr.io/open-asm/connector-nuclei:3.3.0
+inputs:
+  target: https://example.com
+config: # matches configSchema in manifest.yaml
+  severity: [medium, high, critical]
+  tags: [cves]
+  rateLimit: 150
+  concurrency: 25
+  followRedirects: true
+```
+
 ## Deployment
 
 ### Docker

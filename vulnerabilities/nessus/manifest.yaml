@@ -1,7 +1,7 @@
 name: Nessus
 slug: nessus
 version: 0.1.0
-image: ghcr.io/open-asm/connector-nessus:0.1.0
+image: ghcr.io/oasm-platform/connector-nessus:0.1.0
 author: 'oasm'
 license: free
 shortDescription: 'Tenable Nessus vulnerability scanner'

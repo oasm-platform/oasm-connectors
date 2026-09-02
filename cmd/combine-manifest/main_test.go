@@ -24,7 +24,7 @@ func writeManifest(t *testing.T, dir, content string) string {
 const validYAML = `name: "Nuclei Scanner"
 slug: nuclei
 version: 3.3.0
-image: ghcr.io/open-asm/connector-nuclei:3.3.0
+image: ghcr.io/oasm-platform/connector-nuclei:3.3.0
 author: "oasm"
 license: free
 shortDescription: "Fast template-based vulnerability scanner"

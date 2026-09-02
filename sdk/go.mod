@@ -1,4 +1,4 @@
-module github.com/open-asm/oasm-connectors/sdk
+module github.com/oasm-platform/oasm-connectors/sdk
 
 go 1.26
 
