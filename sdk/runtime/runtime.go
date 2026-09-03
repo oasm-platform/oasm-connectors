@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -40,6 +41,7 @@ func (r *Runtime) Run(ctx context.Context) error {
 
 	inputs := env.LoadInputs()
 	r.logger.Infof("loaded %d env inputs", len(inputs))
+	r.logger.Infof("worker config: addr=%s token_set=%t execution=%s job=%s tool=%s", cfg.WorkerAddr, cfg.Token != "", cfg.ExecutionID, cfg.JobID, cfg.Tool)
 
 	// Dial Worker
 	conn, err := transport.Connect(ctx, cfg.WorkerAddr)
@@ -54,10 +56,17 @@ func (r *Runtime) Run(ctx context.Context) error {
 		return fmt.Errorf("open connect stream: %w", err)
 	}
 
-	// Register
+	// Register — attach execution identity so the Worker can route
+	// ExecuteJob back on this stream.
+	register := &pb.Register{
+		Token:       cfg.Token,
+		ExecutionId: cfg.ExecutionID,
+		JobId:       cfg.JobID,
+		Tool:        cfg.Tool,
+	}
 	if err := stream.Send(&pb.ConnectorMessage{
 		Message: &pb.ConnectorMessage_Register{
-			Register: &pb.Register{Token: cfg.Token},
+			Register: register,
 		},
 	}); err != nil {
 		return fmt.Errorf("send register: %w", err)
@@ -74,6 +83,7 @@ func (r *Runtime) Run(ctx context.Context) error {
 		if ack != nil {
 			reason = ack.Reason
 		}
+		r.logger.Errorf("registration rejected: %s", reason)
 		return fmt.Errorf("registration rejected: %s", reason)
 	}
 	r.logger.Info("registered with worker")
@@ -81,10 +91,12 @@ func (r *Runtime) Run(ctx context.Context) error {
 	// Execute loop
 	for {
 		msg, err := stream.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
+			r.logger.Infof("stream closed by worker: %v", err)
 			return nil
 		}
 		if err != nil {
+			r.logger.Errorf("recv failed: %v", err)
 			return fmt.Errorf("recv: %w", err)
 		}
 
@@ -125,6 +137,7 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	}()
 
 	// Stream results — single goroutine, safe for non-concurrent stream writes
+	n := 0
 	for data := range out {
 		if err := stream.Send(&pb.ConnectorMessage{
 			Message: &pb.ConnectorMessage_Result{
@@ -134,8 +147,10 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 				},
 			},
 		}); err != nil {
+			r.logger.Errorf("send failed: execution=%s err=%v", exec.ExecutionId, err)
 			return fmt.Errorf("send result: %w", err)
 		}
+		n++
 	}
 
 	adapterErr := <-errCh
@@ -144,13 +159,15 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	doneMsg := &pb.Done{ExecutionId: exec.ExecutionId}
 	if adapterErr != nil {
 		doneMsg.Error = adapterErr.Error()
-		r.logger.Errorf("adapter error: %v", adapterErr)
+		r.logger.Errorf("adapter error: execution=%s job=%s err=%v", exec.ExecutionId, exec.JobId, adapterErr)
 	}
 	if err := stream.Send(&pb.ConnectorMessage{
 		Message: &pb.ConnectorMessage_Done{Done: doneMsg},
 	}); err != nil {
+		r.logger.Errorf("send failed: execution=%s err=%v", exec.ExecutionId, err)
 		return fmt.Errorf("send done: %w", err)
 	}
+	r.logger.Infof("execution done: execution=%s job=%s results=%d", exec.ExecutionId, exec.JobId, n)
 
 	return nil
 }

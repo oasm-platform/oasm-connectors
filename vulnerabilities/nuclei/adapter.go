@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -71,6 +72,19 @@ func buildArgs(target string, cfg Config) []string {
 	return args
 }
 
+// redactedArgs returns a copy of args with the value following -target
+// replaced by [redacted] so scan targets are not leaked into logs.
+func redactedArgs(args []string) []string {
+	redacted := make([]string, len(args))
+	copy(redacted, args)
+	for i, a := range redacted {
+		if a == "-target" && i+1 < len(redacted) {
+			redacted[i+1] = "[redacted]"
+		}
+	}
+	return redacted
+}
+
 // Validate is intentionally a no-op: inputs are validated upstream by the
 // worker node against the connector's inputsSchema.
 func (a *NucleiAdapter) Validate(_ context.Context, _ map[string]any) error {
@@ -94,6 +108,7 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 		bin = "nuclei"
 	}
 	args := buildArgs(target, cfg)
+	log.Printf("nuclei: bin=%s args=%v", bin, redactedArgs(args))
 	cmd := exec.CommandContext(ctx, bin, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -106,13 +121,20 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 	}
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024) // nuclei JSON lines can be large
+	findings, skipped := 0, 0
+	done := func() {
+		log.Printf("nuclei: done findings=%d skipped=%d", findings, skipped)
+	}
+	defer done()
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		var v map[string]any
 		if json.Unmarshal(line, &v) != nil {
-			continue // skip banner/noise lines
+			skipped++ // banner/noise lines
+			continue
 		}
 		out <- append([]byte(nil), line...)
+		findings++
 	}
 	if err := scanner.Err(); err != nil {
 		_ = cmd.Wait()

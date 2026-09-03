@@ -6,6 +6,9 @@ option go_package = "./connector";
 
 message Register {
   string token = 1;
+  string execution_id = 2;
+  string job_id = 3;
+  string tool = 4;
 }
 
 message RegisterAck {
