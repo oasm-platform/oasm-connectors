@@ -15,6 +15,26 @@ inputsSchema:
       type: string
       format: uri
   additionalProperties: false
+configSchema:
+  type: object
+  required: [url, username, password]
+  properties:
+    url:
+      type: string
+      format: uri
+    username:
+      type: string
+    password:
+      type: string
+    accessKey:
+      type: string
+    secretKey:
+      type: string
+    templateUuid:
+      type: string
+    policyId:
+      type: string
+  additionalProperties: false
 resourceDefaults:
   cpu: 500m
   memory: 512Mi
