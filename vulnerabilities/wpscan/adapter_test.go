@@ -2,13 +2,14 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sync"
 	"testing"
+
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 )
 
 var (
@@ -49,7 +50,7 @@ func TestValidate_IsNoOp(t *testing.T) {
 
 func TestWpscanExecute_MissingTargetErrors(t *testing.T) {
 	a := WpscanAdapter{}
-	out := make(chan []byte, 64)
+	out := make(chan connector.Finding, 64)
 	err := a.Execute(context.Background(), map[string]any{}, out)
 	close(out)
 	if err == nil {
@@ -65,7 +66,7 @@ func TestWpscanExecute_StreamsJsonlFindings(t *testing.T) {
 	t.Setenv("WPSCAN_BIN", bin)
 
 	a := WpscanAdapter{}
-	out := make(chan []byte, 64)
+	out := make(chan connector.Finding, 64)
 	ctx := context.Background()
 
 	err := a.Execute(ctx, map[string]any{"target": "https://example.com"}, out)
@@ -74,12 +75,8 @@ func TestWpscanExecute_StreamsJsonlFindings(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var findings []map[string]any
-	for raw := range out {
-		var f map[string]any
-		if err := unmarshalJSON(raw, &f); err != nil {
-			t.Fatalf("invalid JSON: %v", err)
-		}
+	var findings []connector.Finding
+	for f := range out {
 		findings = append(findings, f)
 	}
 
@@ -88,15 +85,23 @@ func TestWpscanExecute_StreamsJsonlFindings(t *testing.T) {
 	}
 
 	// Check first finding (core vulnerability).
-	title0, _ := findings[0]["title"].(string)
-	if title0 != "XSS in Search Form" {
-		t.Errorf("expected first finding title 'XSS in Search Form', got %q", title0)
+	if findings[0].Name != "XSS in Search Form" {
+		t.Errorf("expected first finding name 'XSS in Search Form', got %q", findings[0].Name)
+	}
+	if findings[0].MatchedAt != "https://example.com" {
+		t.Errorf("expected first finding MatchedAt 'https://example.com', got %q", findings[0].MatchedAt)
 	}
 
 	// Check second finding (plugin vulnerability).
-	title1, _ := findings[1]["title"].(string)
-	if title1 != "Open Redirect in Akismet" {
-		t.Errorf("expected second finding title 'Open Redirect in Akismet', got %q", title1)
+	if findings[1].Name != "Open Redirect in Akismet" {
+		t.Errorf("expected second finding name 'Open Redirect in Akismet', got %q", findings[1].Name)
+	}
+
+	// Every emitted Finding must pass the SDK contract validation.
+	for i, f := range findings {
+		if err := f.Validate(); err != nil {
+			t.Errorf("finding %d invalid: %v", i, err)
+		}
 	}
 }
 
@@ -106,7 +111,7 @@ func TestWpscanExecute_EmptyOutputNoError(t *testing.T) {
 	t.Setenv("FAKE_MODE", "empty")
 
 	a := WpscanAdapter{}
-	out := make(chan []byte, 64)
+	out := make(chan connector.Finding, 64)
 	ctx := context.Background()
 
 	err := a.Execute(ctx, map[string]any{"target": "https://clean.example.com"}, out)
@@ -130,7 +135,7 @@ func TestWpscanExecute_ReturnsErrorOnNonZeroExit(t *testing.T) {
 	t.Setenv("FAKE_MODE", "fail")
 
 	a := WpscanAdapter{}
-	out := make(chan []byte, 64)
+	out := make(chan connector.Finding, 64)
 	ctx := context.Background()
 
 	err := a.Execute(ctx, map[string]any{"target": "https://example.com"}, out)
@@ -156,9 +161,4 @@ func searchString(s, sub string) bool {
 		}
 	}
 	return false
-}
-
-// unmarshalJSON is a test helper that uses encoding/json.
-func unmarshalJSON(data []byte, v any) error {
-	return json.Unmarshal(data, v)
 }

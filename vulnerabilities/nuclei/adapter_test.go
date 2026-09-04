@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +9,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 )
 
 // ensureFakeNuclei builds the fake nuclei helper executable once and returns its path.
@@ -59,7 +61,7 @@ func TestValidate_IsNoOp(t *testing.T) {
 func TestNucleiExecute_MissingTargetErrors(t *testing.T) {
 	t.Setenv("NUCLEI_BIN", "") // must fail before spawning any process
 	a := &NucleiAdapter{}
-	ch := make(chan []byte, 4)
+	ch := make(chan connector.Finding, 4)
 	err := a.Execute(context.Background(), map[string]any{}, ch)
 	if err == nil {
 		t.Fatal("expected error for missing target")
@@ -69,7 +71,7 @@ func TestNucleiExecute_MissingTargetErrors(t *testing.T) {
 	}
 	select {
 	case b := <-ch:
-		t.Fatalf("nothing should be emitted, got: %s", b)
+		t.Fatalf("nothing should be emitted, got: %+v", b)
 	default:
 	}
 }
@@ -79,30 +81,32 @@ func TestNucleiExecute_MissingTargetErrors(t *testing.T) {
 func TestNucleiExecute_StreamsJsonlFindings(t *testing.T) {
 	t.Setenv("NUCLEI_BIN", ensureFakeNuclei(t))
 	a := &NucleiAdapter{}
-	ch := make(chan []byte, 8)
+	ch := make(chan connector.Finding, 8)
 	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
 	close(ch)
-	var findings []map[string]any
-	for b := range ch {
-		var m map[string]any
-		if err := json.Unmarshal(b, &m); err != nil {
-			t.Fatalf("emitted line is not valid JSON object: %v (%s)", err, b)
-		}
-		findings = append(findings, m)
+	var findings []connector.Finding
+	for f := range ch {
+		findings = append(findings, f)
 	}
 	if len(findings) != 2 {
 		t.Fatalf("expected exactly 2 findings (noise skipped), got %d", len(findings))
 	}
-	wantIDs := []string{"cve-2023-1234", "cve-2024-5678"}
-	for i, id := range wantIDs {
-		if findings[i]["template-id"] != id {
-			t.Errorf("finding[%d] template-id = %v, want %v", i, findings[i]["template-id"], id)
+	wantNames := []string{"Example CVE 2023", "Example CVE 2024"}
+	for i, name := range wantNames {
+		if findings[i].Name != name {
+			t.Errorf("finding[%d].Name = %q, want %q", i, findings[i].Name, name)
 		}
 	}
-	if findings[0]["matched-at"] != "https://example.com" {
-		t.Errorf("matched-at mismatch: %v", findings[0]["matched-at"])
+	if findings[0].Severity != "high" || findings[1].Severity != "medium" {
+		t.Errorf("severities = %q/%q, want high/medium", findings[0].Severity, findings[1].Severity)
+	}
+	if findings[0].MatchedAt != "https://example.com" {
+		t.Errorf("matched-at mismatch: %q", findings[0].MatchedAt)
+	}
+	if err := findings[0].Validate(); err != nil {
+		t.Errorf("emitted finding must validate, got: %v", err)
 	}
 }
 
@@ -112,13 +116,13 @@ func TestNucleiExecute_EmptyOutputNoError(t *testing.T) {
 	t.Setenv("NUCLEI_BIN", bin)
 	t.Setenv("FAKE_MODE", "empty")
 	a := &NucleiAdapter{}
-	ch := make(chan []byte, 4)
+	ch := make(chan connector.Finding, 4)
 	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
 		t.Fatalf("expected nil error for empty output, got: %v", err)
 	}
 	select {
 	case b := <-ch:
-		t.Fatalf("nothing should be emitted, got: %s", b)
+		t.Fatalf("nothing should be emitted, got: %+v", b)
 	default:
 	}
 }
@@ -129,7 +133,7 @@ func TestNucleiExecute_ReturnsErrorOnNonZeroExit(t *testing.T) {
 	t.Setenv("NUCLEI_BIN", bin)
 	t.Setenv("FAKE_MODE", "fail")
 	a := &NucleiAdapter{}
-	ch := make(chan []byte, 4)
+	ch := make(chan connector.Finding, 4)
 	err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch)
 	if err == nil {
 		t.Fatal("expected error on non-zero exit")
@@ -154,52 +158,52 @@ func TestBuildArgs(t *testing.T) {
 		{
 			name:   "empty config yields stable flags and manifest defaults",
 			cfg:    Config{},
-			expect: []string{"-duc", "-silent", "-nc", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-t", defaultTemplateDir, "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "severity single",
 			cfg:    Config{Severity: []string{"high"}},
-			expect: []string{"-duc", "-silent", "-nc", "-severity", "high", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-t", defaultTemplateDir, "-severity", "high", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "severity multiple csv",
 			cfg:    Config{Severity: []string{"high", "critical"}},
-			expect: []string{"-duc", "-silent", "-nc", "-severity", "high,critical", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-t", defaultTemplateDir, "-severity", "high,critical", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "tags csv",
 			cfg:    Config{Tags: []string{"cve", "xss"}},
-			expect: []string{"-duc", "-silent", "-nc", "-tags", "cve,xss", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-t", defaultTemplateDir, "-tags", "cve,xss", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "excludeTags csv",
 			cfg:    Config{ExcludeTags: []string{"dos"}},
-			expect: []string{"-duc", "-silent", "-nc", "-etags", "dos", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-t", defaultTemplateDir, "-etags", "dos", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "templateIds csv",
 			cfg:    Config{TemplateIds: []string{"CVE-2021-1234", "CVE-2022-5678"}},
-			expect: []string{"-duc", "-silent", "-nc", "-id", "CVE-2021-1234,CVE-2022-5678", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-t", defaultTemplateDir, "-id", "CVE-2021-1234,CVE-2022-5678", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "rateLimit",
 			cfg:    Config{RateLimit: intPtr(100)},
-			expect: []string{"-duc", "-silent", "-nc", "-rl", "100", "-c", "25", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-t", defaultTemplateDir, "-rl", "100", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "concurrency",
 			cfg:    Config{Concurrency: intPtr(50)},
-			expect: []string{"-duc", "-silent", "-nc", "-rl", "150", "-c", "50", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-t", defaultTemplateDir, "-rl", "150", "-c", "50", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "followRedirects true appends flag",
 			cfg:    Config{FollowRedirects: boolPtr(true)},
-			expect: []string{"-duc", "-silent", "-nc", "-rl", "150", "-c", "25", "-follow-redirects", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-t", defaultTemplateDir, "-rl", "150", "-c", "25", "-follow-redirects", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "followRedirects false omits flag",
 			cfg:    Config{FollowRedirects: boolPtr(false)},
-			expect: []string{"-duc", "-silent", "-nc", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-t", defaultTemplateDir, "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name: "all fields populated with templateIds (id dominates)",
@@ -212,7 +216,7 @@ func TestBuildArgs(t *testing.T) {
 				Concurrency:     intPtr(40),
 				FollowRedirects: boolPtr(true),
 			},
-			expect: []string{"-duc", "-silent", "-nc", "-id", "CVE-2021-1234", "-rl", "200", "-c", "40", "-follow-redirects", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-t", defaultTemplateDir, "-id", "CVE-2021-1234", "-rl", "200", "-c", "40", "-follow-redirects", "-target", target, "-jsonl"},
 		},
 	}
 
@@ -228,6 +232,62 @@ func TestBuildArgs(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestParseFinding covers the nuclei JSONL → Finding mapping rules.
+func TestParseFinding(t *testing.T) {
+	valid := `{"template-id":"cve-2021-1","info":{"name":"Real XSS","severity":"high","reference":["https://ref.example"],"solution":"patch it"},"tags":"xss,cve","matched-at":"https://example.com","host":"example.com","ip":"1.2.3.4","cve-id":["CVE-2021-1"],"cwe-id":["CWE-79"],"cvss-score":"8.1","cvss-metrics":"CVSS:3.1/AV:N/AC:L","epss-score":0.00054,"timestamp":"2024-01-02T03:04:05Z"}`
+	f, err := parseFinding([]byte(valid))
+	if err != nil {
+		t.Fatalf("parseFinding(valid) error: %v", err)
+	}
+	if f.Name != "Real XSS" || f.Severity != "high" || !strings.Contains(f.Host, "example.com") || f.IP != "1.2.3.4" {
+		t.Errorf("basic fields wrong: %+v", f)
+	}
+	if len(f.Tags) != 2 || f.Tags[0] != "xss" || f.Tags[1] != "cve" {
+		t.Errorf("tags = %v, want [xss cve]", f.Tags)
+	}
+	if len(f.References) != 1 || f.References[0] != "https://ref.example" {
+		t.Errorf("references = %v", f.References)
+	}
+	if len(f.CVEID) != 1 || f.CVEID[0] != "CVE-2021-1" || len(f.CWEID) != 1 || f.CWEID[0] != "CWE-79" {
+		t.Errorf("cve/cwe = %v / %v", f.CVEID, f.CWEID)
+	}
+	if f.CVSSScore != 8.1 || f.CVSSMetrics != "CVSS:3.1/AV:N/AC:L" || f.EPSSScore != 0.00054 {
+		t.Errorf("scores = %v/%v/%v", f.CVSSScore, f.CVSSMetrics, f.EPSSScore)
+	}
+	if ts := f.Timestamp.UTC().Format(time.RFC3339); ts != "2024-01-02T03:04:05Z" {
+		t.Errorf("timestamp = %q, want 2024-01-02T03:04:05Z", ts)
+	}
+	if err := f.Validate(); err != nil {
+		t.Errorf("parsed finding must validate: %v", err)
+	}
+
+	// Noise line → error (caller skips it).
+	if _, err := parseFinding([]byte("[INF] nuclei started scanning")); err == nil {
+		t.Error("parseFinding(noise) = nil error, want error")
+	}
+
+	// Unknown severity normalizes to info so real matches survive.
+	unknown, err := parseFinding([]byte(`{"template-id":"t1","info":{"name":"N","severity":"unknown"}}`))
+	if err != nil {
+		t.Fatalf("parseFinding(unknown severity) error: %v", err)
+	}
+	if unknown.Severity != "info" {
+		t.Errorf("unknown severity → %q, want info", unknown.Severity)
+	}
+
+	// Missing name falls back to template-id; missing everything → error.
+	fallback, err := parseFinding([]byte(`{"template-id":"t2","info":{"severity":"low"}}`))
+	if err != nil {
+		t.Fatalf("parseFinding(name fallback) error: %v", err)
+	}
+	if fallback.Name != "t2" {
+		t.Errorf("Name = %q, want fallback t2", fallback.Name)
+	}
+	if _, err := parseFinding([]byte(`{}`)); err == nil {
+		t.Error("parseFinding(empty line) = nil error, want error")
 	}
 }
 
@@ -279,7 +339,7 @@ func TestBuildArgs_HasDucSilentNc(t *testing.T) {
 			if targetIdx < 0 {
 				t.Fatalf("missing -target in %v", got)
 			}
-			for _, flag := range []string{"-duc", "-silent", "-nc"} {
+			for _, flag := range []string{"-duc", "-silent", "-nc", "-t"} {
 				if indexOf(got, flag) > targetIdx {
 					t.Errorf("%q must come before -target, got %v", flag, got)
 				}
@@ -298,6 +358,31 @@ func TestBuildArgs_AppliesDefaults(t *testing.T) {
 	got := buildArgs(target, Config{})
 	assertArgsContainsNext(t, got, "-rl", "150")
 	assertArgsContainsNext(t, got, "-c", "25")
+}
+
+// TestBuildArgs_IncludesTemplateDir: -t is always emitted after -duc -silent -nc,
+// defaulting to the templates baked into /opt by the Dockerfile.
+func TestBuildArgs_IncludesTemplateDir(t *testing.T) {
+	t.Setenv("NUCLEI_TEMPLATE_DIR", "")
+	if defaultTemplateDir != "/opt/nuclei-templates" {
+		t.Fatalf("defaultTemplateDir = %q, want /opt/nuclei-templates", defaultTemplateDir)
+	}
+	target := "https://example.com"
+	got := buildArgs(target, Config{})
+	assertArgsContainsNext(t, got, "-t", defaultTemplateDir)
+	if idx := indexOf(got, "-t"); idx != 3 || idx+1 >= len(got) || got[idx-3] != "-duc" {
+		t.Errorf("-t must be the 4th arg (right after -duc -silent -nc), got %v", got)
+	}
+}
+
+// TestBuildArgs_TemplateDirEnvOverride: NUCLEI_TEMPLATE_DIR overrides the
+// baked-in default so scans can point at a custom templates location.
+func TestBuildArgs_TemplateDirEnvOverride(t *testing.T) {
+	t.Setenv("NUCLEI_TEMPLATE_DIR", "/custom/templates")
+	target := "https://example.com"
+	got := buildArgs(target, Config{})
+	assertArgsContainsNext(t, got, "-t", "/custom/templates")
+	assertArgsNotContains(t, got, "/opt/nuclei-templates")
 }
 
 func indexOf(args []string, v string) int {
@@ -456,14 +541,14 @@ func TestExecute_WithOASMConfig(t *testing.T) {
 	t.Setenv("FAKE_MODE", "empty")
 	t.Setenv("OASM_CONFIG", `{"severity":["critical"],"rateLimit":200}`)
 	a := &NucleiAdapter{}
-	ch := make(chan []byte, 4)
+	ch := make(chan connector.Finding, 4)
 	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
 	// empty mode produces no findings — just verify it ran without error
 	select {
 	case b := <-ch:
-		t.Fatalf("nothing should be emitted in empty mode, got: %s", b)
+		t.Fatalf("nothing should be emitted in empty mode, got: %+v", b)
 	default:
 	}
 }
@@ -474,7 +559,7 @@ func TestExecute_EmptyOASMConfig(t *testing.T) {
 	t.Setenv("FAKE_MODE", "empty")
 	t.Setenv("OASM_CONFIG", "")
 	a := &NucleiAdapter{}
-	ch := make(chan []byte, 4)
+	ch := make(chan connector.Finding, 4)
 	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
@@ -486,7 +571,7 @@ func TestExecute_MalformedOASMConfig(t *testing.T) {
 	t.Setenv("FAKE_MODE", "empty")
 	t.Setenv("OASM_CONFIG", "not-json!!!")
 	a := &NucleiAdapter{}
-	ch := make(chan []byte, 4)
+	ch := make(chan connector.Finding, 4)
 	err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch)
 	if err == nil {
 		t.Fatal("expected error for malformed OASM_CONFIG")

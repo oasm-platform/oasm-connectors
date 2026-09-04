@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
+	"time"
+
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 )
 
 // WpscanAdapter runs WPScan and streams normalised findings.
@@ -16,8 +20,8 @@ type WpscanAdapter struct{}
 func (a WpscanAdapter) Validate(_ context.Context, _ map[string]any) error { return nil }
 
 // Execute runs wpscan --url <target> --format json and streams each
-// vulnerability as a JSONL line to out.
-func (a WpscanAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- []byte) error {
+// vulnerability as a normalized Finding to out.
+func (a WpscanAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
 	target, _ := inputs["target"].(string)
 	if strings.TrimSpace(target) == "" {
 		return fmt.Errorf("target required")
@@ -60,11 +64,11 @@ func (a WpscanAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 
 	findings := extractFindings(scanResult, target)
 	for _, f := range findings {
-		data, err := json.Marshal(f)
-		if err != nil {
-			continue
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case out <- f:
 		}
-		out <- data
 	}
 
 	return nil
@@ -101,16 +105,8 @@ type wpscanVersionInfo struct {
 
 // --- Finding extraction ---
 
-type finding struct {
-	Title    string              `json:"title"`
-	Severity string              `json:"severity"`
-	Source   string              `json:"source"`
-	Target   string              `json:"target"`
-	Refs     map[string][]string `json:"references,omitempty"`
-}
-
-func extractFindings(result wpscanOutput, target string) []finding {
-	var findings []finding
+func extractFindings(result wpscanOutput, target string) []connector.Finding {
+	var findings []connector.Finding
 
 	// Core vulnerabilities.
 	for _, vulns := range result.Vulnerabilities {
@@ -147,15 +143,38 @@ func extractFindings(result wpscanOutput, target string) []finding {
 	return findings
 }
 
-func toFinding(v wpscanVuln, target string) finding {
-	f := finding{
-		Title:    v.Title,
-		Severity: v.Severity,
-		Source:   "wpscan",
-		Target:   target,
+// normalizeSeverity lowercases a wpscan severity so it matches the SDK enum
+// (wpscan emits "Critical", "High", "Medium", "Low"; the Finding contract is
+// info|low|medium|high|critical). Unknown values fall back to info — same
+// policy as the nessus adapter's mapSeverity.
+func normalizeSeverity(s string) string {
+	s = strings.ToLower(s)
+	for _, sev := range connector.Severities {
+		if s == sev {
+			return s
+		}
+	}
+	return "info"
+}
+
+func toFinding(v wpscanVuln, target string) connector.Finding {
+	f := connector.Finding{
+		Name:      v.Title,
+		Severity:  normalizeSeverity(v.Severity),
+		MatchedAt: target,
+		Timestamp: time.Now(),
 	}
 	if len(v.References) > 0 {
-		f.Refs = v.References
+		// Flatten the references map (url, wpvulndb, …) into a deterministic
+		// list: sorted keys, then values in their listed order.
+		keys := make([]string, 0, len(v.References))
+		for k := range v.References {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			f.References = append(f.References, v.References[k]...)
+		}
 	}
 	return f
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"sort"
@@ -10,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 	"github.com/tencat-dev/nessus-client-go/nessus"
 )
 
@@ -176,7 +176,25 @@ func mapPluginOutput(v *nessus.VulnerabilityResource, output *nessus.ScansPlugin
 	return f, nil
 }
 
-func collectFindings(ctx context.Context, client *nessus.Client, r *nessus.ScansDetailsResponse, target string, out chan<- []byte) error {
+// toSDKFinding converts the internal finding model to the normalized SDK
+// Finding streamed on the connector channel.
+func (f *finding) toSDKFinding() connector.Finding {
+	return connector.Finding{
+		Name:        f.PluginName,
+		Severity:    f.Severity,
+		References:  f.References,
+		CVEID:       f.CVEIDs,
+		CWEID:       f.CWEIDs,
+		CVSSScore:   f.CVSSScore,
+		CVSSMetrics: f.CVSSVector,
+		EPSSScore:   f.EPSSScore,
+		Solution:    f.Solution,
+		Host:        f.Host,
+		Timestamp:   time.Now(),
+	}
+}
+
+func collectFindings(ctx context.Context, client *nessus.Client, r *nessus.ScansDetailsResponse, target string, out chan<- connector.Finding) error {
 	if r == nil || len(r.Vulnerabilities) == 0 {
 		return nil
 	}
@@ -239,15 +257,10 @@ func collectFindings(ctx context.Context, client *nessus.Client, r *nessus.Scans
 	})
 
 	for _, f := range collected {
-		data, err := json.Marshal(f)
-		if err != nil {
-			log.Printf("nessus: marshal plugin %d: %v", f.PluginID, err)
-			continue
-		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case out <- data:
+		case out <- f.toSDKFinding():
 		}
 	}
 

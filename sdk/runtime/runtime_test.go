@@ -14,17 +14,17 @@ import (
 	"google.golang.org/grpc"
 )
 
-// fakeAdapter emits one chunk and succeeds; mirrors adapter shape used by connectors.
+// fakeAdapter emits one finding and succeeds; mirrors adapter shape used by connectors.
 type fakeAdapter struct {
-	chunk []byte
+	chunk *connector.Finding
 	err   error
 }
 
 func (a *fakeAdapter) Validate(ctx context.Context, inputs map[string]any) error { return nil }
-func (a *fakeAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- []byte) error {
+func (a *fakeAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
 	if a.chunk != nil {
 		select {
-		case out <- a.chunk:
+		case out <- *a.chunk:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -38,7 +38,7 @@ type fakeConnectorServer struct {
 	pb.UnimplementedConnectorServiceServer
 	registerCh chan *pb.Register
 	execReq    *pb.ExecuteJob
-	resultCh   chan []byte
+	resultCh   chan *pb.Result
 	doneCh     chan *pb.Done
 }
 
@@ -46,7 +46,7 @@ func newFakeConnectorServer(exec *pb.ExecuteJob) *fakeConnectorServer {
 	return &fakeConnectorServer{
 		registerCh: make(chan *pb.Register, 1),
 		execReq:    exec,
-		resultCh:   make(chan []byte, 1),
+		resultCh:   make(chan *pb.Result, 16),
 		doneCh:     make(chan *pb.Done, 1),
 	}
 }
@@ -75,7 +75,7 @@ func (s *fakeConnectorServer) Connect(stream pb.ConnectorService_ConnectServer) 
 		}
 		switch m := msg.Message.(type) {
 		case *pb.ConnectorMessage_Result:
-			s.resultCh <- m.Result.Data
+			s.resultCh <- m.Result
 		case *pb.ConnectorMessage_Done:
 			s.doneCh <- m.Done
 			return nil
@@ -164,7 +164,7 @@ func TestRunRegistersExecutionIdentity(t *testing.T) {
 	addr := startFakeServer(t, srv)
 	t.Setenv("WORKER_GRPC_ADDR", addr)
 
-	adapter := &fakeAdapter{chunk: []byte(`{"ok":true}`)}
+	adapter := &fakeAdapter{chunk: &connector.Finding{Name: "example-finding", Severity: "info", MatchedAt: "https://example.com"}}
 	rt := New(connector.New(adapter))
 	_, _ = runRuntime(t, rt)
 
@@ -183,9 +183,15 @@ func TestRunRegistersExecutionIdentity(t *testing.T) {
 	}
 
 	select {
-	case data := <-srv.resultCh:
-		if string(data) != `{"ok":true}` {
-			t.Errorf("Result data = %q, want %q", data, `{"ok":true}`)
+	case res := <-srv.resultCh:
+		if len(res.Findings) != 1 {
+			t.Fatalf("Result.Findings length = %d, want 1", len(res.Findings))
+		}
+		if res.Findings[0].Name != "example-finding" {
+			t.Errorf("Result.Findings[0].Name = %q, want %q", res.Findings[0].Name, "example-finding")
+		}
+		if res.Findings[0].Severity != "info" {
+			t.Errorf("Result.Findings[0].Severity = %q, want %q", res.Findings[0].Severity, "info")
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for Result")
@@ -207,6 +213,7 @@ func TestRunRegistersExecutionIdentity(t *testing.T) {
 func TestRunRejectedRegistrationReturnsReason(t *testing.T) {
 	t.Setenv("WORKER_GRPC_ADDR", "")
 	t.Setenv("WORKER_TOKEN", "tok-reject")
+	t.Setenv("EXECUTION_ID", "exec-reject")
 
 	srv := &rejectedConnectorServer{
 		registerCh: make(chan *pb.Register, 1),
@@ -243,7 +250,9 @@ func TestRunRejectedRegistrationReturnsReason(t *testing.T) {
 func TestRunLegacyRegisterOmitsIdentity(t *testing.T) {
 	t.Setenv("WORKER_GRPC_ADDR", "")
 	t.Setenv("WORKER_TOKEN", "tok-legacy")
-	// EXECUTION_ID, JOB_ID, TOOL unset — legacy mode must stay intact
+	// EXECUTION_ID, JOB_ID, TOOL unset — legacy mode must stay intact; the
+	// opt-out keeps the legacy no-identity path legal.
+	t.Setenv("OASM_ALLOW_LEGACY_NO_EXEC_ID", "1")
 
 	srv := newFakeConnectorServer(nil) // no Execute; register-only
 	addr := startFakeServer(t, srv)
@@ -269,19 +278,19 @@ func TestRunLegacyRegisterOmitsIdentity(t *testing.T) {
 
 // recordingAdapter captures the merged inputs handed to Execute.
 type recordingAdapter struct {
-	chunk    []byte
+	chunk    *connector.Finding
 	err      error
 	inputsCh chan map[string]any
 }
 
 func (a *recordingAdapter) Validate(ctx context.Context, inputs map[string]any) error { return nil }
-func (a *recordingAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- []byte) error {
+func (a *recordingAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
 	if a.inputsCh != nil {
 		a.inputsCh <- inputs
 	}
 	if a.chunk != nil {
 		select {
-		case out <- a.chunk:
+		case out <- *a.chunk:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -297,7 +306,7 @@ type blockingAdapter struct {
 }
 
 func (a *blockingAdapter) Validate(ctx context.Context, inputs map[string]any) error { return nil }
-func (a *blockingAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- []byte) error {
+func (a *blockingAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
 	close(a.startedCh)
 	<-ctx.Done()
 	err := ctx.Err()
@@ -389,6 +398,7 @@ func (s *cancelServer) Connect(stream pb.ConnectorService_ConnectServer) error {
 
 func TestRunWorkerInputsOverrideEnvInputs(t *testing.T) {
 	t.Setenv("WORKER_GRPC_ADDR", "")
+	t.Setenv("EXECUTION_ID", "exec-merge")
 	t.Setenv("INPUT_TARGET", "env-target")
 	t.Setenv("INPUT_EXTRA", "env-only")
 
@@ -402,7 +412,7 @@ func TestRunWorkerInputsOverrideEnvInputs(t *testing.T) {
 	t.Setenv("WORKER_GRPC_ADDR", addr)
 
 	inputsCh := make(chan map[string]any, 1)
-	adapter := &recordingAdapter{chunk: []byte(`{"ok":true}`), inputsCh: inputsCh}
+	adapter := &recordingAdapter{chunk: &connector.Finding{Name: "merged", Severity: "info"}, inputsCh: inputsCh}
 	rt := New(connector.New(adapter))
 	_, _ = runRuntime(t, rt)
 	waitRegister(t, srv)
@@ -423,6 +433,7 @@ func TestRunWorkerInputsOverrideEnvInputs(t *testing.T) {
 func TestRunCancelAbortsInFlightExecution(t *testing.T) {
 	t.Setenv("WORKER_GRPC_ADDR", "")
 	t.Setenv("WORKER_TOKEN", "tok-cancel")
+	t.Setenv("EXECUTION_ID", "exec-cancel")
 
 	execReq := &pb.ExecuteJob{ExecutionId: "exec-cancel", JobId: "job-cancel", Tool: "nuclei"}
 	sendCancel := make(chan struct{})
@@ -477,5 +488,68 @@ func TestRunCancelAbortsInFlightExecution(t *testing.T) {
 	rt.cancelsMu.Unlock()
 	if still {
 		t.Error("cancel map still holds entry after execution finished")
+	}
+}
+
+// invalidFindingAdapter emits one valid finding, then one that fails
+// Validate (empty name) — proves the runtime fail-fasts on contract
+// violations instead of silently dropping them.
+type invalidFindingAdapter struct{}
+
+func (a *invalidFindingAdapter) Validate(ctx context.Context, inputs map[string]any) error {
+	return nil
+}
+func (a *invalidFindingAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
+	out <- connector.Finding{Name: "good-finding", Severity: "medium"}
+	out <- connector.Finding{Severity: "medium"} // missing Name → invalid
+	return nil
+}
+
+func TestRunInvalidFindingFailsFast(t *testing.T) {
+	t.Setenv("WORKER_GRPC_ADDR", "")
+	t.Setenv("WORKER_TOKEN", "tok-invalid")
+	t.Setenv("EXECUTION_ID", "exec-invalid")
+	t.Setenv("JOB_ID", "job-invalid")
+	t.Setenv("TOOL", "nuclei")
+
+	srv := newFakeConnectorServer(&pb.ExecuteJob{
+		ExecutionId: "exec-invalid",
+		JobId:       "job-invalid",
+		Tool:        "nuclei",
+		Inputs:      map[string]string{"target": "https://example.com"},
+	})
+	addr := startFakeServer(t, srv)
+	t.Setenv("WORKER_GRPC_ADDR", addr)
+
+	rt := New(connector.New(&invalidFindingAdapter{}))
+	_, _ = runRuntime(t, rt)
+	waitRegister(t, srv)
+
+	// The valid finding still ships.
+	select {
+	case res := <-srv.resultCh:
+		if len(res.Findings) != 1 || res.Findings[0].Name != "good-finding" {
+			t.Fatalf("first Result = %+v, want one finding named good-finding", res)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for first Result")
+	}
+
+	// The invalid finding must not stream: the execution terminates with a
+	// fatal Done error naming the offending index, not a silent drop.
+	select {
+	case done := <-srv.doneCh:
+		if !strings.Contains(done.Error, "fatal: finding 1 invalid") {
+			t.Fatalf("Done.Error = %q, want fatal invalid-finding error at index 1", done.Error)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for Done")
+	}
+
+	// No further Result may arrive for the invalid finding.
+	select {
+	case res := <-srv.resultCh:
+		t.Fatalf("unexpected extra Result after invalid finding: %+v", res)
+	case <-time.After(100 * time.Millisecond):
 	}
 }

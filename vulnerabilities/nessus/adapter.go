@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 	"github.com/tencat-dev/nessus-client-go/nessus"
 )
 
@@ -26,10 +27,10 @@ func (a *NessusAdapter) Validate(_ context.Context, _ map[string]any) error {
 	return nil
 }
 
-// Execute runs a Nessus scan against target and streams every JSONL finding to
+// Execute runs a Nessus scan against target and streams every finding to
 // out. The scan is deleted only after findings streamed successfully
 // (retention-on-failure).
-func (a *NessusAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- []byte) error {
+func (a *NessusAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
 	target, _ := inputs["target"].(string)
 	target = strings.TrimSpace(target)
 	if target == "" {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 	"github.com/tencat-dev/nessus-client-go/nessus"
 )
 
@@ -897,7 +898,7 @@ func TestCollectFindings_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
 
-	out := make(chan []byte, 100)
+	out := make(chan connector.Finding, 100)
 	r := &nessus.ScansDetailsResponse{
 		Info: &nessus.ScansDetailsInfo{ObjectID: 1},
 		Vulnerabilities: []*nessus.VulnerabilityResource{

@@ -11,12 +11,19 @@ RUN cd vulnerabilities/nuclei && CGO_ENABLED=0 GOWORK=off go build -trimpath -o 
 FROM alpine:3.20
 COPY --from=tool /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /out/connector /usr/local/bin/connector
-# Offline runtime: templates are baked at build time. /opt/nuclei-templates
-# lives outside /tmp because the worker mounts Tmpfs on /tmp (plus the named
-# volume on NUCLEI_TEMPLATES_DIR); HOME/XDG_CACHE_HOME stay under /tmp, which
-# is ephemeral. At runtime nuclei runs with -duc and never touches the network.
-ENV HOME=/tmp XDG_CACHE_HOME=/tmp/.cache NUCLEI_TEMPLATES_DIR=/opt/nuclei-templates
-RUN mkdir -p /opt/nuclei-templates && chmod 777 /opt/nuclei-templates && nuclei -ut || true
+# Offline runtime: templates are baked into /opt/nuclei-templates at build
+# time. nuclei ignores the NUCLEI_TEMPLATES_DIR env var (it honors only the
+# -t/-ud flags and its config file), so the adapter always passes -t
+# explicitly. HOME/XDG_CACHE_HOME stay under /tmp (the worker mounts Tmpfs
+# there); `nuclei -ut` defaults to HOME and would land in /tmp, hence -ud
+# targets /opt before privileges drop. /tmp is world-writable so uid 10001
+# can create its config/cache dirs at runtime.
+ENV HOME=/tmp XDG_CACHE_HOME=/tmp/.cache
+RUN mkdir -p /opt/nuclei-templates /tmp/.config/nuclei /tmp/.cache \
+    && nuclei -ut -ud /opt/nuclei-templates || true \
+    && chown -R 10001:10001 /opt/nuclei-templates /tmp/.config /tmp/.cache \
+    && chmod 1777 /tmp \
+    && chmod -R a+rX /opt/nuclei-templates
 RUN adduser -D -u 10001 connector
 USER 10001
 ENTRYPOINT ["/usr/local/bin/connector"]

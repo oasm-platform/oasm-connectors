@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 )
 
 // fakeNessus is a scripted fake of the Nessus REST API. It records call counts
@@ -183,7 +185,7 @@ func TestValidate_NoOp(t *testing.T) {
 
 func TestExecute_MissingTarget(t *testing.T) {
 	a := NessusAdapter{}
-	err := a.Execute(context.Background(), map[string]any{}, make(chan []byte, 1))
+	err := a.Execute(context.Background(), map[string]any{}, make(chan connector.Finding, 1))
 	if err == nil || !strings.Contains(err.Error(), "target required") {
 		t.Fatalf("err = %v, want error containing 'target required'", err)
 	}
@@ -194,7 +196,7 @@ func TestExecute_MissingURL(t *testing.T) {
 	t.Setenv("NESSUS_USERNAME", "u")
 	t.Setenv("NESSUS_PASSWORD", "p")
 	a := NessusAdapter{}
-	err := a.Execute(context.Background(), map[string]any{"target": "10.0.0.1"}, make(chan []byte, 1))
+	err := a.Execute(context.Background(), map[string]any{"target": "10.0.0.1"}, make(chan connector.Finding, 1))
 	if err == nil {
 		t.Fatal("want error for missing NESSUS_URL")
 	}
@@ -205,34 +207,38 @@ func TestExecute_HappyPath(t *testing.T) {
 	setNessusEnv(t, f.server.URL)
 	shortenPoll(t, 20*time.Millisecond)
 
-	out := make(chan []byte, 16)
+	out := make(chan connector.Finding, 16)
 	if err := (&NessusAdapter{}).Execute(context.Background(), map[string]any{"target": "10.0.0.1"}, out); err != nil {
 		t.Fatalf("Execute error: %v", err)
 	}
 	close(out)
 
-	var findings []map[string]any
-	for data := range out {
-		var m map[string]any
-		if err := json.Unmarshal(data, &m); err != nil {
-			t.Fatalf("invalid JSON finding %q: %v", data, err)
-		}
-		findings = append(findings, m)
+	var findings []connector.Finding
+	for f := range out {
+		findings = append(findings, f)
 	}
 
 	if len(findings) != 2 {
 		t.Fatalf("got %d findings, want 2", len(findings))
 	}
-	ids := map[float64]bool{}
+	names := map[string]bool{}
 	for _, finding := range findings {
-		id, ok := finding["plugin_id"].(float64)
-		if !ok {
-			t.Fatalf("finding has no numeric plugin_id: %v", finding)
-		}
-		ids[id] = true
+		names[finding.Name] = true
 	}
-	if !ids[11111] || !ids[22222] {
-		t.Errorf("findings missing expected plugin ids 11111/22222: %v", findings)
+	if !names["Test Vuln 11111"] || !names["Test Vuln 22222"] {
+		t.Errorf("findings missing expected plugin findings 11111/22222: %v", names)
+	}
+	// Fake data severity 3 → high, Host from the port output map.
+	for _, finding := range findings {
+		if finding.Severity != "high" {
+			t.Errorf("finding %q severity = %q, want high", finding.Name, finding.Severity)
+		}
+		if finding.Host != "example.com" {
+			t.Errorf("finding %q host = %q, want example.com", finding.Name, finding.Host)
+		}
+		if err := finding.Validate(); err != nil {
+			t.Errorf("finding %q invalid: %v", finding.Name, err)
+		}
 	}
 
 	f.mu.Lock()
@@ -259,7 +265,7 @@ func TestExecute_ScanAborted(t *testing.T) {
 	setNessusEnv(t, f.server.URL)
 	shortenPoll(t, 20*time.Millisecond)
 
-	out := make(chan []byte, 16)
+	out := make(chan connector.Finding, 16)
 	err := (&NessusAdapter{}).Execute(context.Background(), map[string]any{"target": "10.0.0.1"}, out)
 	if err == nil || !strings.Contains(err.Error(), "aborted") {
 		t.Fatalf("err = %v, want error containing 'aborted'", err)
@@ -282,7 +288,7 @@ func TestExecute_ServerUnreachable(t *testing.T) {
 
 	setNessusEnv(t, url)
 
-	err := (&NessusAdapter{}).Execute(context.Background(), map[string]any{"target": "10.0.0.1"}, make(chan []byte, 16))
+	err := (&NessusAdapter{}).Execute(context.Background(), map[string]any{"target": "10.0.0.1"}, make(chan connector.Finding, 16))
 	if err == nil {
 		t.Fatal("want error for unreachable server")
 	}
@@ -297,7 +303,7 @@ func TestExecute_CtxCancelMidPoll(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	out := make(chan []byte, 16)
+	out := make(chan connector.Finding, 16)
 	done := make(chan error, 1)
 	go func() {
 		done <- (&NessusAdapter{}).Execute(ctx, map[string]any{"target": "10.0.0.1"}, out)

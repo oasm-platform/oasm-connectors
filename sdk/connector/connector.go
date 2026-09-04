@@ -5,7 +5,7 @@ import "context"
 // Adapter is the tool-specific implementation that each connector provides.
 type Adapter interface {
 	Validate(ctx context.Context, inputs map[string]any) error
-	Execute(ctx context.Context, inputs map[string]any, out chan<- []byte) error
+	Execute(ctx context.Context, inputs map[string]any, out chan<- Finding) error
 }
 
 // Connector wraps an Adapter and exposes Validate/Execute.
@@ -20,6 +20,6 @@ func (c *Connector) Validate(ctx context.Context, inputs map[string]any) error {
 }
 
 // Execute delegates to the underlying Adapter.
-func (c *Connector) Execute(ctx context.Context, inputs map[string]any, out chan<- []byte) error {
+func (c *Connector) Execute(ctx context.Context, inputs map[string]any, out chan<- Finding) error {
 	return c.adapter.Execute(ctx, inputs, out)
 }

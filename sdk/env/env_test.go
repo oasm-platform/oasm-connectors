@@ -35,7 +35,9 @@ func TestLoadParsesExecutionIdentity(t *testing.T) {
 func TestLoadOptionalIdentityMissingIsEmpty(t *testing.T) {
 	t.Setenv("WORKER_GRPC_ADDR", "localhost:6276")
 	t.Setenv("WORKER_TOKEN", "tok-1")
-	// EXECUTION_ID, JOB_ID, TOOL intentionally unset
+	// EXECUTION_ID, JOB_ID, TOOL intentionally unset. EXECUTION_ID is
+	// mandatory without the opt-out; the opt-out keeps the legacy path valid.
+	t.Setenv("OASM_ALLOW_LEGACY_NO_EXEC_ID", "1")
 
 	cfg, err := Load()
 	if err != nil {

@@ -13,6 +13,8 @@ import (
 	"github.com/oasm-platform/oasm-connectors/sdk/logging"
 	pb "github.com/oasm-platform/oasm-connectors/sdk/proto/gen"
 	"github.com/oasm-platform/oasm-connectors/sdk/transport"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Runtime owns a Connector and runs until the context is cancelled.
@@ -44,25 +46,54 @@ func New(c *connector.Connector) *Runtime {
 const sendTimeout = 30 * time.Second
 
 // Run connects to the Worker gRPC server using env-injected config,
-// registers, and enters the execute loop. Falls back to blocking on
-// ctx.Done() when WORKER_GRPC_ADDR is not set (legacy mode).
+// registers, and enters the execute loop. Fails fast with a clear error when
+// required config is missing (no point registering and waiting forever for an
+// ExecuteJob the worker will never route): a connector only ever runs inside
+// a worker-managed container, and the worker always injects WORKER_GRPC_ADDR,
+// so a missing addr is a misconfiguration.
 func (r *Runtime) Run(ctx context.Context) error {
 	cfg, err := env.Load()
+	if errors.Is(err, env.ErrWorkerAddrMissing) {
+		// No Worker endpoint: a connector must be started by the Worker, which
+		// always injects WORKER_GRPC_ADDR (open-asm worker buildContainerEnv).
+		// Fail fast instead of blocking on ctx.Done() — with a Background
+		// context that would deadlock (nil Done channel).
+		r.logger.Errorf("fatal config: %v", err)
+		return fmt.Errorf("fatal: %w: connector must be started by the worker; check WORKER_GRPC_ADDR", err)
+	}
 	if err != nil {
-		// No Worker config — legacy mode, just block
-		r.logger.Info("no WORKER_GRPC_ADDR set, blocking on context")
-		<-ctx.Done()
-		return ctx.Err()
+		// Missing execution identity (or other config problem): fail fast
+		// instead of registering and hanging waiting for ExecuteJob.
+		r.logger.Errorf("fatal config: %v", err)
+		return fmt.Errorf("fatal: %w", err)
 	}
 
 	inputs := env.LoadInputs()
 	r.logger.Infof("loaded %d env inputs", len(inputs))
 	r.logger.Infof("worker config: addr=%s token_set=%t execution=%s job=%s tool=%s", cfg.WorkerAddr, cfg.Token != "", cfg.ExecutionID, cfg.JobID, cfg.Tool)
 
-	// Dial Worker
-	conn, err := transport.Connect(ctx, cfg.WorkerAddr)
-	if err != nil {
-		return fmt.Errorf("retryable: dial worker: %w", err)
+	// Dial Worker — mTLS when all three WORKER_TLS_* vars are set, plaintext
+	// otherwise (missing any var keeps the historical plaintext behavior).
+	// Empty serverName lets gRPC derive it from the dial address, so the
+	// Worker cert must cover the address it is dialed at.
+	caFile, certFile, keyFile, tlsEnabled := env.TLSFiles()
+	var conn *grpc.ClientConn
+	if tlsEnabled {
+		r.logger.Info("worker mTLS enabled: WORKER_TLS_CA/CERT/KEY all set")
+		creds, err := transport.LoadMTLS(caFile, certFile, keyFile, "")
+		if err != nil {
+			// Bad CA/cert/key material is operator config, not transient.
+			return fmt.Errorf("fatal: load mTLS credentials: %w", err)
+		}
+		conn, err = transport.DialWithTLSCreds(cfg.WorkerAddr, creds)
+		if err != nil {
+			return fmt.Errorf("retryable: dial worker (mTLS): %w", err)
+		}
+	} else {
+		conn, err = transport.Connect(ctx, cfg.WorkerAddr)
+		if err != nil {
+			return fmt.Errorf("retryable: dial worker: %w", err)
+		}
 	}
 	defer conn.Close()
 
@@ -245,7 +276,7 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 
 	// 128-buffer so a burst of findings does not stall the adapter while a
 	// send to a slow worker is in flight.
-	out := make(chan []byte, 128)
+	out := make(chan connector.Finding, 128)
 	errCh := make(chan error, 1)
 
 	go func() {
@@ -256,13 +287,26 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	// Stream results — sends are serialized inside this goroutine; each send
 	// is bounded so a stalled worker cannot wedge the stream (a wedged send
 	// would also make the worker's Cancel unprocessable).
+	//
+	// Every finding is validated before it is transported. An invalid finding
+	// is a protocol violation, not noise: the stream stops (fail fast), the
+	// execution is cancelled so the adapter unblocks, and a fatal error
+	// naming the index is carried to the worker by the Done message. No
+	// silent drops — findings either ship or fail loudly.
 	n := 0
-	for data := range out {
+	var invalidErr error
+	for f := range out {
+		if err := f.Validate(); err != nil {
+			invalidErr = fmt.Errorf("fatal: finding %d invalid: %w", n, err)
+			r.logger.Errorf("invalid finding dropped: execution=%s index=%d err=%v", exec.ExecutionId, n, err)
+			cancel()
+			break
+		}
 		if err := r.sendStreamMsg(execCtx, stream, &pb.ConnectorMessage{
 			Message: &pb.ConnectorMessage_Result{
 				Result: &pb.Result{
 					ExecutionId: exec.ExecutionId,
-					Data:        data,
+					Findings:    []*pb.Finding{toProtoFinding(f)},
 				},
 			},
 		}); err != nil {
@@ -287,6 +331,12 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 		r.logger.Errorf("adapter did not stop: execution=%s job=%s tool=%s", exec.ExecutionId, exec.JobId, exec.Tool)
 	}
 
+	// An invalid finding outranks any adapter error: it is why the stream
+	// stopped, and the worker must see it on the Done path.
+	if invalidErr != nil {
+		adapterErr = invalidErr
+	}
+
 	// Send Done
 	doneMsg := &pb.Done{ExecutionId: exec.ExecutionId}
 	if adapterErr != nil {
@@ -304,4 +354,28 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	r.logger.Infof("execution done: execution=%s job=%s tool=%s results=%d", exec.ExecutionId, exec.JobId, exec.Tool, n)
 
 	return nil
+}
+
+// toProtoFinding maps a connector.Finding onto its wire representation. A
+// zero Timestamp is omitted rather than shipped as a bogus epoch value.
+func toProtoFinding(f connector.Finding) *pb.Finding {
+	out := &pb.Finding{
+		Name:        f.Name,
+		Severity:    f.Severity,
+		Tags:        f.Tags,
+		References:  f.References,
+		CveId:       f.CVEID,
+		CweId:       f.CWEID,
+		CvssScore:   f.CVSSScore,
+		CvssMetrics: f.CVSSMetrics,
+		EpssScore:   f.EPSSScore,
+		Solution:    f.Solution,
+		MatchedAt:   f.MatchedAt,
+		Host:        f.Host,
+		Ip:          f.IP,
+	}
+	if !f.Timestamp.IsZero() {
+		out.Timestamp = timestamppb.New(f.Timestamp)
+	}
+	return out
 }

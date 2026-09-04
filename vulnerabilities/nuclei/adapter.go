@@ -11,6 +11,9 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 )
 
 // NucleiAdapter implements Validate/Execute for nuclei as a thin wrapper:
@@ -43,6 +46,22 @@ func parseConfig(raw string) (Config, error) {
 	return cfg, nil
 }
 
+// defaultTemplateDir is where the Dockerfile bakes the template collection
+// (-ud /opt/nuclei-templates at build time). nuclei itself ignores the
+// NUCLEI_TEMPLATES_DIR env var — it honors only -t/-ud flags and its config
+// file — so the adapter must pass -t explicitly. Override per-scan via the
+// NUCLEI_TEMPLATE_DIR env var for custom layouts.
+const defaultTemplateDir = "/opt/nuclei-templates"
+
+// templateDir returns the templates directory: NUCLEI_TEMPLATE_DIR if set,
+// otherwise the baked-in defaultTemplateDir.
+func templateDir() string {
+	if d := os.Getenv("NUCLEI_TEMPLATE_DIR"); d != "" {
+		return d
+	}
+	return defaultTemplateDir
+}
+
 // buildArgs maps a Config to nuclei CLI flags, always ending with -target and -jsonl.
 // When TemplateIds is set, only -id is emitted as a filter: -severity/-tags/-etags
 // are dropped (with a warning) because mixing -id with template selection filters
@@ -54,6 +73,11 @@ func buildArgs(target string, cfg Config) []string {
 	// Stable flags first: -duc disables the update check (the container has no
 	// network at runtime), -silent hides banner noise, -nc disables colored output.
 	args = append(args, "-duc", "-silent", "-nc")
+
+	// Always pin the templates directory: at runtime HOME is a tmpfs, so nuclei's
+	// default lookup (HOME/nuclei-templates) finds nothing and aborts with
+	// "FTL no templates provided". /opt/nuclei-templates is baked at build time.
+	args = append(args, "-t", templateDir())
 
 	if len(cfg.TemplateIds) > 0 {
 		if len(cfg.Severity) > 0 || len(cfg.Tags) > 0 || len(cfg.ExcludeTags) > 0 {
@@ -114,10 +138,9 @@ func (a *NucleiAdapter) Validate(_ context.Context, _ map[string]any) error {
 }
 
 // Execute runs nuclei against target and streams every JSONL finding to out.
-// Non-JSON stdout lines (banner/noise) are skipped. Non-zero exit returns an
-// error carrying the exit code and the tail of stderr. A malformed OASM_CONFIG
+// Non-JSON stdout lines (banner/noise) are skipped. A malformed OASM_CONFIG
 // fails the execution instead of silently falling back to defaults.
-func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- []byte) error {
+func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
 	target, _ := inputs["target"].(string)
 	if target == "" {
 		return fmt.Errorf("target required")
@@ -155,12 +178,12 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 	defer done()
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		var v map[string]any
-		if json.Unmarshal(line, &v) != nil {
-			skipped++ // banner/noise lines
+		f, err := parseFinding(line)
+		if err != nil {
+			skipped++ // banner/noise or unusable lines
 			continue
 		}
-		out <- append([]byte(nil), line...)
+		out <- f
 		findings++
 	}
 	if err := scanner.Err(); err != nil {
@@ -178,6 +201,124 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 		return fmt.Errorf("nuclei exited: %w (exit code %d); stderr tail: %s", err, code, string(stderrTail))
 	}
 	return nil
+}
+
+// nucleiLine is the subset of a nuclei -jsonl output line the adapter maps
+// onto a Finding. `any` fields are used because nuclei emits some values
+// either as numbers or as strings depending on version/type.
+type nucleiLine struct {
+	TemplateID string `json:"template-id"`
+	Info       struct {
+		Name      string `json:"name"`
+		Severity  string `json:"severity"`
+		Reference any    `json:"reference"`
+		Tags      any    `json:"tags"`
+		Solution  string `json:"solution"`
+	} `json:"info"`
+	Tags        any    `json:"tags"`
+	MatchedAt   string `json:"matched-at"`
+	Host        string `json:"host"`
+	IP          string `json:"ip"`
+	CVSSScore   any    `json:"cvss-score"`
+	CVSSMetrics string `json:"cvss-metrics"`
+	EPSSScore   any    `json:"epss-score"`
+	CVEID       any    `json:"cve-id"`
+	CWEID       any    `json:"cwe-id"`
+	Timestamp   string `json:"timestamp"`
+}
+
+// parseFinding maps one nuclei JSONL line onto a connector.Finding. Lines the
+// adapter cannot use (noise, malformed JSON, no name at all) yield an error so
+// the caller skips them instead of failing the stream. Severity "unknown"
+// normalizes to "info" — mirrors nessus mapSeverity's default — so real
+// matches never drop; a missing info.name falls back to the template-id.
+func parseFinding(line []byte) (connector.Finding, error) {
+	var n nucleiLine
+	if err := json.Unmarshal(line, &n); err != nil {
+		return connector.Finding{}, err
+	}
+
+	f := connector.Finding{
+		Name:        n.Info.Name,
+		Severity:    normalizeSeverity(n.Info.Severity),
+		Tags:        toStrings(n.Tags),
+		References:  toStrings(n.Info.Reference),
+		CVEID:       toStrings(n.CVEID),
+		CWEID:       toStrings(n.CWEID),
+		CVSSMetrics: n.CVSSMetrics,
+		Solution:    n.Info.Solution,
+		MatchedAt:   n.MatchedAt,
+		Host:        n.Host,
+		IP:          n.IP,
+	}
+	if f.Name == "" {
+		f.Name = n.TemplateID
+	}
+	if score, ok := toFloat64(n.CVSSScore); ok {
+		f.CVSSScore = score
+	}
+	if score, ok := toFloat64(n.EPSSScore); ok {
+		f.EPSSScore = score
+	}
+	if ts, err := time.Parse(time.RFC3339, n.Timestamp); err == nil {
+		f.Timestamp = ts
+	}
+	if f.Name == "" {
+		return connector.Finding{}, fmt.Errorf("finding line has no name")
+	}
+	return f, nil
+}
+
+// normalizeSeverity maps a scanner severity onto the Finding enum; anything
+// outside it (e.g. nuclei "unknown") becomes "info" rather than killing the
+// whole stream at runtime validation.
+func normalizeSeverity(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	for _, v := range connector.Severities {
+		if s == v {
+			return s
+		}
+	}
+	return "info"
+}
+
+// toStrings normalizes a JSON value into a string slice, accepting a string
+// (comma- or single-valued), an array, or nil.
+func toStrings(v any) []string {
+	switch t := v.(type) {
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, e := range t {
+			if s, ok := e.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, strings.TrimSpace(s))
+			}
+		}
+		return out
+	case string:
+		if strings.TrimSpace(t) == "" {
+			return nil
+		}
+		parts := strings.Split(t, ",")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		return parts
+	default:
+		return nil
+	}
+}
+
+// toFloat64 normalizes a JSON number-or-string into a float64.
+func toFloat64(v any) (float64, bool) {
+	switch t := v.(type) {
+	case float64:
+		return t, true
+	case string:
+		f, err := strconv.ParseFloat(strings.TrimSpace(t), 64)
+		return f, err == nil
+	default:
+		return 0, false
+	}
 }
 
 // limitedWriter keeps only the last `limit` bytes written to it.

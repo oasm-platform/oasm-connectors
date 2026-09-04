@@ -8,8 +8,8 @@ import (
 type fakeAdapter struct{}
 
 func (f *fakeAdapter) Validate(ctx context.Context, inputs map[string]any) error { return nil }
-func (f *fakeAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- []byte) error {
-	out <- []byte(`{"ok":true}`)
+func (f *fakeAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- Finding) error {
+	out <- Finding{Name: "test-finding", Severity: "info"}
 	return nil
 }
 
@@ -25,13 +25,13 @@ func TestConnectorWrapsAdapter(t *testing.T) {
 
 func TestConnectorExecuteForwardsToAdapter(t *testing.T) {
 	c := New(&fakeAdapter{})
-	ch := make(chan []byte, 1)
+	ch := make(chan Finding, 1)
 	if err := c.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
 		t.Fatal(err)
 	}
-	got := string(<-ch)
-	if got != `{"ok":true}` {
-		t.Fatalf("unexpected execute output: %q", got)
+	got := <-ch
+	if got.Name != "test-finding" || got.Severity != "info" {
+		t.Fatalf("unexpected execute output: %+v", got)
 	}
 }
 
