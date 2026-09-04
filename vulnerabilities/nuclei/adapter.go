@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -43,27 +44,48 @@ func parseConfig(raw string) (Config, error) {
 }
 
 // buildArgs maps a Config to nuclei CLI flags, always ending with -target and -jsonl.
+// When TemplateIds is set, only -id is emitted as a filter: -severity/-tags/-etags
+// are dropped (with a warning) because mixing -id with template selection filters
+// made nuclei silently match nothing and report zero findings. When no config is
+// provided the manifest.yaml defaults apply: rateLimit=150, concurrency=25.
 func buildArgs(target string, cfg Config) []string {
 	var args []string
 
-	if len(cfg.Severity) > 0 {
-		args = append(args, "-severity", strings.Join(cfg.Severity, ","))
-	}
-	if len(cfg.Tags) > 0 {
-		args = append(args, "-tags", strings.Join(cfg.Tags, ","))
-	}
-	if len(cfg.ExcludeTags) > 0 {
-		args = append(args, "-etags", strings.Join(cfg.ExcludeTags, ","))
-	}
+	// Stable flags first: -duc disables the update check (the container has no
+	// network at runtime), -silent hides banner noise, -nc disables colored output.
+	args = append(args, "-duc", "-silent", "-nc")
+
 	if len(cfg.TemplateIds) > 0 {
+		if len(cfg.Severity) > 0 || len(cfg.Tags) > 0 || len(cfg.ExcludeTags) > 0 {
+			log.Printf("nuclei: templateIds set — dropping -severity/-tags/-etags (incompatible with -id)")
+		}
 		args = append(args, "-id", strings.Join(cfg.TemplateIds, ","))
+	} else {
+		if len(cfg.Severity) > 0 {
+			args = append(args, "-severity", strings.Join(cfg.Severity, ","))
+		}
+		if len(cfg.Tags) > 0 {
+			args = append(args, "-tags", strings.Join(cfg.Tags, ","))
+		}
+		if len(cfg.ExcludeTags) > 0 {
+			args = append(args, "-etags", strings.Join(cfg.ExcludeTags, ","))
+		}
 	}
+
+	// Manifest defaults apply when the config leaves them unset (manifest.yaml:
+	// rateLimit default 150, concurrency default 25).
+	rl := 150
 	if cfg.RateLimit != nil {
-		args = append(args, "-rl", strconv.Itoa(*cfg.RateLimit))
+		rl = *cfg.RateLimit
 	}
+	args = append(args, "-rl", strconv.Itoa(rl))
+
+	c := 25
 	if cfg.Concurrency != nil {
-		args = append(args, "-c", strconv.Itoa(*cfg.Concurrency))
+		c = *cfg.Concurrency
 	}
+	args = append(args, "-c", strconv.Itoa(c))
+
 	if cfg.FollowRedirects != nil && *cfg.FollowRedirects {
 		args = append(args, "-follow-redirects")
 	}
@@ -93,15 +115,20 @@ func (a *NucleiAdapter) Validate(_ context.Context, _ map[string]any) error {
 
 // Execute runs nuclei against target and streams every JSONL finding to out.
 // Non-JSON stdout lines (banner/noise) are skipped. Non-zero exit returns an
-// error carrying the tail of stderr.
+// error carrying the exit code and the tail of stderr. A malformed OASM_CONFIG
+// fails the execution instead of silently falling back to defaults.
 func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- []byte) error {
 	target, _ := inputs["target"].(string)
 	if target == "" {
 		return fmt.Errorf("target required")
 	}
 
-	// Read optional OASM_CONFIG env — empty/invalid → zero Config (nuclei defaults).
-	cfg, _ := parseConfig(os.Getenv("OASM_CONFIG"))
+	// Read optional OASM_CONFIG env — empty → zero Config (manifest defaults
+	// apply); malformed → fail loudly instead of silently scanning with defaults.
+	cfg, err := parseConfig(os.Getenv("OASM_CONFIG"))
+	if err != nil {
+		return fmt.Errorf("invalid OASM_CONFIG: %w", err)
+	}
 
 	bin := os.Getenv("NUCLEI_BIN")
 	if bin == "" {
@@ -115,12 +142,12 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 		return fmt.Errorf("stdout pipe: %w", err)
 	}
 	var stderrTail []byte
-	cmd.Stderr = &limitedWriter{buf: &stderrTail, limit: 2048}
+	cmd.Stderr = &limitedWriter{buf: &stderrTail, limit: 32 * 1024}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start %s: %w", bin, err)
 	}
 	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024) // nuclei JSON lines can be large
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024) // nuclei JSON lines can be large
 	findings, skipped := 0, 0
 	done := func() {
 		log.Printf("nuclei: done findings=%d skipped=%d", findings, skipped)
@@ -141,7 +168,14 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 		return fmt.Errorf("read stdout: %w", err)
 	}
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("nuclei exited: %w; stderr tail: %s", err, string(stderrTail))
+		// Keep the Done.Error string compatible (contains `exit status N`) while
+		// adding the numeric exit code for downstream consumers.
+		code := -1
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			code = ee.ExitCode()
+		}
+		return fmt.Errorf("nuclei exited: %w (exit code %d); stderr tail: %s", err, code, string(stderrTail))
 	}
 	return nil
 }

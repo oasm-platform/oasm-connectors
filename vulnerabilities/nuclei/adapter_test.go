@@ -152,57 +152,57 @@ func TestBuildArgs(t *testing.T) {
 		expect []string
 	}{
 		{
-			name:   "empty config yields only target and jsonl",
+			name:   "empty config yields stable flags and manifest defaults",
 			cfg:    Config{},
-			expect: []string{"-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "severity single",
 			cfg:    Config{Severity: []string{"high"}},
-			expect: []string{"-severity", "high", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-severity", "high", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "severity multiple csv",
 			cfg:    Config{Severity: []string{"high", "critical"}},
-			expect: []string{"-severity", "high,critical", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-severity", "high,critical", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "tags csv",
 			cfg:    Config{Tags: []string{"cve", "xss"}},
-			expect: []string{"-tags", "cve,xss", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-tags", "cve,xss", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "excludeTags csv",
 			cfg:    Config{ExcludeTags: []string{"dos"}},
-			expect: []string{"-etags", "dos", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-etags", "dos", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "templateIds csv",
 			cfg:    Config{TemplateIds: []string{"CVE-2021-1234", "CVE-2022-5678"}},
-			expect: []string{"-id", "CVE-2021-1234,CVE-2022-5678", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-id", "CVE-2021-1234,CVE-2022-5678", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "rateLimit",
 			cfg:    Config{RateLimit: intPtr(100)},
-			expect: []string{"-rl", "100", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-rl", "100", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "concurrency",
 			cfg:    Config{Concurrency: intPtr(50)},
-			expect: []string{"-c", "50", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-rl", "150", "-c", "50", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "followRedirects true appends flag",
 			cfg:    Config{FollowRedirects: boolPtr(true)},
-			expect: []string{"-follow-redirects", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-rl", "150", "-c", "25", "-follow-redirects", "-target", target, "-jsonl"},
 		},
 		{
 			name:   "followRedirects false omits flag",
 			cfg:    Config{FollowRedirects: boolPtr(false)},
-			expect: []string{"-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-rl", "150", "-c", "25", "-target", target, "-jsonl"},
 		},
 		{
-			name: "all fields populated",
+			name: "all fields populated with templateIds (id dominates)",
 			cfg: Config{
 				Severity:        []string{"high", "critical"},
 				Tags:            []string{"cve"},
@@ -212,7 +212,7 @@ func TestBuildArgs(t *testing.T) {
 				Concurrency:     intPtr(40),
 				FollowRedirects: boolPtr(true),
 			},
-			expect: []string{"-severity", "high,critical", "-tags", "cve", "-etags", "dos", "-id", "CVE-2021-1234", "-rl", "200", "-c", "40", "-follow-redirects", "-target", target, "-jsonl"},
+			expect: []string{"-duc", "-silent", "-nc", "-id", "CVE-2021-1234", "-rl", "200", "-c", "40", "-follow-redirects", "-target", target, "-jsonl"},
 		},
 	}
 
@@ -234,6 +234,110 @@ func TestBuildArgs(t *testing.T) {
 func intPtr(v int) *int       { return &v }
 func boolPtr(v bool) *bool    { return &v }
 func strPtr(v string) *string { return &v }
+
+// ---------------------------------------------------------------------------
+// buildArgs — id-mode priority, stable flags, manifest defaults
+// ---------------------------------------------------------------------------
+
+// TestBuildArgs_IdPrioritized: when templateIds is set, -severity/-tags/-etags
+// are dropped and only -id is emitted. Mixing -id with template selection
+// filters made nuclei silently return zero findings, so id mode wins.
+func TestBuildArgs_IdPrioritized(t *testing.T) {
+	target := "https://example.com"
+	cfg := Config{
+		Severity:    []string{"high", "critical"},
+		Tags:        []string{"cve"},
+		ExcludeTags: []string{"dos"},
+		TemplateIds: []string{"CVE-2021-1234"},
+	}
+	got := buildArgs(target, cfg)
+	for _, flag := range []string{"-severity", "-tags", "-etags"} {
+		assertArgsNotContains(t, got, flag)
+	}
+	assertArgsContains(t, got, "-id")
+	assertArgsContainsNext(t, got, "-id", "CVE-2021-1234")
+	if got[len(got)-1] != "-jsonl" {
+		t.Errorf("want -jsonl last, got %v", got)
+	}
+}
+
+// TestBuildArgs_HasDucSilentNc: -duc -silent -nc are always present and always
+// ordered before -target; -jsonl stays last.
+func TestBuildArgs_HasDucSilentNc(t *testing.T) {
+	target := "https://example.com"
+	for name, cfg := range map[string]Config{
+		"empty config": {},
+		"id mode":      {TemplateIds: []string{"CVE-2021-1"}},
+		"full config":  {Severity: []string{"high"}, Tags: []string{"cve"}, RateLimit: intPtr(10), Concurrency: intPtr(5)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := buildArgs(target, cfg)
+			for _, flag := range []string{"-duc", "-silent", "-nc"} {
+				assertArgsContains(t, got, flag)
+			}
+			targetIdx := indexOf(got, "-target")
+			if targetIdx < 0 {
+				t.Fatalf("missing -target in %v", got)
+			}
+			for _, flag := range []string{"-duc", "-silent", "-nc"} {
+				if indexOf(got, flag) > targetIdx {
+					t.Errorf("%q must come before -target, got %v", flag, got)
+				}
+			}
+			if got[len(got)-1] != "-jsonl" {
+				t.Errorf("want -jsonl last, got %v", got)
+			}
+		})
+	}
+}
+
+// TestBuildArgs_AppliesDefaults: nil rateLimit/concurrency fall back to the
+// manifest.yaml defaults (150 / 25).
+func TestBuildArgs_AppliesDefaults(t *testing.T) {
+	target := "https://example.com"
+	got := buildArgs(target, Config{})
+	assertArgsContainsNext(t, got, "-rl", "150")
+	assertArgsContainsNext(t, got, "-c", "25")
+}
+
+func indexOf(args []string, v string) int {
+	for i, a := range args {
+		if a == v {
+			return i
+		}
+	}
+	return -1
+}
+
+func assertArgsContains(t *testing.T, args []string, v string) {
+	t.Helper()
+	if indexOf(args, v) < 0 {
+		t.Errorf("args %v missing %q", args, v)
+	}
+}
+
+func assertArgsNotContains(t *testing.T, args []string, v string) {
+	t.Helper()
+	if indexOf(args, v) >= 0 {
+		t.Errorf("args %v must not contain %q", args, v)
+	}
+}
+
+func assertArgsContainsNext(t *testing.T, args []string, flag, v string) {
+	t.Helper()
+	if !argsContainPair(args, flag, v) {
+		t.Errorf("args %v missing pair %q %q", args, flag, v)
+	}
+}
+
+func argsContainPair(args []string, flag, v string) bool {
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == flag && args[i+1] == v {
+			return true
+		}
+	}
+	return false
+}
 
 // ---------------------------------------------------------------------------
 // parseConfig — OASM_CONFIG JSON parsing tests
@@ -330,6 +434,18 @@ func TestParseConfig(t *testing.T) {
 	}
 }
 
+// TestParseConfig_MalformedReturnsError: malformed OASM_CONFIG surfaces as an
+// error so Execute fails loudly instead of silently scanning with defaults.
+func TestParseConfig_MalformedReturnsError(t *testing.T) {
+	cfg, err := parseConfig(`{not valid json`)
+	if err == nil {
+		t.Fatal("expected error for malformed JSON, got nil")
+	}
+	if len(cfg.Severity) != 0 || cfg.RateLimit != nil || cfg.Concurrency != nil {
+		t.Errorf("config should be empty on error, got %+v", cfg)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Execute integration: OASM_CONFIG env → buildArgs used
 // ---------------------------------------------------------------------------
@@ -371,7 +487,11 @@ func TestExecute_MalformedOASMConfig(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "not-json!!!")
 	a := &NucleiAdapter{}
 	ch := make(chan []byte, 4)
-	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
-		t.Fatalf("Execute failed: %v", err)
+	err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch)
+	if err == nil {
+		t.Fatal("expected error for malformed OASM_CONFIG")
+	}
+	if got := err.Error(); !strings.Contains(got, "invalid OASM_CONFIG") {
+		t.Fatalf("error should mention invalid OASM_CONFIG, got: %v", got)
 	}
 }

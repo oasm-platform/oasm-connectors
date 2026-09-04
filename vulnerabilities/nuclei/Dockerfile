@@ -11,6 +11,12 @@ RUN cd vulnerabilities/nuclei && CGO_ENABLED=0 GOWORK=off go build -trimpath -o 
 FROM alpine:3.20
 COPY --from=tool /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /out/connector /usr/local/bin/connector
+# Offline runtime: templates are baked at build time. /opt/nuclei-templates
+# lives outside /tmp because the worker mounts Tmpfs on /tmp (plus the named
+# volume on NUCLEI_TEMPLATES_DIR); HOME/XDG_CACHE_HOME stay under /tmp, which
+# is ephemeral. At runtime nuclei runs with -duc and never touches the network.
+ENV HOME=/tmp XDG_CACHE_HOME=/tmp/.cache NUCLEI_TEMPLATES_DIR=/opt/nuclei-templates
+RUN mkdir -p /opt/nuclei-templates && chmod 777 /opt/nuclei-templates && nuclei -ut || true
 RUN adduser -D -u 10001 connector
 USER 10001
 ENTRYPOINT ["/usr/local/bin/connector"]
