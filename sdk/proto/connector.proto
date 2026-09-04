@@ -25,6 +25,7 @@ message ExecuteJob {
   string image = 4;
   string trace_id = 5;
   map<string, string> inputs = 6;
+  map<string, string> config = 7;
 }
 
 message Cancel {

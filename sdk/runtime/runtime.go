@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -164,16 +165,32 @@ func (r *Runtime) Run(ctx context.Context) error {
 	// handleExecute goroutines report stream-fatal errors back to the loop.
 	execErrCh := make(chan error, 8)
 
+	// One execution at a time per stream (worker MaxJobsPerContainer=1). The
+	// gate serializes ExecuteJobs so a second execution never starts before
+	// the first's Done was sent; the worker only sends the next Execute after
+	// receiving Done, but the gate is the SDK-side enforcement.
+	execGate := make(chan struct{}, 1)
+
 	for {
 		select {
 		case msg := <-msgCh:
 			switch m := msg.Message.(type) {
 			case *pb.WorkerMessage_Execute:
 				// Execution runs concurrently with the recv loop so a later
-				// Cancel can abort it via the cancel map. One stream carries
-				// one execution (the worker maps a stream per execution), so
-				// sends from different executions never interleave.
-				go func() { execErrCh <- r.handleExecute(ctx, stream, m.Execute, inputs) }()
+				// Cancel can abort it via the cancel map. A single stream
+				// serves executions SEQUENTIALLY (warm-pool reuse, Phase 2);
+				// a second ExecuteJob blocks on the gate until the first
+				// finishes (Done sent).
+				select {
+				case execGate <- struct{}{}:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				go func() {
+					err := r.handleExecute(ctx, stream, m.Execute, inputs)
+					<-execGate
+					execErrCh <- err
+				}()
 
 			case *pb.WorkerMessage_Cancel:
 				r.logger.Infof("cancel execution_id=%s", m.Cancel.ExecutionId)
@@ -272,6 +289,19 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	}
 	for k, v := range exec.Inputs {
 		inputs[k] = v
+	}
+
+	// Per-job config override (Phase 2 warm pool): a REUSED container keeps its
+	// first-run OASM_CONFIG env; the worker ships the job's config profile as
+	// JSON in ExecuteJob.config["oasm_config"]. Adapters read OASM_CONFIG via
+	// os.Getenv at Execute time, so restore the env var around the adapter
+	// run. The execGate guarantees a single in-flight execution, making this
+	// process-global mutation race-free.
+	if raw := exec.Config["oasm_config"]; raw != "" {
+		prev := os.Getenv("OASM_CONFIG")
+		os.Setenv("OASM_CONFIG", raw)
+		defer os.Setenv("OASM_CONFIG", prev)
+		r.logger.Infof("config override applied: execution=%s job=%s", exec.ExecutionId, exec.JobId)
 	}
 
 	// 128-buffer so a burst of findings does not stall the adapter while a

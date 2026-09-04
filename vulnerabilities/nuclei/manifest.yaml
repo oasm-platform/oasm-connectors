@@ -39,5 +39,5 @@ configSchema:
       type: boolean
 resourceDefaults:
   cpu: 500m
-  memory: 512Mi
+  memory: 4096Mi
   timeoutSeconds: 600
