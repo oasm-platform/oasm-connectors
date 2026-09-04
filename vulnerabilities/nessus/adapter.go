@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"time"
 
@@ -14,7 +13,8 @@ import (
 
 // NessusAdapter implements Validate/Execute for the Nessus scanner:
 // receive input -> authenticate -> create+launch scan -> poll to completion ->
-// stream findings -> cleanup. Configuration comes from NESSUS_* env vars.
+// stream findings -> cleanup. Configuration comes from the per-job OASM_CONFIG
+// profile (NESSUS_* env vars are the legacy fallback).
 type NessusAdapter struct{}
 
 // pollInterval is the delay between scan status polls. Production default is
@@ -47,10 +47,10 @@ func (a *NessusAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 		return err
 	}
 
-	name := os.Getenv("EXECUTION_ID")
-	if name == "" {
-		name = "oasm-scan"
-	}
+	// Per-execution scan name: EXECUTION_ID is set only at container start, so
+	// it is stale on warm-pool reuse. The target is per-execution; a timestamp
+	// suffix keeps reused scans distinguishable in the Nessus UI.
+	name := fmt.Sprintf("%s %s", target, time.Now().UTC().Format("20060102T150405Z"))
 
 	tmpl := nessus.TemplateBasic
 	if cfg.TemplateUUID != "" {

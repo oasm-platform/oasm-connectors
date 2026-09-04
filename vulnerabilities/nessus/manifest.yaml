@@ -34,6 +34,8 @@ configSchema:
       type: string
     policyId:
       type: string
+    folderId:
+      type: string
   additionalProperties: false
 resourceDefaults:
   cpu: 500m

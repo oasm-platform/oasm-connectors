@@ -1,13 +1,15 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/tencat-dev/nessus-client-go/nessus"
 )
 
-// nessusConfig holds the Nessus connection + scan settings, all env-driven.
+// nessusConfig holds the Nessus connection + scan settings.
 type nessusConfig struct {
 	URL          string
 	Username     string
@@ -19,35 +21,68 @@ type nessusConfig struct {
 	FolderID     string
 }
 
-// loadNessusConfig reads the NESSUS_* environment variables. URL, username and
-// password are required; the API key pair is optional but must be set together;
-// the rest fall back to sane defaults.
+// configProfile is the OASM_CONFIG JSON shape the Worker ships per job.
+// Keys are camelCase to mirror manifest.yaml configSchema.
+type configProfile struct {
+	URL          string `json:"url"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	AccessKey    string `json:"accessKey"`
+	SecretKey    string `json:"secretKey"`
+	TemplateUUID string `json:"templateUuid"`
+	PolicyID     string `json:"policyId"`
+	FolderID     string `json:"folderId"`
+}
+
+// loadNessusConfig reads the Nessus connection + scan settings. The primary
+// source is OASM_CONFIG (the per-job config profile) — the SDK runtime
+// overrides that env var per execution so a warm-pool reused container sees
+// its own job's config rather than its first-run env. NESSUS_* env vars remain
+// as a legacy fallback for direct-runtime use. URL, username and password are
+// required; the API key pair is optional but must be set together; the rest
+// fall back to sane defaults.
 func loadNessusConfig() (*nessusConfig, error) {
-	cfg := &nessusConfig{
-		URL:          os.Getenv("NESSUS_URL"),
-		Username:     os.Getenv("NESSUS_USERNAME"),
-		Password:     os.Getenv("NESSUS_PASSWORD"),
-		AccessKey:    os.Getenv("NESSUS_ACCESS_KEY"),
-		SecretKey:    os.Getenv("NESSUS_SECRET_KEY"),
-		TemplateUUID: os.Getenv("NESSUS_TEMPLATE_UUID"),
-		PolicyID:     os.Getenv("NESSUS_POLICY_ID"),
-		FolderID:     os.Getenv("NESSUS_FOLDER_ID"),
+	cfg := &nessusConfig{}
+
+	if raw := strings.TrimSpace(os.Getenv("OASM_CONFIG")); raw != "" {
+		var p configProfile
+		if err := json.Unmarshal([]byte(raw), &p); err != nil {
+			return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
+		}
+		cfg.URL = p.URL
+		cfg.Username = p.Username
+		cfg.Password = p.Password
+		cfg.AccessKey = p.AccessKey
+		cfg.SecretKey = p.SecretKey
+		cfg.TemplateUUID = p.TemplateUUID
+		cfg.PolicyID = p.PolicyID
+		cfg.FolderID = p.FolderID
+	} else {
+		cfg.URL = os.Getenv("NESSUS_URL")
+		cfg.Username = os.Getenv("NESSUS_USERNAME")
+		cfg.Password = os.Getenv("NESSUS_PASSWORD")
+		cfg.AccessKey = os.Getenv("NESSUS_ACCESS_KEY")
+		cfg.SecretKey = os.Getenv("NESSUS_SECRET_KEY")
+		cfg.TemplateUUID = os.Getenv("NESSUS_TEMPLATE_UUID")
+		cfg.PolicyID = os.Getenv("NESSUS_POLICY_ID")
+		cfg.FolderID = os.Getenv("NESSUS_FOLDER_ID")
 	}
+
 	if cfg.FolderID == "" {
 		cfg.FolderID = "0"
 	}
 
 	if cfg.URL == "" {
-		return nil, fmt.Errorf("NESSUS_URL required")
+		return nil, fmt.Errorf("nessus URL required (config.url or NESSUS_URL)")
 	}
 	if cfg.Username == "" {
-		return nil, fmt.Errorf("NESSUS_USERNAME required")
+		return nil, fmt.Errorf("nessus username required (config.username or NESSUS_USERNAME)")
 	}
 	if cfg.Password == "" {
-		return nil, fmt.Errorf("NESSUS_PASSWORD required")
+		return nil, fmt.Errorf("nessus password required (config.password or NESSUS_PASSWORD)")
 	}
 	if (cfg.AccessKey == "") != (cfg.SecretKey == "") {
-		return nil, fmt.Errorf("NESSUS_ACCESS_KEY and NESSUS_SECRET_KEY must be set together")
+		return nil, fmt.Errorf("access key and secret key must be set together")
 	}
 
 	return cfg, nil

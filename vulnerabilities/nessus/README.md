@@ -12,20 +12,38 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 
 ## Configuration
 
-| Parameter | env | default | mandatory | description |
-|-----------|-----|---------|-----------|-------------|
-| Worker URL | `WORKER_URL` | `http://localhost:50051` | yes | Worker gRPC endpoint |
-| Worker token | `WORKER_TOKEN` | `` | no | Auth token if Worker requires it |
-| Nessus URL | `NESSUS_URL` | — | yes | Nessus server URL (e.g. `https://nessus.example.com:8834`) |
-| Nessus username | `NESSUS_USERNAME` | — | yes | Authentication username |
-| Nessus password | `NESSUS_PASSWORD` | — | yes | Authentication password |
-| Nessus access key | `NESSUS_ACCESS_KEY` | — | no* | API access key (*set with secret key) |
-| Nessus secret key | `NESSUS_SECRET_KEY` | — | no* | API secret key (*set with access key) |
-| Nessus template UUID | `NESSUS_TEMPLATE_UUID` | `TemplateBasic` | no | Nessus scan template |
-| Nessus policy ID | `NESSUS_POLICY_ID` | `` | no | Nessus scan policy |
-| Nessus folder ID | `NESSUS_FOLDER_ID` | `0` | no | Nessus folder for scans |
-| Execution ID | `EXECUTION_ID` | — | no | Scan name (auto-set by Worker) |
-| Target | `inputs.target` | — | yes | Scan target URI |
+The connector reads its settings from `OASM_CONFIG` — the per-job config profile
+the Worker ships as JSON (camelCase keys mirroring `manifest.yaml` `configSchema`).
+This is the new-SDK path that makes warm-pool reuse work: the SDK overrides
+`OASM_CONFIG` per execution, so a reused container sees its own job's config.
+`NESSUS_*` env vars remain as a legacy fallback for direct-runtime use.
+
+```json
+{
+  "url": "https://nessus.example.com:8834",
+  "username": "admin",
+  "password": "changeme",
+  "accessKey": "",
+  "secretKey": "",
+  "templateUuid": "",
+  "policyId": "",
+  "folderId": "0"
+}
+```
+
+| Key | legacy env fallback | default | mandatory | description |
+|-----|---------------------|---------|-----------|-------------|
+| `url` | `NESSUS_URL` | — | yes | Nessus server URL |
+| `username` | `NESSUS_USERNAME` | — | yes | Authentication username |
+| `password` | `NESSUS_PASSWORD` | — | yes | Authentication password |
+| `accessKey` | `NESSUS_ACCESS_KEY` | — | no* | API access key (*set with secret key) |
+| `secretKey` | `NESSUS_SECRET_KEY` | — | no* | API secret key (*set with access key) |
+| `templateUuid` | `NESSUS_TEMPLATE_UUID` | `TemplateBasic` | no | Nessus scan template |
+| `policyId` | `NESSUS_POLICY_ID` | `` | no | Nessus scan policy |
+| `folderId` | `NESSUS_FOLDER_ID` | `0` | no | Nessus folder for scans |
+
+Worker connection (`WORKER_GRPC_ADDR`, `WORKER_TOKEN`) and `EXECUTION_ID` are
+injected by the Worker; the scan name is derived from the target per execution.
 
 `inputsSchema` (see `manifest.yaml`): `{target: string (uri)}`.
 
@@ -36,9 +54,7 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 ```bash
 docker build -t ghcr.io/open-asm/connector-nessus:0.1.0 -f vulnerabilities/nessus/Dockerfile .
 docker run --rm -e WORKER_URL=http://worker:50051 \
-  -e NESSUS_URL=https://nessus.example.com:8834 \
-  -e NESSUS_USERNAME=admin \
-  -e NESSUS_PASSWORD=changeme \
+  -e OASM_CONFIG='{"url":"https://nessus.example.com:8834","username":"admin","password":"changeme"}' \
   ghcr.io/open-asm/connector-nessus:0.1.0
 ```
 
