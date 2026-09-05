@@ -12,6 +12,18 @@ on:
         required: false
         default: false
         type: boolean
+  # CI on every change touching the connectors: build + test only — images
+  # are published solely via workflow_dispatch (see the push job's guard).
+  push:
+    paths:
+      - 'sdk/**'
+      - 'vulnerabilities/**'
+      - '.github/workflows/build-connectors.yml'
+  pull_request:
+    paths:
+      - 'sdk/**'
+      - 'vulnerabilities/**'
+      - '.github/workflows/build-connectors.yml'
 
 permissions:
   contents: read
@@ -91,7 +103,10 @@ jobs:
   push:
     needs: [discover, test, build-test]
     runs-on: ubuntu-latest
-    if: ${{ !inputs.dry_run }}
+    # Publish only on explicit dispatch (dry_run=false). On push/pull_request
+    # events `inputs` is empty, so this guard also prevents accidental
+    # publishes from CI runs.
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.dry_run }}
     strategy:
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
     steps:

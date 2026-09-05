@@ -273,6 +273,10 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	// Per-execution cancel handle — stored so Run's Cancel handler can abort
 	// this execution, removed when this execution finishes.
 	execCtx, cancel := context.WithCancel(ctx)
+	// Release the per-execution context on every exit path: without this, a
+	// handleExecute that returns early (send failure, invalid finding) leaves
+	// an adapter blocked on `out <- f` wedged until process exit.
+	defer cancel()
 	r.cancelsMu.Lock()
 	r.cancels[exec.ExecutionId] = cancel
 	r.cancelsMu.Unlock()
@@ -372,6 +376,10 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	if adapterErr != nil {
 		doneMsg.Error = adapterErr.Error()
 		r.logger.Errorf("adapter error: execution=%s job=%s tool=%s err=%v", exec.ExecutionId, exec.JobId, exec.Tool, adapterErr)
+	} else if execCtx.Err() != nil {
+		// The execution was cancelled but the adapter swallowed the error
+		// (returned nil): the worker must still learn the run did not finish.
+		doneMsg.Error = context.Canceled.Error()
 	}
 	// Done goes out on the parent context so it still succeeds after a
 	// protocol cancel of this execution.

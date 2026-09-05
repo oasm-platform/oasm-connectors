@@ -40,6 +40,11 @@ type fakeConnectorServer struct {
 	execReq    *pb.ExecuteJob
 	resultCh   chan *pb.Result
 	doneCh     chan *pb.Done
+	// resultsBeforeClose: when >0, the server hangs up (returns) after
+	// receiving that many Results — simulating a worker that died
+	// mid-execution, so client sends must start failing. 0 keeps the stream
+	// open until Done (default).
+	resultsBeforeClose int
 }
 
 func newFakeConnectorServer(exec *pb.ExecuteJob) *fakeConnectorServer {
@@ -76,6 +81,13 @@ func (s *fakeConnectorServer) Connect(stream pb.ConnectorService_ConnectServer) 
 		switch m := msg.Message.(type) {
 		case *pb.ConnectorMessage_Result:
 			s.resultCh <- m.Result
+			if s.resultsBeforeClose > 0 {
+				s.resultsBeforeClose--
+				if s.resultsBeforeClose == 0 {
+					// Hang up mid-execution: the client's next sends must fail.
+					return nil
+				}
+			}
 		case *pb.ConnectorMessage_Done:
 			s.doneCh <- m.Done
 			return nil
@@ -551,5 +563,113 @@ func TestRunInvalidFindingFailsFast(t *testing.T) {
 	case res := <-srv.resultCh:
 		t.Fatalf("unexpected extra Result after invalid finding: %+v", res)
 	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+// ctxCaptureAdapter records the execution context it is handed, then emits
+// findings in an endless loop until the context is cancelled — it behaves
+// like an adapter wedged on `out <- finding` once the runtime stops draining.
+type ctxCaptureAdapter struct {
+	execCtxCh chan context.Context
+}
+
+func (a *ctxCaptureAdapter) Validate(ctx context.Context, inputs map[string]any) error { return nil }
+
+func (a *ctxCaptureAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
+	a.execCtxCh <- ctx
+	for i := 0; ; i++ {
+		select {
+		case out <- connector.Finding{Name: fmt.Sprintf("finding-%d", i), Severity: "info"}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func TestRunCancelsExecContextAfterSendFailure(t *testing.T) {
+	t.Setenv("WORKER_GRPC_ADDR", "")
+	t.Setenv("WORKER_TOKEN", "tok-leak")
+	t.Setenv("EXECUTION_ID", "exec-leak")
+
+	srv := newFakeConnectorServer(&pb.ExecuteJob{
+		ExecutionId: "exec-leak",
+		JobId:       "job-leak",
+		Tool:        "nuclei",
+	})
+	srv.resultsBeforeClose = 1 // hang up after the first Result → sends start failing
+	addr := startFakeServer(t, srv)
+	t.Setenv("WORKER_GRPC_ADDR", addr)
+
+	execCtxCh := make(chan context.Context, 1)
+	adapter := &ctxCaptureAdapter{execCtxCh: execCtxCh}
+	rt := New(connector.New(adapter))
+	_, _ = runRuntime(t, rt)
+	waitRegister(t, srv)
+
+	var execCtx context.Context
+	select {
+	case execCtx = <-execCtxCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for adapter start")
+	}
+
+	// The stream died after the first Result. handleExecute must return and
+	// cancel execCtx so an adapter blocked on `out <- f` unblocks instead of
+	// leaking until process exit.
+	deadline := time.After(5 * time.Second)
+	for execCtx.Err() == nil {
+		select {
+		case <-deadline:
+			t.Fatal("execution context never cancelled after stream send failure (cancel leak)")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	if !errors.Is(execCtx.Err(), context.Canceled) {
+		t.Errorf("execCtx.Err() = %v, want context.Canceled", execCtx.Err())
+	}
+}
+
+// silentCancelAdapter blocks until its context is cancelled, then returns nil
+// — it swallows the cancellation instead of reporting it. The runtime must
+// still carry the cancellation on Done so the worker knows the run failed.
+type silentCancelAdapter struct {
+	startedCh chan struct{}
+}
+
+func (a *silentCancelAdapter) Validate(ctx context.Context, inputs map[string]any) error { return nil }
+func (a *silentCancelAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
+	close(a.startedCh)
+	<-ctx.Done()
+	return nil
+}
+
+func TestRunDoneReportsCanceledWhenAdapterSwallowsCancel(t *testing.T) {
+	t.Setenv("WORKER_GRPC_ADDR", "")
+	t.Setenv("WORKER_TOKEN", "tok-silent")
+	t.Setenv("EXECUTION_ID", "exec-silent")
+
+	execReq := &pb.ExecuteJob{ExecutionId: "exec-silent", JobId: "job-silent", Tool: "nuclei"}
+	sendCancel := make(chan struct{})
+	srv := newCancelServer(execReq, sendCancel)
+	addr := startFakeServer(t, srv)
+	t.Setenv("WORKER_GRPC_ADDR", addr)
+
+	startedCh := make(chan struct{})
+	adapter := &silentCancelAdapter{startedCh: startedCh}
+	rt := New(connector.New(adapter))
+	_, _ = runRuntime(t, rt)
+	waitRegisterCh(t, srv.registerCh)
+
+	<-startedCh
+	close(sendCancel)
+
+	select {
+	case done := <-srv.doneCh:
+		if done.Error != context.Canceled.Error() {
+			t.Errorf("Done.Error = %q, want %q (cancellation must be reported even when the adapter returns nil)", done.Error, context.Canceled.Error())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for Done")
 	}
 }
