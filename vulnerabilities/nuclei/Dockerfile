@@ -19,9 +19,14 @@ COPY --from=builder /out/connector /usr/local/bin/connector
 # targets /opt before privileges drop. /tmp is world-writable so uid 10001
 # can create its config/cache dirs at runtime.
 ENV HOME=/tmp XDG_CACHE_HOME=/tmp/.cache
-RUN mkdir -p /opt/nuclei-templates /tmp/.config/nuclei /tmp/.cache \
-    && nuclei -ut -ud /opt/nuclei-templates || true \
-    && chown -R 10001:10001 /opt/nuclei-templates /tmp/.config /tmp/.cache \
+LABEL oasm.persist="/opt/nuclei-templates"
+ENV NUCLEI_TEMPLATE_DIR=/opt/nuclei-templates NUCLEI_TEMPLATES_DIR=/opt/nuclei-templates
+RUN mkdir -p /opt/nuclei-templates /tmp/.config/nuclei /tmp/.cache
+RUN nuclei -ut -ud /opt/nuclei-templates
+RUN test -n "$(ls -A /opt/nuclei-templates)" \
+    && echo "nuclei-templates baked: $(find /opt/nuclei-templates -name '*.yaml' | wc -l) templates" \
+    && ls /opt/nuclei-templates | head -5
+RUN chown -R 10001:10001 /opt/nuclei-templates /tmp/.config /tmp/.cache \
     && chmod 1777 /tmp \
     && chmod -R a+rX /opt/nuclei-templates
 RUN adduser -D -u 10001 connector

@@ -54,9 +54,13 @@ func parseConfig(raw string) (Config, error) {
 const defaultTemplateDir = "/opt/nuclei-templates"
 
 // templateDir returns the templates directory: NUCLEI_TEMPLATE_DIR if set,
-// otherwise the baked-in defaultTemplateDir.
+// else NUCLEI_TEMPLATES_DIR (plural, injected by the worker runtime), else
+// the baked-in defaultTemplateDir.
 func templateDir() string {
 	if d := os.Getenv("NUCLEI_TEMPLATE_DIR"); d != "" {
+		return d
+	}
+	if d := os.Getenv("NUCLEI_TEMPLATES_DIR"); d != "" {
 		return d
 	}
 	return defaultTemplateDir
@@ -145,6 +149,17 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 	if target == "" {
 		return fmt.Errorf("target required")
 	}
+
+	dir := templateDir()
+	st, statErr := os.Stat(dir)
+	if statErr != nil || !st.IsDir() {
+		return fmt.Errorf("nuclei templates dir missing: %s: %v (rebuild image so /opt/nuclei-templates is baked, or set NUCLEI_TEMPLATE_DIR)", dir, statErr)
+	}
+	entries, readErr := os.ReadDir(dir)
+	if readErr != nil || len(entries) == 0 {
+		return fmt.Errorf("nuclei templates dir empty: %s (bake failed or volume shadowed it; rm the oasm-nuclei-templates volume)", dir)
+	}
+	log.Printf("nuclei: using templates dir=%s entries=%d", dir, len(entries))
 
 	// Read optional OASM_CONFIG env — empty → zero Config (manifest defaults
 	// apply); malformed → fail loudly instead of silently scanning with defaults.

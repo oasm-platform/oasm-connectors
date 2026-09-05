@@ -80,6 +80,7 @@ func TestNucleiExecute_MissingTargetErrors(t *testing.T) {
 // streamed through, banner/noise lines are skipped.
 func TestNucleiExecute_StreamsJsonlFindings(t *testing.T) {
 	t.Setenv("NUCLEI_BIN", ensureFakeNuclei(t))
+	t.Setenv("NUCLEI_TEMPLATE_DIR", setupTemplateDir(t))
 	a := &NucleiAdapter{}
 	ch := make(chan connector.Finding, 8)
 	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
@@ -114,6 +115,7 @@ func TestNucleiExecute_StreamsJsonlFindings(t *testing.T) {
 func TestNucleiExecute_EmptyOutputNoError(t *testing.T) {
 	bin := ensureFakeNuclei(t)
 	t.Setenv("NUCLEI_BIN", bin)
+	t.Setenv("NUCLEI_TEMPLATE_DIR", setupTemplateDir(t))
 	t.Setenv("FAKE_MODE", "empty")
 	a := &NucleiAdapter{}
 	ch := make(chan connector.Finding, 4)
@@ -131,6 +133,7 @@ func TestNucleiExecute_EmptyOutputNoError(t *testing.T) {
 func TestNucleiExecute_ReturnsErrorOnNonZeroExit(t *testing.T) {
 	bin := ensureFakeNuclei(t)
 	t.Setenv("NUCLEI_BIN", bin)
+	t.Setenv("NUCLEI_TEMPLATE_DIR", setupTemplateDir(t))
 	t.Setenv("FAKE_MODE", "fail")
 	a := &NucleiAdapter{}
 	ch := make(chan connector.Finding, 4)
@@ -408,6 +411,23 @@ func assertArgsNotContains(t *testing.T, args []string, v string) {
 	}
 }
 
+// TestTemplateDir_AcceptsPluralEnv: worker injects NUCLEI_TEMPLATES_DIR (plural,
+// docker.go) while the adapter historically read NUCLEI_TEMPLATE_DIR (singular).
+// Both must work; singular wins when both are set.
+func TestTemplateDir_AcceptsPluralEnv(t *testing.T) {
+	t.Setenv("NUCLEI_TEMPLATE_DIR", "")
+	t.Setenv("NUCLEI_TEMPLATES_DIR", "/plural/templates")
+	if got := templateDir(); got != "/plural/templates" {
+		t.Fatalf("templateDir() = %q, want /plural/templates", got)
+	}
+
+	t.Setenv("NUCLEI_TEMPLATE_DIR", "/singular/templates")
+	t.Setenv("NUCLEI_TEMPLATES_DIR", "/plural/templates")
+	if got := templateDir(); got != "/singular/templates" {
+		t.Fatalf("templateDir() = %q, want /singular/templates (singular wins)", got)
+	}
+}
+
 func assertArgsContainsNext(t *testing.T, args []string, flag, v string) {
 	t.Helper()
 	if !argsContainPair(args, flag, v) {
@@ -535,11 +555,24 @@ func TestParseConfig_MalformedReturnsError(t *testing.T) {
 // Execute integration: OASM_CONFIG env → buildArgs used
 // ---------------------------------------------------------------------------
 
+// setupTemplateDir creates a temp dir with one dummy file so the Execute
+// preflight (templates dir must exist and be non-empty) passes in tests.
+func setupTemplateDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "dummy-template.yaml"), []byte("id: dummy\n"), 0o600); err != nil {
+		t.Fatalf("write dummy template: %v", err)
+	}
+	return dir
+}
+
 func TestExecute_WithOASMConfig(t *testing.T) {
 	bin := ensureFakeNuclei(t)
 	t.Setenv("NUCLEI_BIN", bin)
 	t.Setenv("FAKE_MODE", "empty")
 	t.Setenv("OASM_CONFIG", `{"severity":["critical"],"rateLimit":200}`)
+	dir := setupTemplateDir(t)
+	t.Setenv("NUCLEI_TEMPLATE_DIR", dir)
 	a := &NucleiAdapter{}
 	ch := make(chan connector.Finding, 4)
 	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
@@ -558,6 +591,8 @@ func TestExecute_EmptyOASMConfig(t *testing.T) {
 	t.Setenv("NUCLEI_BIN", bin)
 	t.Setenv("FAKE_MODE", "empty")
 	t.Setenv("OASM_CONFIG", "")
+	dir := setupTemplateDir(t)
+	t.Setenv("NUCLEI_TEMPLATE_DIR", dir)
 	a := &NucleiAdapter{}
 	ch := make(chan connector.Finding, 4)
 	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
@@ -570,6 +605,8 @@ func TestExecute_MalformedOASMConfig(t *testing.T) {
 	t.Setenv("NUCLEI_BIN", bin)
 	t.Setenv("FAKE_MODE", "empty")
 	t.Setenv("OASM_CONFIG", "not-json!!!")
+	dir := setupTemplateDir(t)
+	t.Setenv("NUCLEI_TEMPLATE_DIR", dir)
 	a := &NucleiAdapter{}
 	ch := make(chan connector.Finding, 4)
 	err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch)
@@ -578,5 +615,25 @@ func TestExecute_MalformedOASMConfig(t *testing.T) {
 	}
 	if got := err.Error(); !strings.Contains(got, "invalid OASM_CONFIG") {
 		t.Fatalf("error should mention invalid OASM_CONFIG, got: %v", got)
+	}
+}
+
+// TestExecute_MissingTemplateDirFailsFast: a missing/empty template dir must
+// fail with a clear adapter error, not nuclei's cryptic FTL on stdout.
+func TestExecute_MissingTemplateDirFailsFast(t *testing.T) {
+	t.Setenv("NUCLEI_TEMPLATE_DIR", "/nonexistent-templates-xyz")
+	t.Setenv("NUCLEI_TEMPLATES_DIR", "")
+	t.Setenv("NUCLEI_BIN", "true") // would succeed if reached; must not be reached
+	t.Setenv("OASM_CONFIG", "")
+
+	a := &NucleiAdapter{}
+	out := make(chan connector.Finding, 1)
+	err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, out)
+	close(out)
+	if err == nil {
+		t.Fatal("want error for missing template dir, got nil")
+	}
+	if got := err.Error(); !strings.Contains(got, "/nonexistent-templates-xyz") {
+		t.Fatalf("error must name the bad dir, got: %v", err)
 	}
 }
