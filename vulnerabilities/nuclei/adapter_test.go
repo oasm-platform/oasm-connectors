@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -29,7 +30,10 @@ func ensureFakeNuclei(t *testing.T) string {
 			fakeBinErr = err
 			return
 		}
-		fakeBinPath = filepath.Join(dir, "fake-nuclei.exe")
+		fakeBinPath = filepath.Join(dir, "fake-nuclei")
+		if runtime.GOOS == "windows" {
+			fakeBinPath += ".exe"
+		}
 		cmd := exec.Command("go", "build", "-o", fakeBinPath, "./testdata/fake-nuclei")
 		if b, err := cmd.CombinedOutput(); err != nil {
 			fakeBinErr = fmt.Errorf("build fake nuclei: %v: %s", err, b)
@@ -623,7 +627,8 @@ func TestExecute_MalformedOASMConfig(t *testing.T) {
 func TestExecute_MissingTemplateDirFailsFast(t *testing.T) {
 	t.Setenv("NUCLEI_TEMPLATE_DIR", "/nonexistent-templates-xyz")
 	t.Setenv("NUCLEI_TEMPLATES_DIR", "")
-	t.Setenv("NUCLEI_BIN", "true") // would succeed if reached; must not be reached
+	fakeBin := filepath.Join(t.TempDir(), "nuclei-should-not-exist")
+	t.Setenv("NUCLEI_BIN", fakeBin) // would fail if reached; preflight must catch first
 	t.Setenv("OASM_CONFIG", "")
 
 	a := &NucleiAdapter{}
