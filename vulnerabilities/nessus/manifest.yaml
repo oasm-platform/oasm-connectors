@@ -14,7 +14,10 @@ inputsSchema:
     target:
       type: string
       format: uri
+      title: Scan target
+      description: 'Target URL or hostname to scan.'
       examples: [https://example.com]
+      ui:placeholder: 'https://example.com'
   additionalProperties: false
 configSchema:
   type: object
@@ -23,13 +26,20 @@ configSchema:
     url:
       type: string
       format: uri
+      title: Nessus URL
+      description: 'Base URL of the Nessus instance.'
       examples: [https://nessus.local:8834]
       ui:placeholder: 'https://nessus.local:8834'
     username:
       type: string
+      title: Username
+      description: 'Nessus username for session authentication.'
       examples: [administrator]
+      ui:placeholder: 'administrator'
     password:
       type: string
+      title: Password
+      description: 'Nessus password for session authentication.'
       ui:widget: password
       ui:placeholder: '••••••••'
     accessKey:

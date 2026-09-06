@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-06T05:20:27.775902Z",
+  "generatedAt": "2026-09-06T10:29:45.540102Z",
   "connectors": [
     {
       "name": "Nessus",
@@ -17,11 +17,14 @@
         "additionalProperties": false,
         "properties": {
           "target": {
+            "description": "Target URL or hostname to scan.",
             "examples": [
               "https://example.com"
             ],
             "format": "uri",
-            "type": "string"
+            "title": "Scan target",
+            "type": "string",
+            "ui:placeholder": "https://example.com"
           }
         },
         "required": [
@@ -45,6 +48,8 @@
             "ui:placeholder": "e.g. 1"
           },
           "password": {
+            "description": "Nessus password for session authentication.",
+            "title": "Password",
             "type": "string",
             "ui:placeholder": "••••••••",
             "ui:widget": "password"
@@ -68,18 +73,23 @@
             "ui:placeholder": "ad629e16-03b6-461c-94cf-736f3f1a1c2f"
           },
           "url": {
+            "description": "Base URL of the Nessus instance.",
             "examples": [
               "https://nessus.local:8834"
             ],
             "format": "uri",
+            "title": "Nessus URL",
             "type": "string",
             "ui:placeholder": "https://nessus.local:8834"
           },
           "username": {
+            "description": "Nessus username for session authentication.",
             "examples": [
               "administrator"
             ],
-            "type": "string"
+            "title": "Username",
+            "type": "string",
+            "ui:placeholder": "administrator"
           }
         },
         "required": [
