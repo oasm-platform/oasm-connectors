@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/tencat-dev/nessus-client-go/nessus"
@@ -68,10 +70,6 @@ func loadNessusConfig() (*nessusConfig, error) {
 		cfg.FolderID = os.Getenv("NESSUS_FOLDER_ID")
 	}
 
-	if cfg.FolderID == "" {
-		cfg.FolderID = "0"
-	}
-
 	if cfg.URL == "" {
 		return nil, fmt.Errorf("nessus URL required (config.url or NESSUS_URL)")
 	}
@@ -110,7 +108,14 @@ func newNessusClient(cfg *nessusConfig) (*nessus.Client, error) {
 			AccessKey: cfg.AccessKey,
 			SecretKey: cfg.SecretKey,
 		}); err != nil {
-			return nil, fmt.Errorf("nessus: session keys: %w", err)
+			// Nessus returns "Key already in use" when the key pair is already
+			// registered for this account — idempotent re-registration, not a
+			// failure. Treat it as success so a warm-pool reuse / repeated job
+			// doesn't abort before scan creation.
+			var apiErr *nessus.APIError
+			if !errors.As(err, &apiErr) || apiErr.ErrorMsg != "Key already in use" {
+				return nil, fmt.Errorf("nessus: session keys: %w", err)
+			}
 		}
 		client.WithAPIKey(cfg.AccessKey, cfg.SecretKey)
 	}
@@ -123,5 +128,37 @@ func newNessusClient(cfg *nessusConfig) (*nessus.Client, error) {
 		return nil, fmt.Errorf("nessus: server not ready: status=%q", st.Status)
 	}
 
+	if cfg.FolderID == "" {
+		if err := resolveScanFolder(client, cfg); err != nil {
+			return nil, err
+		}
+	}
+
 	return client, nil
 }
+
+// resolveScanFolder sets cfg.FolderID to the real "oasm-scan" folder ID,
+// discovering or creating it as needed. Nessus rejects an unknown folder ID
+// (the historical "0" default) at scan-create time.
+func resolveScanFolder(client *nessus.Client, cfg *nessusConfig) error {
+	resp, err := client.FoldersGet()
+	if err != nil {
+		return fmt.Errorf("nessus: folders get: %w", err)
+	}
+
+	for _, folder := range resp.Folders {
+		if folder.Name == oasmScanFolder {
+			cfg.FolderID = strconv.Itoa(folder.ID)
+			return nil
+		}
+	}
+
+	created, err := client.FoldersCreate(&nessus.FoldersCreateRequest{Name: oasmScanFolder})
+	if err != nil {
+		return fmt.Errorf("nessus: create %s folder: %w", oasmScanFolder, err)
+	}
+	cfg.FolderID = strconv.Itoa(created.ID)
+	return nil
+}
+
+const oasmScanFolder = "oasm-scan"

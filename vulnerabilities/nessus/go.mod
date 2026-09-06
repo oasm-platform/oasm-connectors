@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/oasm-platform/oasm-connectors/sdk v0.0.0
-	github.com/tencat-dev/nessus-client-go v0.1.4
+	github.com/tencat-dev/nessus-client-go v0.1.5-0.20260906084052-775e34ddb8db
 )
 
 require (

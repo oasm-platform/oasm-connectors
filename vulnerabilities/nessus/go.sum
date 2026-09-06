@@ -48,6 +48,8 @@ github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOf
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/tencat-dev/nessus-client-go v0.1.4 h1:hoaS0W5T56zvib1C0bNmkdfGE3xXxSgU23lWNZ7J15Q=
 github.com/tencat-dev/nessus-client-go v0.1.4/go.mod h1:4yTIn/zGU9dL5cxaEgNvhBkJ5BlTEqaI1aMgXbRcaRg=
+github.com/tencat-dev/nessus-client-go v0.1.5-0.20260906084052-775e34ddb8db h1:n9xru/MV78djywMnQmy4ttGxm4Rh7cNRQC/8L9sk/ss=
+github.com/tencat-dev/nessus-client-go v0.1.5-0.20260906084052-775e34ddb8db/go.mod h1:4yTIn/zGU9dL5cxaEgNvhBkJ5BlTEqaI1aMgXbRcaRg=
 github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS4MhqMhdFk5YI=
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=

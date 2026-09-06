@@ -44,8 +44,8 @@ func TestLoadNessusConfig_OASMDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadNessusConfig: %v", err)
 	}
-	if cfg.FolderID != "0" {
-		t.Errorf("FolderID = %q, want default 0", cfg.FolderID)
+	if cfg.FolderID != "" {
+		t.Errorf("FolderID = %q, want empty (resolved via oasm-scan discovery)", cfg.FolderID)
 	}
 	if cfg.TemplateUUID != "" {
 		t.Errorf("TemplateUUID = %q, want empty", cfg.TemplateUUID)

@@ -27,6 +27,7 @@ type fakeNessus struct {
 	sessionCalls int
 	keysCalls    int
 	statusCalls  int
+	foldersCalls int
 	createCalls  int
 	detailsCalls int
 	pluginCalls  int
@@ -57,6 +58,16 @@ func (f *fakeNessus) handleServerStatus(w http.ResponseWriter, r *http.Request) 
 	f.statusCalls++
 	f.mu.Unlock()
 	writeJSON(w, map[string]any{"status": "ready"})
+}
+
+func (f *fakeNessus) handleFolders(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	f.foldersCalls++
+	f.mu.Unlock()
+	writeJSON(w, map[string]any{"folders": []map[string]any{
+		{"id": 1, "name": "trash", "type": "trash"},
+		{"id": 42, "name": "oasm-scan", "type": "custom"},
+	}})
 }
 
 func (f *fakeNessus) handleScanCreate(w http.ResponseWriter, r *http.Request) {
@@ -138,6 +149,7 @@ func newFakeNessus(t *testing.T, statuses ...string) *fakeNessus {
 	mux.HandleFunc("POST /session", f.handleSession)
 	mux.HandleFunc("PUT /session/keys", f.handleSessionKeys)
 	mux.HandleFunc("GET /server/status", f.handleServerStatus)
+	mux.HandleFunc("GET /folders", f.handleFolders)
 	mux.HandleFunc("POST /scans", f.handleScanCreate)
 	mux.HandleFunc("GET /scans/{id}", f.handleScanDetails)
 	mux.HandleFunc("GET /scans/{id}/plugins/{pluginID}", f.handlePluginOutput)
