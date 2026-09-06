@@ -17,26 +17,47 @@ configSchema:
       items:
         type: string
         enum: [info, low, medium, high, critical]
+      title: Severity levels
+      description: 'Only report findings at the selected severity levels.'
+      default: [high, critical]
     tags:
       type: array
       items:
         type: string
+      title: Template tags
+      description: 'Only run templates matching these tags.'
+      examples: [[cve, rce]]
+      ui:placeholder: 'e.g. cve, rce'
     excludeTags:
       type: array
       items:
         type: string
+      title: Excluded tags
+      description: 'Skip templates that match these tags.'
+      examples: [[dos, fuzz]]
+      ui:placeholder: 'e.g. dos, fuzz'
     templateIds:
       type: array
       items:
         type: string
+      title: Template IDs
+      description: 'Only run these specific template IDs.'
+      examples: [[CVE-2024-12345, wordpress-rce]]
+      ui:placeholder: 'e.g. CVE-2024-12345'
     rateLimit:
       type: integer
       default: 150
+      title: Rate limit
+      description: 'Maximum HTTP requests per second.'
     concurrency:
       type: integer
       default: 25
+      title: Concurrency
+      description: 'Maximum templates executed in parallel.'
     followRedirects:
       type: boolean
+      title: Follow redirects
+      description: 'Follow HTTP redirects during the scan.'
 resourceDefaults:
   cpu: 500m
   memory: 4096Mi

@@ -14,6 +14,7 @@ inputsSchema:
     target:
       type: string
       format: uri
+      examples: [https://example.com]
   additionalProperties: false
 configSchema:
   type: object
@@ -22,20 +23,40 @@ configSchema:
     url:
       type: string
       format: uri
+      examples: [https://nessus.local:8834]
+      ui:placeholder: 'https://nessus.local:8834'
     username:
       type: string
+      examples: [administrator]
     password:
       type: string
+      ui:widget: password
+      ui:placeholder: '••••••••'
     accessKey:
       type: string
+      title: API access key
+      description: 'Nessus API access key (alternative to username/password).'
+      ui:placeholder: 'Enter API access key'
     secretKey:
       type: string
+      title: API secret key
+      description: 'Nessus API secret key, paired with accessKey.'
+      ui:placeholder: 'Enter API secret key'
     templateUuid:
       type: string
+      title: Scan template UUID
+      description: 'UUID of the Nessus scan template to use.'
+      ui:placeholder: 'ad629e16-03b6-461c-94cf-736f3f1a1c2f'
     policyId:
       type: string
+      title: Policy ID
+      description: 'ID of an existing Nessus scan policy.'
+      ui:placeholder: 'e.g. 123'
     folderId:
       type: string
+      title: Folder ID
+      description: 'ID of the Nessus folder that will contain the scan.'
+      ui:placeholder: 'e.g. 1'
   additionalProperties: false
 resourceDefaults:
   cpu: 500m
