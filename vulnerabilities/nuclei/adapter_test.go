@@ -150,10 +150,10 @@ func TestNucleiExecute_ReturnsErrorOnNonZeroExit(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// buildArgs — table-driven tests for config → CLI flag mapping
+// buildCLIArgs — table-driven tests for params → CLI flag mapping
 // ---------------------------------------------------------------------------
 
-func TestBuildArgs(t *testing.T) {
+func TestBuildCLIArgs(t *testing.T) {
 	target := "https://example.com"
 
 	tests := []struct {
@@ -228,7 +228,7 @@ func TestBuildArgs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := buildArgs(target, tc.cfg)
+			got := buildCLIArgs(target, scanParams(tc.cfg, defaultTemplateDir))
 			if len(got) != len(tc.expect) {
 				t.Fatalf("arg count = %d, want %d\ngot:  %v\nwant: %v", len(got), len(tc.expect), got, tc.expect)
 			}
@@ -246,13 +246,10 @@ func boolPtr(v bool) *bool    { return &v }
 func strPtr(v string) *string { return &v }
 
 // ---------------------------------------------------------------------------
-// buildArgs — id-mode priority, stable flags, manifest defaults
+// buildCLIArgs — id-mode priority, stable flags, manifest defaults
 // ---------------------------------------------------------------------------
 
-// TestBuildArgs_IdPrioritized: when templateIds is set, -severity/-tags/-etags
-// are dropped and only -id is emitted. Mixing -id with template selection
-// filters made nuclei silently return zero findings, so id mode wins.
-func TestBuildArgs_IdPrioritized(t *testing.T) {
+func TestBuildCLIArgs_IdPrioritized(t *testing.T) {
 	target := "https://example.com"
 	cfg := Config{
 		Severity:    []string{"high", "critical"},
@@ -260,7 +257,7 @@ func TestBuildArgs_IdPrioritized(t *testing.T) {
 		ExcludeTags: []string{"dos"},
 		TemplateIds: []string{"CVE-2021-1234"},
 	}
-	got := buildArgs(target, cfg)
+	got := buildCLIArgs(target, scanParams(cfg, defaultTemplateDir))
 	for _, flag := range []string{"-severity", "-tags", "-etags"} {
 		assertArgsNotContains(t, got, flag)
 	}
@@ -271,9 +268,7 @@ func TestBuildArgs_IdPrioritized(t *testing.T) {
 	}
 }
 
-// TestBuildArgs_HasDucSilentNc: -duc -silent -nc are always present and always
-// ordered before -target; -jsonl stays last.
-func TestBuildArgs_HasDucSilentNc(t *testing.T) {
+func TestBuildCLIArgs_HasDucSilentNc(t *testing.T) {
 	target := "https://example.com"
 	for name, cfg := range map[string]Config{
 		"empty config": {},
@@ -281,7 +276,7 @@ func TestBuildArgs_HasDucSilentNc(t *testing.T) {
 		"full config":  {Severity: []string{"high"}, Tags: []string{"cve"}, RateLimit: intPtr(10), Concurrency: intPtr(5)},
 	} {
 		t.Run(name, func(t *testing.T) {
-			got := buildArgs(target, cfg)
+			got := buildCLIArgs(target, scanParams(cfg, defaultTemplateDir))
 			for _, flag := range []string{"-duc", "-silent", "-nc"} {
 				assertArgsContains(t, got, flag)
 			}
@@ -301,36 +296,28 @@ func TestBuildArgs_HasDucSilentNc(t *testing.T) {
 	}
 }
 
-// TestBuildArgs_AppliesDefaults: nil rateLimit/concurrency fall back to the
-// manifest.yaml defaults (150 / 25).
-func TestBuildArgs_AppliesDefaults(t *testing.T) {
+func TestBuildCLIArgs_AppliesDefaults(t *testing.T) {
 	target := "https://example.com"
-	got := buildArgs(target, Config{})
+	got := buildCLIArgs(target, scanParams(Config{}, defaultTemplateDir))
 	assertArgsContainsNext(t, got, "-rl", "150")
 	assertArgsContainsNext(t, got, "-c", "25")
 }
 
-// TestBuildArgs_IncludesTemplateDir: -t is always emitted after -duc -silent -nc,
-// defaulting to the templates baked into /opt by the Dockerfile.
-func TestBuildArgs_IncludesTemplateDir(t *testing.T) {
-	t.Setenv("NUCLEI_TEMPLATE_DIR", "")
+func TestBuildCLIArgs_IncludesTemplateDir(t *testing.T) {
 	if defaultTemplateDir != "/opt/nuclei-templates" {
 		t.Fatalf("defaultTemplateDir = %q, want /opt/nuclei-templates", defaultTemplateDir)
 	}
 	target := "https://example.com"
-	got := buildArgs(target, Config{})
+	got := buildCLIArgs(target, scanParams(Config{}, defaultTemplateDir))
 	assertArgsContainsNext(t, got, "-t", defaultTemplateDir)
 	if idx := indexOf(got, "-t"); idx != 3 || idx+1 >= len(got) || got[idx-3] != "-duc" {
 		t.Errorf("-t must be the 4th arg (right after -duc -silent -nc), got %v", got)
 	}
 }
 
-// TestBuildArgs_TemplateDirEnvOverride: NUCLEI_TEMPLATE_DIR overrides the
-// baked-in default so scans can point at a custom templates location.
-func TestBuildArgs_TemplateDirEnvOverride(t *testing.T) {
-	t.Setenv("NUCLEI_TEMPLATE_DIR", "/custom/templates")
+func TestBuildCLIArgs_TemplateDirOverride(t *testing.T) {
 	target := "https://example.com"
-	got := buildArgs(target, Config{})
+	got := buildCLIArgs(target, scanParams(Config{}, "/custom/templates"))
 	assertArgsContainsNext(t, got, "-t", "/custom/templates")
 	assertArgsNotContains(t, got, "/opt/nuclei-templates")
 }
@@ -499,7 +486,7 @@ func TestParseConfig_MalformedReturnsError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Execute integration: OASM_CONFIG env → buildArgs used
+// Execute integration: OASM_CONFIG env → scanParams used
 // ---------------------------------------------------------------------------
 
 // setupTemplateDir creates a temp dir with one dummy file so the Execute

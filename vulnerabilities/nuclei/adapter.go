@@ -34,10 +34,11 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
+	"time"
 
 	"github.com/oasm-platform/oasm-connectors/sdk/connector"
+	nuclei "github.com/projectdiscovery/nuclei/v3/lib"
 	nucleiOutput "github.com/projectdiscovery/nuclei/v3/pkg/output"
 )
 
@@ -91,73 +92,98 @@ func templateDir() string {
 	return defaultTemplateDir
 }
 
-// buildArgs maps a Config to nuclei CLI flags, always ending with -target and -jsonl.
-// When TemplateIds is set, only -id is emitted as a filter: -severity/-tags/-etags
-// are dropped (with a warning) because mixing -id with template selection filters
-// made nuclei silently match nothing and report zero findings. When no config is
-// provided the manifest.yaml defaults apply: rateLimit=150, concurrency=25.
-func buildArgs(target string, cfg Config) []string {
-	var args []string
+type params struct {
+	templates      []string
+	filters        nuclei.TemplateFilters
+	rateLimit      int
+	concurrency    int
+	followRedirects bool
+	idMode         bool
+}
 
-	// Stable flags first: -duc disables the update check (the container has no
-	// network at runtime), -silent hides banner noise, -nc disables colored output.
-	args = append(args, "-duc", "-silent", "-nc")
-
-	// Always pin the templates directory: at runtime HOME is a tmpfs, so nuclei's
-	// default lookup (HOME/nuclei-templates) finds nothing and aborts with
-	// "FTL no templates provided". /opt/nuclei-templates is baked at build time.
-	args = append(args, "-t", templateDir())
-
-	if len(cfg.TemplateIds) > 0 {
+// scanParams maps a Config + templates directory into a params struct.
+// When TemplateIds is set, only filters.IDs is populated: severity/tags/excludeTags
+// are dropped because mixing -id with template selection filters made nuclei
+// silently match nothing. When no config is provided the manifest.yaml defaults
+// apply: rateLimit=150, concurrency=25.
+func scanParams(cfg Config, dir string) params {
+	templates := []string{dir}
+	var filters nuclei.TemplateFilters
+	idMode := len(cfg.TemplateIds) > 0
+	if idMode {
+		filters.IDs = cfg.TemplateIds
 		if len(cfg.Severity) > 0 || len(cfg.Tags) > 0 || len(cfg.ExcludeTags) > 0 {
 			log.Printf("nuclei: templateIds set — dropping -severity/-tags/-etags (incompatible with -id)")
 		}
-		args = append(args, "-id", strings.Join(cfg.TemplateIds, ","))
 	} else {
 		if len(cfg.Severity) > 0 {
-			args = append(args, "-severity", strings.Join(cfg.Severity, ","))
+			filters.Severity = strings.Join(cfg.Severity, ",")
 		}
 		if len(cfg.Tags) > 0 {
-			args = append(args, "-tags", strings.Join(cfg.Tags, ","))
+			filters.Tags = cfg.Tags
 		}
 		if len(cfg.ExcludeTags) > 0 {
-			args = append(args, "-etags", strings.Join(cfg.ExcludeTags, ","))
+			filters.ExcludeTags = cfg.ExcludeTags
 		}
 	}
 
-	// Manifest defaults apply when the config leaves them unset (manifest.yaml:
-	// rateLimit default 150, concurrency default 25).
 	rl := 150
 	if cfg.RateLimit != nil {
 		rl = *cfg.RateLimit
 	}
-	args = append(args, "-rl", strconv.Itoa(rl))
-
 	c := 25
 	if cfg.Concurrency != nil {
 		c = *cfg.Concurrency
 	}
-	args = append(args, "-c", strconv.Itoa(c))
+	fr := cfg.FollowRedirects != nil && *cfg.FollowRedirects
 
-	if cfg.FollowRedirects != nil && *cfg.FollowRedirects {
-		args = append(args, "-follow-redirects")
-	}
-
-	args = append(args, "-target", target, "-jsonl")
-	return args
+	return params{templates, filters, rl, c, fr, idMode}
 }
 
-// redactedArgs returns a copy of args with the value following -target
-// replaced by [redacted] so scan targets are not leaked into logs.
-func redactedArgs(args []string) []string {
-	redacted := make([]string, len(args))
-	copy(redacted, args)
-	for i, a := range redacted {
-		if a == "-target" && i+1 < len(redacted) {
-			redacted[i+1] = "[redacted]"
+// sdkOptions converts resolved params into nuclei SDK option functions.
+// HostConcurrency is hardcoded to 25, matching BulkSize default from
+// pkg/types/types.go DefaultOptions() (T1 spike confirmed).
+func sdkOptions(ctx context.Context, p params) []nuclei.NucleiSDKOptions {
+	opts := []nuclei.NucleiSDKOptions{
+		nuclei.DisableUpdateCheck(),
+		nuclei.WithTemplatesOrWorkflows(nuclei.TemplateSources{Templates: p.templates}),
+		nuclei.WithVerbosity(nuclei.VerbosityOptions{Silent: true}),
+	}
+	if p.filters.Severity != "" || p.filters.Tags != nil || p.filters.ExcludeTags != nil || p.filters.IDs != nil {
+		opts = append(opts, nuclei.WithTemplateFilters(p.filters))
+	}
+	opts = append(opts, nuclei.WithGlobalRateLimitCtx(ctx, p.rateLimit, time.Second))
+	opts = append(opts, nuclei.WithConcurrency(nuclei.Concurrency{TemplateConcurrency: p.concurrency, HostConcurrency: 25}))
+	return opts
+}
+
+// buildCLIArgs constructs nuclei CLI flags from resolved params.
+// Transitional: used by the exec-based Execute until T4 rewrites it to use
+// the nuclei SDK engine directly via sdkOptions.
+func buildCLIArgs(target string, p params) []string {
+	var args []string
+	args = append(args, "-duc", "-silent", "-nc")
+	args = append(args, "-t", p.templates[0])
+	if p.idMode {
+		args = append(args, "-id", strings.Join(p.filters.IDs, ","))
+	} else {
+		if p.filters.Severity != "" {
+			args = append(args, "-severity", p.filters.Severity)
+		}
+		if p.filters.Tags != nil {
+			args = append(args, "-tags", strings.Join(p.filters.Tags, ","))
+		}
+		if p.filters.ExcludeTags != nil {
+			args = append(args, "-etags", strings.Join(p.filters.ExcludeTags, ","))
 		}
 	}
-	return redacted
+	args = append(args, "-rl", fmt.Sprintf("%d", p.rateLimit))
+	args = append(args, "-c", fmt.Sprintf("%d", p.concurrency))
+	if p.followRedirects {
+		args = append(args, "-follow-redirects")
+	}
+	args = append(args, "-target", target, "-jsonl")
+	return args
 }
 
 // Validate is intentionally a no-op: inputs are validated upstream by the
@@ -197,8 +223,9 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 	if bin == "" {
 		bin = "nuclei"
 	}
-	args := buildArgs(target, cfg)
-	log.Printf("nuclei: bin=%s args=%v", bin, redactedArgs(args))
+	p := scanParams(cfg, dir)
+	log.Printf("nuclei: bin=%s templates=%v", bin, p.templates)
+	args := buildCLIArgs(target, p)
 	cmd := exec.CommandContext(ctx, bin, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
