@@ -1,3 +1,28 @@
+// ==== T1 nuclei SDK API spike (v3.4.1) — consumed by T3/T4/T5 ====
+// VERIFIED per-symbol facts from `go doc` against github.com/projectdiscovery/nuclei/v3 v3.4.1:
+//
+//   - lib.NucleiEngine options (all exist as NucleiSDKOptions funcs):
+//     WithTemplatesOrWorkflows(TemplateSources), WithTemplateFilters(TemplateFilters),
+//     WithConcurrency(Concurrency), WithVerbosity(VerbosityOptions), DisableUpdateCheck(),
+//     WithGlobalRateLimit(maxTokens, duration), WithGlobalRateLimitCtx(ctx, maxTokens, duration),
+//     WithInteractshOptions(InteractshOpts), plus WithProxy, WithSandboxOptions, WithScanStrategy,
+//     WithHeaders, WithNetworkConfig, EnablePassiveMode, DASTMode, etc.
+//   - Global rate limit: BOTH exist; WithGlobalRateLimit is marked Deprecated
+//     ("will be removed in favour of WithGlobalRateLimitCtx in next release").
+//   - WithInteractshOptions: EXISTS (so T5's interactsh branch is reachable from the lib API).
+//   - severity.Holder{Severity Severity `mapping:"true"`}: field Severity is the severity.Severity
+//     type, which has `func (severity Severity) String() string` (no pointer receiver).
+//   - output.ResultEvent: Info field is `model.Info` (json "info,inline"); no Classification field
+//     directly on ResultEvent — classification lives on model.Info.
+//   - model.Info fields incl.: Name, Authors, Tags, Description, Impact, Reference (RawStringSlice),
+//     SeverityHolder severity.Holder, Metadata, Classification *Classification, Remediation.
+//   - installer.TemplateManager: has `func (t *TemplateManager) FreshInstallIfNotExists() error`
+//     (and UpdateIfOutdated()).
+//   - pkg/types.Options defaults (from DefaultOptions() in pkg/types/types.go, v3.4.1):
+//     BulkSize = 25, TemplateThreads = 25.
+//
+// deps.go (blank imports of lib, pkg/output, pkg/installer, pkg/catalog/config) keeps the v3.4.1
+// require from being pruned by `go mod tidy`; deleted in T4 when adapter.go imports lib for real.
 package main
 
 import (
