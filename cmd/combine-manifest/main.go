@@ -29,7 +29,10 @@ type Manifest struct {
 	Version          string         `yaml:"version"       json:"version"`
 	Image            string         `yaml:"image"         json:"image"`
 	Author           string         `yaml:"author"        json:"author"`
-	License          string         `yaml:"license"       json:"license"`
+	PricingTier      []string       `yaml:"pricingTier"   json:"pricingTier"`
+	Homepage         string         `yaml:"homepage,omitempty"     json:"homepage,omitempty"`
+	RepositoryURL    string         `yaml:"repositoryUrl,omitempty" json:"repositoryUrl,omitempty"`
+	SupportURL       string         `yaml:"supportUrl,omitempty"    json:"supportUrl,omitempty"`
 	ShortDescription string         `yaml:"shortDescription" json:"shortDescription"`
 	Description      string         `yaml:"description"      json:"description"`
 	Capabilities     []string       `yaml:"capabilities"  json:"capabilities"`
@@ -83,8 +86,29 @@ func validate(m *Manifest, path string) error {
 	if m.Author == "" {
 		return fmt.Errorf("author required")
 	}
-	if m.License == "" {
-		return fmt.Errorf("license required")
+	if len(m.PricingTier) == 0 {
+		return fmt.Errorf("pricingTier required")
+	}
+	normalized := make([]string, 0, len(m.PricingTier))
+	for _, t := range m.PricingTier {
+		tier := strings.ToLower(strings.TrimSpace(t))
+		if tier != "free" && tier != "paid" {
+			return fmt.Errorf("invalid pricingTier %q (must be free|paid)", t)
+		}
+		normalized = append(normalized, tier)
+	}
+	m.PricingTier = normalized
+	for _, field := range []struct {
+		key string
+		val string
+	}{
+		{"homepage", m.Homepage},
+		{"repositoryUrl", m.RepositoryURL},
+		{"supportUrl", m.SupportURL},
+	} {
+		if field.val != "" && strings.TrimSpace(field.val) == "" {
+			return fmt.Errorf("%s must be non-empty if set", field.key)
+		}
 	}
 	return nil
 }

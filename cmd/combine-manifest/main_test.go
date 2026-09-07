@@ -26,7 +26,7 @@ slug: nuclei
 version: 3.3.0
 image: ghcr.io/oasm-platform/connector-nuclei:3.3.0
 author: "oasm"
-license: free
+pricingTier: [free]
 shortDescription: "Fast template-based vulnerability scanner"
 description: "Runs ProjectDiscovery Nuclei template-based scans against a target URL."
 capabilities: [vulnerabilities]
@@ -98,7 +98,7 @@ func TestValidateRejectsBadSlug(t *testing.T) {
 func TestValidateAllowsSpacedUppercaseName(t *testing.T) {
 	m := &Manifest{Name: "Nuclei Scanner v2", Slug: "nuclei", Version: "3.3.0", Image: "x",
 		ShortDescription: "short", Description: "long", Capabilities: []string{"vulnerabilities"},
-		Author: "oasm", License: "free"}
+		Author: "oasm", PricingTier: []string{"free"}}
 	if err := validate(m, "test"); err != nil {
 		t.Fatalf("spaced uppercase display name should be valid, got %v", err)
 	}
@@ -129,7 +129,7 @@ func TestValidateRejectsMissingShortDescription(t *testing.T) {
 }
 
 func TestValidateRejectsMissingAuthor(t *testing.T) {
-	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", License: "free",
+	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", PricingTier: []string{"free"},
 		ShortDescription: "short", Description: "long description",
 		Capabilities: []string{"vulnerabilities"}}
 	err := validate(m, "test")
@@ -141,16 +141,84 @@ func TestValidateRejectsMissingAuthor(t *testing.T) {
 	}
 }
 
-func TestValidateRejectsMissingLicense(t *testing.T) {
+func TestValidateRejectsMissingPricingTier(t *testing.T) {
+	for _, tiers := range [][]string{nil, {}} {
+		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
+			PricingTier:      tiers,
+			ShortDescription: "short", Description: "long description",
+			Capabilities: []string{"vulnerabilities"}}
+		err := validate(m, "test")
+		if err == nil {
+			t.Fatalf("expected error for missing/empty pricingTier (%v)", tiers)
+		}
+		if !strings.Contains(err.Error(), "pricingTier required") {
+			t.Fatalf("expected error mentioning pricingTier required, got %q", err.Error())
+		}
+	}
+}
+
+func TestValidateRejectsInvalidPricingTier(t *testing.T) {
+	for _, bad := range []string{"enterprise", "mit", "proprietary", "freemium"} {
+		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
+			PricingTier:      []string{bad},
+			ShortDescription: "short", Description: "long description",
+			Capabilities: []string{"vulnerabilities"}}
+		err := validate(m, "test")
+		if err == nil {
+			t.Fatalf("expected error for invalid pricingTier %q", bad)
+		}
+		if !strings.Contains(err.Error(), "pricingTier") {
+			t.Fatalf("pricingTier %q: expected error mentioning pricingTier, got %q", bad, err.Error())
+		}
+	}
+}
+
+func TestValidateAcceptsPricingTierCaseInsensitiveTrim(t *testing.T) {
+	for _, ok := range []string{"free", "paid", " Free ", "PAID"} {
+		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
+			PricingTier:      []string{ok},
+			ShortDescription: "short", Description: "long description",
+			Capabilities: []string{"vulnerabilities"}}
+		if err := validate(m, "test"); err != nil {
+			t.Fatalf("pricingTier %q should be valid, got %v", ok, err)
+		}
+	}
+}
+
+func TestValidateAcceptsBothTiers(t *testing.T) {
 	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
+		PricingTier:      []string{"free", "paid"},
 		ShortDescription: "short", Description: "long description",
 		Capabilities: []string{"vulnerabilities"}}
-	err := validate(m, "test")
-	if err == nil {
-		t.Fatal("expected error for missing license")
+	if err := validate(m, "test"); err != nil {
+		t.Fatalf("pricingTier [free paid] should be valid, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "license required") {
-		t.Fatalf("expected error mentioning license required, got %q", err.Error())
+	if len(m.PricingTier) != 2 || m.PricingTier[0] != "free" || m.PricingTier[1] != "paid" {
+		t.Fatalf("PricingTier not normalized: %v", m.PricingTier)
+	}
+}
+
+func TestValidateRejectsBlankOptionalURLs(t *testing.T) {
+	for _, field := range []string{"homepage", "repositoryUrl", "supportUrl"} {
+		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
+			PricingTier:      []string{"free"},
+			ShortDescription: "short", Description: "long description",
+			Capabilities: []string{"vulnerabilities"}}
+		switch field {
+		case "homepage":
+			m.Homepage = "   "
+		case "repositoryUrl":
+			m.RepositoryURL = "   "
+		case "supportUrl":
+			m.SupportURL = "   "
+		}
+		err := validate(m, "test")
+		if err == nil {
+			t.Fatalf("expected error for blank %s", field)
+		}
+		if !strings.Contains(err.Error(), field) {
+			t.Fatalf("expected error mentioning %s, got %q", field, err.Error())
+		}
 	}
 }
 
@@ -176,8 +244,8 @@ func TestLoadAndRunEmitDescriptions(t *testing.T) {
 	if m.Author != "oasm" {
 		t.Fatalf("Author not parsed: %q", m.Author)
 	}
-	if m.License != "free" {
-		t.Fatalf("License not parsed: %q", m.License)
+	if len(m.PricingTier) != 1 || m.PricingTier[0] != "free" {
+		t.Fatalf("PricingTier not parsed: %v", m.PricingTier)
 	}
 
 	out := filepath.Join(root, "manifest.json")
@@ -197,11 +265,15 @@ func TestLoadAndRunEmitDescriptions(t *testing.T) {
 	if len(doc.Connectors) != 1 {
 		t.Fatalf("expected 1 connector, got %d", len(doc.Connectors))
 	}
-	for _, key := range []string{"description", "shortDescription", "author", "license", "slug"} {
+	for _, key := range []string{"description", "shortDescription", "author", "slug"} {
 		v, ok := doc.Connectors[0][key].(string)
 		if !ok || v == "" {
 			t.Fatalf("connector object missing non-empty %q key: %v", key, doc.Connectors[0])
 		}
+	}
+	tiers, ok := doc.Connectors[0]["pricingTier"].([]any)
+	if !ok || len(tiers) != 1 || tiers[0] != "free" {
+		t.Fatalf("connector object pricingTier must be [free], got: %v", doc.Connectors[0])
 	}
 }
 
@@ -210,6 +282,24 @@ func TestLoadRejectsUnknownFields(t *testing.T) {
 	p := writeManifest(t, filepath.Join(root, "vulnerabilities", "nuclei"), validYAML+"unknownField: 1\n")
 	if _, err := loadManifest(p); err == nil {
 		t.Fatal("expected unknown-field rejection")
+	}
+}
+
+func TestLoadRejectsScalarPricingTier(t *testing.T) {
+	root := t.TempDir()
+	scalar := strings.Replace(validYAML, "pricingTier: [free]", "pricingTier: free", 1)
+	p := writeManifest(t, filepath.Join(root, "vulnerabilities", "nuclei"), scalar)
+	if _, err := loadManifest(p); err == nil {
+		t.Fatal("expected scalar pricingTier to be rejected (must be array)")
+	}
+}
+
+func TestLoadRejectsLegacyLicenseField(t *testing.T) {
+	root := t.TempDir()
+	legacy := strings.Replace(validYAML, "pricingTier: [free]", "license: free", 1)
+	p := writeManifest(t, filepath.Join(root, "vulnerabilities", "nuclei"), legacy)
+	if _, err := loadManifest(p); err == nil {
+		t.Fatal("expected legacy license field to be rejected as unknown field")
 	}
 }
 
