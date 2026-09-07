@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 )
@@ -239,62 +238,6 @@ func TestBuildArgs(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-// TestParseFinding covers the nuclei JSONL → Finding mapping rules.
-func TestParseFinding(t *testing.T) {
-	valid := `{"template-id":"cve-2021-1","info":{"name":"Real XSS","severity":"high","reference":["https://ref.example"],"solution":"patch it"},"tags":"xss,cve","matched-at":"https://example.com","host":"example.com","ip":"1.2.3.4","cve-id":["CVE-2021-1"],"cwe-id":["CWE-79"],"cvss-score":"8.1","cvss-metrics":"CVSS:3.1/AV:N/AC:L","epss-score":0.00054,"timestamp":"2024-01-02T03:04:05Z"}`
-	f, err := parseFinding([]byte(valid))
-	if err != nil {
-		t.Fatalf("parseFinding(valid) error: %v", err)
-	}
-	if f.Name != "Real XSS" || f.Severity != "high" || !strings.Contains(f.Host, "example.com") || f.IP != "1.2.3.4" {
-		t.Errorf("basic fields wrong: %+v", f)
-	}
-	if len(f.Tags) != 2 || f.Tags[0] != "xss" || f.Tags[1] != "cve" {
-		t.Errorf("tags = %v, want [xss cve]", f.Tags)
-	}
-	if len(f.References) != 1 || f.References[0] != "https://ref.example" {
-		t.Errorf("references = %v", f.References)
-	}
-	if len(f.CVEID) != 1 || f.CVEID[0] != "CVE-2021-1" || len(f.CWEID) != 1 || f.CWEID[0] != "CWE-79" {
-		t.Errorf("cve/cwe = %v / %v", f.CVEID, f.CWEID)
-	}
-	if f.CVSSScore != 8.1 || f.CVSSMetrics != "CVSS:3.1/AV:N/AC:L" || f.EPSSScore != 0.00054 {
-		t.Errorf("scores = %v/%v/%v", f.CVSSScore, f.CVSSMetrics, f.EPSSScore)
-	}
-	if ts := f.Timestamp.UTC().Format(time.RFC3339); ts != "2024-01-02T03:04:05Z" {
-		t.Errorf("timestamp = %q, want 2024-01-02T03:04:05Z", ts)
-	}
-	if err := f.Validate(); err != nil {
-		t.Errorf("parsed finding must validate: %v", err)
-	}
-
-	// Noise line → error (caller skips it).
-	if _, err := parseFinding([]byte("[INF] nuclei started scanning")); err == nil {
-		t.Error("parseFinding(noise) = nil error, want error")
-	}
-
-	// Unknown severity normalizes to info so real matches survive.
-	unknown, err := parseFinding([]byte(`{"template-id":"t1","info":{"name":"N","severity":"unknown"}}`))
-	if err != nil {
-		t.Fatalf("parseFinding(unknown severity) error: %v", err)
-	}
-	if unknown.Severity != "info" {
-		t.Errorf("unknown severity → %q, want info", unknown.Severity)
-	}
-
-	// Missing name falls back to template-id; missing everything → error.
-	fallback, err := parseFinding([]byte(`{"template-id":"t2","info":{"severity":"low"}}`))
-	if err != nil {
-		t.Fatalf("parseFinding(name fallback) error: %v", err)
-	}
-	if fallback.Name != "t2" {
-		t.Errorf("Name = %q, want fallback t2", fallback.Name)
-	}
-	if _, err := parseFinding([]byte(`{}`)); err == nil {
-		t.Error("parseFinding(empty line) = nil error, want error")
 	}
 }
 

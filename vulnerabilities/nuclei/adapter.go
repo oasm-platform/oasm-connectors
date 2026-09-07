@@ -36,9 +36,9 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/oasm-platform/oasm-connectors/sdk/connector"
+	nucleiOutput "github.com/projectdiscovery/nuclei/v3/pkg/output"
 )
 
 // NucleiAdapter implements Validate/Execute for nuclei as a thin wrapper:
@@ -218,9 +218,16 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 	defer done()
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		f, err := parseFinding(line)
+		// Parse straight into the typed event (no hand-rolled JSONL structs);
+		// T4 replaces this exec loop with the in-process engine callback.
+		var ev nucleiOutput.ResultEvent
+		if err := json.Unmarshal(line, &ev); err != nil {
+			skipped++ // banner/noise lines are not JSON
+			continue
+		}
+		f, err := resultEventToFinding(&ev)
 		if err != nil {
-			skipped++ // banner/noise or unusable lines
+			skipped++ // event without a usable name
 			continue
 		}
 		out <- f
@@ -243,72 +250,6 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 	return nil
 }
 
-// nucleiLine is the subset of a nuclei -jsonl output line the adapter maps
-// onto a Finding. `any` fields are used because nuclei emits some values
-// either as numbers or as strings depending on version/type.
-type nucleiLine struct {
-	TemplateID string `json:"template-id"`
-	Info       struct {
-		Name      string `json:"name"`
-		Severity  string `json:"severity"`
-		Reference any    `json:"reference"`
-		Tags      any    `json:"tags"`
-		Solution  string `json:"solution"`
-	} `json:"info"`
-	Tags        any    `json:"tags"`
-	MatchedAt   string `json:"matched-at"`
-	Host        string `json:"host"`
-	IP          string `json:"ip"`
-	CVSSScore   any    `json:"cvss-score"`
-	CVSSMetrics string `json:"cvss-metrics"`
-	EPSSScore   any    `json:"epss-score"`
-	CVEID       any    `json:"cve-id"`
-	CWEID       any    `json:"cwe-id"`
-	Timestamp   string `json:"timestamp"`
-}
-
-// parseFinding maps one nuclei JSONL line onto a connector.Finding. Lines the
-// adapter cannot use (noise, malformed JSON, no name at all) yield an error so
-// the caller skips them instead of failing the stream. Severity "unknown"
-// normalizes to "info" — mirrors nessus mapSeverity's default — so real
-// matches never drop; a missing info.name falls back to the template-id.
-func parseFinding(line []byte) (connector.Finding, error) {
-	var n nucleiLine
-	if err := json.Unmarshal(line, &n); err != nil {
-		return connector.Finding{}, err
-	}
-
-	f := connector.Finding{
-		Name:        n.Info.Name,
-		Severity:    normalizeSeverity(n.Info.Severity),
-		Tags:        toStrings(n.Tags),
-		References:  toStrings(n.Info.Reference),
-		CVEID:       toStrings(n.CVEID),
-		CWEID:       toStrings(n.CWEID),
-		CVSSMetrics: n.CVSSMetrics,
-		Solution:    n.Info.Solution,
-		MatchedAt:   n.MatchedAt,
-		Host:        n.Host,
-		IP:          n.IP,
-	}
-	if f.Name == "" {
-		f.Name = n.TemplateID
-	}
-	if score, ok := toFloat64(n.CVSSScore); ok {
-		f.CVSSScore = score
-	}
-	if score, ok := toFloat64(n.EPSSScore); ok {
-		f.EPSSScore = score
-	}
-	if ts, err := time.Parse(time.RFC3339, n.Timestamp); err == nil {
-		f.Timestamp = ts
-	}
-	if f.Name == "" {
-		return connector.Finding{}, fmt.Errorf("finding line has no name")
-	}
-	return f, nil
-}
-
 // normalizeSeverity maps a scanner severity onto the Finding enum; anything
 // outside it (e.g. nuclei "unknown") becomes "info" rather than killing the
 // whole stream at runtime validation.
@@ -322,43 +263,42 @@ func normalizeSeverity(s string) string {
 	return "info"
 }
 
-// toStrings normalizes a JSON value into a string slice, accepting a string
-// (comma- or single-valued), an array, or nil.
-func toStrings(v any) []string {
-	switch t := v.(type) {
-	case []any:
-		out := make([]string, 0, len(t))
-		for _, e := range t {
-			if s, ok := e.(string); ok && strings.TrimSpace(s) != "" {
-				out = append(out, strings.TrimSpace(s))
-			}
-		}
-		return out
-	case string:
-		if strings.TrimSpace(t) == "" {
-			return nil
-		}
-		parts := strings.Split(t, ",")
-		for i := range parts {
-			parts[i] = strings.TrimSpace(parts[i])
-		}
-		return parts
-	default:
-		return nil
+// resultEventToFinding maps one nuclei SDK output.ResultEvent onto a
+// connector.Finding. Events whose name is empty in both info.name and
+// template-id yield an error so the caller skips them instead of failing the
+// stream. Severity "unknown" normalizes to "info" via normalizeSeverity,
+// mirroring the old JSONL parser's no-drop behaviour. StringSlice fields use
+// ToSlice() because stringslice models a single string OR a []string.
+func resultEventToFinding(event *nucleiOutput.ResultEvent) (connector.Finding, error) {
+	name := event.Info.Name
+	if name == "" {
+		name = event.TemplateID
 	}
-}
+	if name == "" {
+		return connector.Finding{}, fmt.Errorf("finding event has no name")
+	}
 
-// toFloat64 normalizes a JSON number-or-string into a float64.
-func toFloat64(v any) (float64, bool) {
-	switch t := v.(type) {
-	case float64:
-		return t, true
-	case string:
-		f, err := strconv.ParseFloat(strings.TrimSpace(t), 64)
-		return f, err == nil
-	default:
-		return 0, false
+	f := connector.Finding{
+		Name:      name,
+		Severity:  normalizeSeverity(event.Info.SeverityHolder.Severity.String()),
+		Tags:      event.Info.Tags.ToSlice(),
+		Solution:  event.Info.Remediation,
+		MatchedAt: event.Matched,
+		Host:      event.Host,
+		IP:        event.IP,
+		Timestamp: event.Timestamp,
 	}
+	if event.Info.Reference != nil {
+		f.References = event.Info.Reference.ToSlice()
+	}
+	if c := event.Info.Classification; c != nil {
+		f.CVEID = c.CVEID.ToSlice()
+		f.CWEID = c.CWEID.ToSlice()
+		f.CVSSScore = c.CVSSScore
+		f.CVSSMetrics = c.CVSSMetrics
+		f.EPSSScore = c.EPSSScore
+	}
+	return f, nil
 }
 
 // limitedWriter keeps only the last `limit` bytes written to it.
