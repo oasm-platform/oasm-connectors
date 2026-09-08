@@ -66,12 +66,13 @@ func templateDir() string {
 }
 
 type params struct {
-	templates      []string
-	filters        nuclei.TemplateFilters
-	rateLimit      int
-	concurrency    int
+	templates       []string
+	filters         nuclei.TemplateFilters
+	rateLimit       int
+	concurrency     int
 	followRedirects bool
-	idMode         bool
+	idMode          bool
+	noInteractsh    bool
 }
 
 // scanParams maps a Config + templates directory into a params struct.
@@ -110,7 +111,7 @@ func scanParams(cfg Config, dir string) params {
 	}
 	fr := cfg.FollowRedirects != nil && *cfg.FollowRedirects
 
-	return params{templates, filters, rl, c, fr, idMode}
+	return params{templates, filters, rl, c, fr, idMode, true}
 }
 
 // sdkOptions converts resolved params into nuclei SDK option functions.
@@ -126,7 +127,26 @@ func sdkOptions(ctx context.Context, p params) []nuclei.NucleiSDKOptions {
 		opts = append(opts, nuclei.WithTemplateFilters(p.filters))
 	}
 	opts = append(opts, nuclei.WithGlobalRateLimitCtx(ctx, p.rateLimit, time.Second))
-	opts = append(opts, nuclei.WithConcurrency(nuclei.Concurrency{TemplateConcurrency: p.concurrency, HostConcurrency: 25}))
+	opts = append(opts, nuclei.WithConcurrency(nuclei.Concurrency{
+		TemplateConcurrency:           p.concurrency,
+		HostConcurrency:               25,
+		HeadlessHostConcurrency:       10,
+		HeadlessTemplateConcurrency:   10,
+		JavascriptTemplateConcurrency: 1,
+		TemplatePayloadConcurrency:    25,
+		ProbeConcurrency:              50,
+	}))
+	if p.noInteractsh {
+		// NoInteractsh:true alone panics (CacheSize=0 → gcache Build).
+		// Backfill the SDK's DefaultOptions cache fields so init() succeeds
+		// while the client stays lazy (poll/URL short-circuit on NoInteractsh).
+		opts = append(opts, nuclei.WithInteractshOptions(nuclei.InteractshOpts{
+			NoInteractsh: true,
+			CacheSize:    5000,
+			Eviction:     60 * time.Second,
+			PollDuration: 5 * time.Second,
+		}))
+	}
 	return opts
 }
 
