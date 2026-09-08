@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	adapter := &NucleiAdapter{} // binary path comes from NUCLEI_BIN at Execute time
+	adapter := &NucleiAdapter{} // in-process nuclei SDK engine (github.com/projectdiscovery/nuclei/v3/lib)
 	conn := sdkconn.New(adapter)
 	rt := runtime.New(conn)
 

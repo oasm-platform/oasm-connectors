@@ -1,39 +1,12 @@
-// ==== T1 nuclei SDK API spike (v3.4.1) — consumed by T3/T4/T5 ====
-// VERIFIED per-symbol facts from `go doc` against github.com/projectdiscovery/nuclei/v3 v3.4.1:
-//
-//   - lib.NucleiEngine options (all exist as NucleiSDKOptions funcs):
-//     WithTemplatesOrWorkflows(TemplateSources), WithTemplateFilters(TemplateFilters),
-//     WithConcurrency(Concurrency), WithVerbosity(VerbosityOptions), DisableUpdateCheck(),
-//     WithGlobalRateLimit(maxTokens, duration), WithGlobalRateLimitCtx(ctx, maxTokens, duration),
-//     WithInteractshOptions(InteractshOpts), plus WithProxy, WithSandboxOptions, WithScanStrategy,
-//     WithHeaders, WithNetworkConfig, EnablePassiveMode, DASTMode, etc.
-//   - Global rate limit: BOTH exist; WithGlobalRateLimit is marked Deprecated
-//     ("will be removed in favour of WithGlobalRateLimitCtx in next release").
-//   - WithInteractshOptions: EXISTS (so T5's interactsh branch is reachable from the lib API).
-//   - severity.Holder{Severity Severity `mapping:"true"`}: field Severity is the severity.Severity
-//     type, which has `func (severity Severity) String() string` (no pointer receiver).
-//   - output.ResultEvent: Info field is `model.Info` (json "info,inline"); no Classification field
-//     directly on ResultEvent — classification lives on model.Info.
-//   - model.Info fields incl.: Name, Authors, Tags, Description, Impact, Reference (RawStringSlice),
-//     SeverityHolder severity.Holder, Metadata, Classification *Classification, Remediation.
-//   - installer.TemplateManager: has `func (t *TemplateManager) FreshInstallIfNotExists() error`
-//     (and UpdateIfOutdated()).
-//   - pkg/types.Options defaults (from DefaultOptions() in pkg/types/types.go, v3.4.1):
-//     BulkSize = 25, TemplateThreads = 25.
-//
-// deps.go (blank imports of lib, pkg/output, pkg/installer, pkg/catalog/config) keeps the v3.4.1
-// require from being pruned by `go mod tidy`; deleted in T4 when adapter.go imports lib for real.
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -192,10 +165,15 @@ func (a *NucleiAdapter) Validate(_ context.Context, _ map[string]any) error {
 	return nil
 }
 
-// Execute runs nuclei against target and streams every JSONL finding to out.
-// Non-JSON stdout lines (banner/noise) are skipped. A malformed OASM_CONFIG
-// fails the execution instead of silently falling back to defaults.
-func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
+// Execute runs nuclei against target using the in-process SDK engine and
+// streams findings to out. Engine panics are recovered and returned as errors.
+func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) (retErr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			retErr = fmt.Errorf("nuclei engine panic: %v", r)
+		}
+	}()
+
 	target, _ := inputs["target"].(string)
 	if target == "" {
 		return fmt.Errorf("target required")
@@ -212,67 +190,46 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 	}
 	log.Printf("nuclei: using templates dir=%s entries=%d", dir, len(entries))
 
-	// Read optional OASM_CONFIG env — empty → zero Config (manifest defaults
-	// apply); malformed → fail loudly instead of silently scanning with defaults.
 	cfg, err := parseConfig(os.Getenv("OASM_CONFIG"))
 	if err != nil {
 		return fmt.Errorf("invalid OASM_CONFIG: %w", err)
 	}
 
-	bin := os.Getenv("NUCLEI_BIN")
-	if bin == "" {
-		bin = "nuclei"
-	}
 	p := scanParams(cfg, dir)
-	log.Printf("nuclei: bin=%s templates=%v", bin, p.templates)
-	args := buildCLIArgs(target, p)
-	cmd := exec.CommandContext(ctx, bin, args...)
-	stdout, err := cmd.StdoutPipe()
+	nuclei.DefaultConfig.SetTemplatesDir(p.templates[0])
+
+	engine, err := nuclei.NewNucleiEngineCtx(ctx, sdkOptions(ctx, p)...)
 	if err != nil {
-		return fmt.Errorf("stdout pipe: %w", err)
+		return fmt.Errorf("nuclei engine: %w", err)
 	}
-	var stderrTail []byte
-	cmd.Stderr = &limitedWriter{buf: &stderrTail, limit: 32 * 1024}
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start %s: %w", bin, err)
-	}
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024) // nuclei JSON lines can be large
+	defer engine.Close()
+
+	engine.Options().FollowRedirects = p.followRedirects
+	engine.LoadTargets([]string{target}, false)
+
 	findings, skipped := 0, 0
-	done := func() {
-		log.Printf("nuclei: done findings=%d skipped=%d", findings, skipped)
-	}
-	defer done()
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		// Parse straight into the typed event (no hand-rolled JSONL structs);
-		// T4 replaces this exec loop with the in-process engine callback.
-		var ev nucleiOutput.ResultEvent
-		if err := json.Unmarshal(line, &ev); err != nil {
-			skipped++ // banner/noise lines are not JSON
-			continue
-		}
-		f, err := resultEventToFinding(&ev)
+	defer func() { log.Printf("nuclei: done findings=%d skipped=%d", findings, skipped) }()
+
+	scanErr := engine.ExecuteCallbackWithCtx(ctx, func(ev *nucleiOutput.ResultEvent) {
+		sent, err := emitFinding(ctx, ev, out, resultEventToFinding)
 		if err != nil {
-			skipped++ // event without a usable name
-			continue
+			return
 		}
-		out <- f
-		findings++
-	}
-	if err := scanner.Err(); err != nil {
-		_ = cmd.Wait()
-		return fmt.Errorf("read stdout: %w", err)
-	}
-	if err := cmd.Wait(); err != nil {
-		// Keep the Done.Error string compatible (contains `exit status N`) while
-		// adding the numeric exit code for downstream consumers.
-		code := -1
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			code = ee.ExitCode()
+		if sent {
+			findings++
+		} else {
+			skipped++
 		}
-		return fmt.Errorf("nuclei exited: %w (exit code %d); stderr tail: %s", err, code, string(stderrTail))
+	})
+
+	if scanErr != nil {
+		if errors.Is(scanErr, nuclei.ErrNoTemplatesAvailable) {
+			return fmt.Errorf("nuclei scan: no templates available")
+		}
+		if errors.Is(scanErr, nuclei.ErrNoTargetsAvailable) {
+			return fmt.Errorf("nuclei scan: no targets available")
+		}
+		return fmt.Errorf("nuclei scan: %w", scanErr)
 	}
 	return nil
 }
@@ -328,16 +285,29 @@ func resultEventToFinding(event *nucleiOutput.ResultEvent) (connector.Finding, e
 	return f, nil
 }
 
-// limitedWriter keeps only the last `limit` bytes written to it.
-type limitedWriter struct {
-	buf   *[]byte
-	limit int
-}
-
-func (w *limitedWriter) Write(p []byte) (int, error) {
-	*w.buf = append(*w.buf, p...)
-	if len(*w.buf) > w.limit {
-		*w.buf = (*w.buf)[len(*w.buf)-w.limit:]
+// emitFinding maps a nuclei result event to a Finding and sends it to the
+// output channel. It wraps panic recovery on the engine goroutine.
+// mapFn defaults to resultEventToFinding; injectable for testing.
+func emitFinding(
+	ctx context.Context,
+	ev *nucleiOutput.ResultEvent,
+	out chan<- connector.Finding,
+	mapFn func(*nucleiOutput.ResultEvent) (connector.Finding, error),
+) (sent bool, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			sent = false
+			err = fmt.Errorf("nuclei event handler panic: %v", r)
+		}
+	}()
+	f, mapErr := mapFn(ev)
+	if mapErr != nil {
+		return false, nil
 	}
-	return len(p), nil
+	select {
+	case out <- f:
+		return true, nil
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
 }

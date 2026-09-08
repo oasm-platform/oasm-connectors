@@ -2,47 +2,16 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/oasm-platform/oasm-connectors/sdk/connector"
+	"github.com/projectdiscovery/nuclei/v3/pkg/model"
+	"github.com/projectdiscovery/nuclei/v3/pkg/model/types/severity"
+	nucleiOutput "github.com/projectdiscovery/nuclei/v3/pkg/output"
 )
-
-// ensureFakeNuclei builds the fake nuclei helper executable once and returns its path.
-var (
-	fakeBinOnce sync.Once
-	fakeBinPath string
-	fakeBinErr  error
-)
-
-func ensureFakeNuclei(t *testing.T) string {
-	t.Helper()
-	fakeBinOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "fake-nuclei-*")
-		if err != nil {
-			fakeBinErr = err
-			return
-		}
-		fakeBinPath = filepath.Join(dir, "fake-nuclei")
-		if runtime.GOOS == "windows" {
-			fakeBinPath += ".exe"
-		}
-		cmd := exec.Command("go", "build", "-o", fakeBinPath, "./testdata/fake-nuclei")
-		if b, err := cmd.CombinedOutput(); err != nil {
-			fakeBinErr = fmt.Errorf("build fake nuclei: %v: %s", err, b)
-		}
-	})
-	if fakeBinErr != nil {
-		t.Fatalf("fake nuclei unavailable: %v", fakeBinErr)
-	}
-	return fakeBinPath
-}
 
 // TestValidate_IsNoOp documents the contract: input validation happens upstream
 // in the worker node layer; the connector must accept anything.
@@ -62,7 +31,6 @@ func TestValidate_IsNoOp(t *testing.T) {
 
 // TestNucleiExecute_MissingTargetErrors checks the presence check (argv needs it).
 func TestNucleiExecute_MissingTargetErrors(t *testing.T) {
-	t.Setenv("NUCLEI_BIN", "") // must fail before spawning any process
 	a := &NucleiAdapter{}
 	ch := make(chan connector.Finding, 4)
 	err := a.Execute(context.Background(), map[string]any{}, ch)
@@ -76,76 +44,6 @@ func TestNucleiExecute_MissingTargetErrors(t *testing.T) {
 	case b := <-ch:
 		t.Fatalf("nothing should be emitted, got: %+v", b)
 	default:
-	}
-}
-
-// TestNucleiExecute_StreamsJsonlFindings is the happy path: JSONL findings are
-// streamed through, banner/noise lines are skipped.
-func TestNucleiExecute_StreamsJsonlFindings(t *testing.T) {
-	t.Setenv("NUCLEI_BIN", ensureFakeNuclei(t))
-	t.Setenv("NUCLEI_TEMPLATE_DIR", setupTemplateDir(t))
-	a := &NucleiAdapter{}
-	ch := make(chan connector.Finding, 8)
-	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
-		t.Fatalf("Execute failed: %v", err)
-	}
-	close(ch)
-	var findings []connector.Finding
-	for f := range ch {
-		findings = append(findings, f)
-	}
-	if len(findings) != 2 {
-		t.Fatalf("expected exactly 2 findings (noise skipped), got %d", len(findings))
-	}
-	wantNames := []string{"Example CVE 2023", "Example CVE 2024"}
-	for i, name := range wantNames {
-		if findings[i].Name != name {
-			t.Errorf("finding[%d].Name = %q, want %q", i, findings[i].Name, name)
-		}
-	}
-	if findings[0].Severity != "high" || findings[1].Severity != "medium" {
-		t.Errorf("severities = %q/%q, want high/medium", findings[0].Severity, findings[1].Severity)
-	}
-	if findings[0].MatchedAt != "https://example.com" {
-		t.Errorf("matched-at mismatch: %q", findings[0].MatchedAt)
-	}
-	if err := findings[0].Validate(); err != nil {
-		t.Errorf("emitted finding must validate, got: %v", err)
-	}
-}
-
-// TestNucleiExecute_EmptyOutputNoError: exit 0 with no output -> no error, no emission.
-func TestNucleiExecute_EmptyOutputNoError(t *testing.T) {
-	bin := ensureFakeNuclei(t)
-	t.Setenv("NUCLEI_BIN", bin)
-	t.Setenv("NUCLEI_TEMPLATE_DIR", setupTemplateDir(t))
-	t.Setenv("FAKE_MODE", "empty")
-	a := &NucleiAdapter{}
-	ch := make(chan connector.Finding, 4)
-	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
-		t.Fatalf("expected nil error for empty output, got: %v", err)
-	}
-	select {
-	case b := <-ch:
-		t.Fatalf("nothing should be emitted, got: %+v", b)
-	default:
-	}
-}
-
-// TestNucleiExecute_ReturnsErrorOnNonZeroExit: non-zero exit surfaces stderr.
-func TestNucleiExecute_ReturnsErrorOnNonZeroExit(t *testing.T) {
-	bin := ensureFakeNuclei(t)
-	t.Setenv("NUCLEI_BIN", bin)
-	t.Setenv("NUCLEI_TEMPLATE_DIR", setupTemplateDir(t))
-	t.Setenv("FAKE_MODE", "fail")
-	a := &NucleiAdapter{}
-	ch := make(chan connector.Finding, 4)
-	err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch)
-	if err == nil {
-		t.Fatal("expected error on non-zero exit")
-	}
-	if got := err.Error(); !strings.Contains(got, "connection refused") {
-		t.Fatalf("error should contain stderr fragment, got: %v", got)
 	}
 }
 
@@ -500,44 +398,7 @@ func setupTemplateDir(t *testing.T) string {
 	return dir
 }
 
-func TestExecute_WithOASMConfig(t *testing.T) {
-	bin := ensureFakeNuclei(t)
-	t.Setenv("NUCLEI_BIN", bin)
-	t.Setenv("FAKE_MODE", "empty")
-	t.Setenv("OASM_CONFIG", `{"severity":["critical"],"rateLimit":200}`)
-	dir := setupTemplateDir(t)
-	t.Setenv("NUCLEI_TEMPLATE_DIR", dir)
-	a := &NucleiAdapter{}
-	ch := make(chan connector.Finding, 4)
-	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
-		t.Fatalf("Execute failed: %v", err)
-	}
-	// empty mode produces no findings — just verify it ran without error
-	select {
-	case b := <-ch:
-		t.Fatalf("nothing should be emitted in empty mode, got: %+v", b)
-	default:
-	}
-}
-
-func TestExecute_EmptyOASMConfig(t *testing.T) {
-	bin := ensureFakeNuclei(t)
-	t.Setenv("NUCLEI_BIN", bin)
-	t.Setenv("FAKE_MODE", "empty")
-	t.Setenv("OASM_CONFIG", "")
-	dir := setupTemplateDir(t)
-	t.Setenv("NUCLEI_TEMPLATE_DIR", dir)
-	a := &NucleiAdapter{}
-	ch := make(chan connector.Finding, 4)
-	if err := a.Execute(context.Background(), map[string]any{"target": "https://example.com"}, ch); err != nil {
-		t.Fatalf("Execute failed: %v", err)
-	}
-}
-
 func TestExecute_MalformedOASMConfig(t *testing.T) {
-	bin := ensureFakeNuclei(t)
-	t.Setenv("NUCLEI_BIN", bin)
-	t.Setenv("FAKE_MODE", "empty")
 	t.Setenv("OASM_CONFIG", "not-json!!!")
 	dir := setupTemplateDir(t)
 	t.Setenv("NUCLEI_TEMPLATE_DIR", dir)
@@ -557,8 +418,6 @@ func TestExecute_MalformedOASMConfig(t *testing.T) {
 func TestExecute_MissingTemplateDirFailsFast(t *testing.T) {
 	t.Setenv("NUCLEI_TEMPLATE_DIR", "/nonexistent-templates-xyz")
 	t.Setenv("NUCLEI_TEMPLATES_DIR", "")
-	fakeBin := filepath.Join(t.TempDir(), "nuclei-should-not-exist")
-	t.Setenv("NUCLEI_BIN", fakeBin) // would fail if reached; preflight must catch first
 	t.Setenv("OASM_CONFIG", "")
 
 	a := &NucleiAdapter{}
@@ -571,4 +430,59 @@ func TestExecute_MissingTemplateDirFailsFast(t *testing.T) {
 	if got := err.Error(); !strings.Contains(got, "/nonexistent-templates-xyz") {
 		t.Fatalf("error must name the bad dir, got: %v", err)
 	}
+}
+
+func TestEmitFinding_RecoversCallbackPanic(t *testing.T) {
+	t.Run("panicking mapFn", func(t *testing.T) {
+		ch := make(chan connector.Finding, 1)
+		sent, err := emitFinding(context.Background(), nil, ch, func(_ *nucleiOutput.ResultEvent) (connector.Finding, error) {
+			panic("injected")
+		})
+		if sent {
+			t.Error("expected sent=false")
+		}
+		if err == nil || !strings.Contains(err.Error(), "nuclei event handler panic: injected") {
+			t.Fatalf("expected panic recovery error, got: %v", err)
+		}
+	})
+
+	t.Run("valid mapFn and event", func(t *testing.T) {
+		ch := make(chan connector.Finding, 1)
+		ev := &nucleiOutput.ResultEvent{
+			Info: model.Info{
+				Name:           "test-finding",
+				SeverityHolder: severity.Holder{Severity: severity.Info},
+			},
+		}
+		sent, err := emitFinding(context.Background(), ev, ch, resultEventToFinding)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !sent {
+			t.Error("expected sent=true")
+		}
+		f := <-ch
+		if f.Name != "test-finding" {
+			t.Errorf("Name = %q, want test-finding", f.Name)
+		}
+	})
+
+	t.Run("context cancelled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		ch := make(chan connector.Finding) // unbuffered — send blocks, cancel wins
+		ev := &nucleiOutput.ResultEvent{
+			Info: model.Info{
+				Name:           "test-finding",
+				SeverityHolder: severity.Holder{Severity: severity.Info},
+			},
+		}
+		sent, err := emitFinding(ctx, ev, ch, resultEventToFinding)
+		if sent {
+			t.Error("expected sent=false")
+		}
+		if err != context.Canceled {
+			t.Fatalf("expected context.Canceled, got: %v", err)
+		}
+	})
 }
