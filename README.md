@@ -13,7 +13,7 @@ flowchart TB
 
     subgraph CC["Connector container"]
         direction LR
-        SDK["Connector SDK<br>runtime.Runtime · Adapter.Execute"] --> TOOL["Security tool<br>e.g. nuclei -target &lt;uri&gt; -jsonl"]
+        SDK["Connector SDK<br>runtime.Runtime · Adapter.Execute"] --> TOOL["Security tool<br>e.g. nuclei SDK in-process (no CLI)"]
     end
 
     subgraph PLT["Core platform"]
@@ -100,7 +100,7 @@ An optional `logo.png` next to `manifest.yaml` is base64-encoded into `manifest.
 6. Wire `main.go`: `runtime.New(connector.New(&MyAdapter{})).Run(context.Background())`.
 7. Regenerate and verify: `task manifest && task test`.
 
-Reference implementation: [`vulnerabilities/nuclei`](vulnerabilities/nuclei) (wraps nuclei `-target <uri> -jsonl`; env: `WORKER_URL`, `WORKER_TOKEN`, `NUCLEI_BIN`).
+Reference implementation: [`vulnerabilities/nuclei`](vulnerabilities/nuclei) (embeds nuclei SDK `github.com/projectdiscovery/nuclei/v3/lib` in-process; env: `WORKER_URL`, `WORKER_TOKEN`, `NUCLEI_TEMPLATE_DIR`).
 
 ## Testing
 
