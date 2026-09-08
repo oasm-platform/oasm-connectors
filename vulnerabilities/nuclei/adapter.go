@@ -150,35 +150,6 @@ func sdkOptions(ctx context.Context, p params) []nuclei.NucleiSDKOptions {
 	return opts
 }
 
-// buildCLIArgs constructs nuclei CLI flags from resolved params.
-// Transitional: used by the exec-based Execute until T4 rewrites it to use
-// the nuclei SDK engine directly via sdkOptions.
-func buildCLIArgs(target string, p params) []string {
-	var args []string
-	args = append(args, "-duc", "-silent", "-nc")
-	args = append(args, "-t", p.templates[0])
-	if p.idMode {
-		args = append(args, "-id", strings.Join(p.filters.IDs, ","))
-	} else {
-		if p.filters.Severity != "" {
-			args = append(args, "-severity", p.filters.Severity)
-		}
-		if p.filters.Tags != nil {
-			args = append(args, "-tags", strings.Join(p.filters.Tags, ","))
-		}
-		if p.filters.ExcludeTags != nil {
-			args = append(args, "-etags", strings.Join(p.filters.ExcludeTags, ","))
-		}
-	}
-	args = append(args, "-rl", fmt.Sprintf("%d", p.rateLimit))
-	args = append(args, "-c", fmt.Sprintf("%d", p.concurrency))
-	if p.followRedirects {
-		args = append(args, "-follow-redirects")
-	}
-	args = append(args, "-target", target, "-jsonl")
-	return args
-}
-
 // Validate is intentionally a no-op: inputs are validated upstream by the
 // worker node against the connector's inputsSchema.
 func (a *NucleiAdapter) Validate(_ context.Context, _ map[string]any) error {

@@ -8,10 +8,10 @@ import "testing"
 
 func TestScanParams(t *testing.T) {
 	tests := []struct {
-		name    string
-		cfg     Config
-		dir     string
-		check   func(t *testing.T, p params)
+		name  string
+		cfg   Config
+		dir   string
+		check func(t *testing.T, p params)
 	}{
 		{
 			name: "empty config yields defaults",
