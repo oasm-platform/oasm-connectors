@@ -11,6 +11,18 @@ supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'Fast template-based vulnerability scanner'
 description: 'Runs ProjectDiscovery Nuclei template-based scans against a target URL to detect known vulnerabilities, misconfigurations, and exposed secrets.'
 capabilities: [vulnerabilities]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+      title: Scan target
+      description: 'Target URL or hostname to scan.'
+      examples: [https://example.com]
+      ui:placeholder: 'https://example.com'
+  additionalProperties: false
 configSchema:
   type: object
   additionalProperties: false

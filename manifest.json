@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-07T05:41:21.5096378Z",
+  "generatedAt": "2026-09-10T01:35:52.510476335Z",
   "connectors": [
     {
       "name": "Nessus",
@@ -128,6 +128,25 @@
       "capabilities": [
         "vulnerabilities"
       ],
+      "inputsSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "description": "Target URL or hostname to scan.",
+            "examples": [
+              "https://example.com"
+            ],
+            "format": "uri",
+            "title": "Scan target",
+            "type": "string",
+            "ui:placeholder": "https://example.com"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "type": "object"
+      },
       "configSchema": {
         "additionalProperties": false,
         "properties": {

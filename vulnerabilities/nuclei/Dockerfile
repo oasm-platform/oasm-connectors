@@ -16,7 +16,9 @@ COPY --from=builder /out/connector /usr/local/bin/connector
 # HOME/XDG_CACHE_HOME stay under /tmp (the worker mounts Tmpfs there);
 # /tmp is world-writable so uid 10001 can create config/cache dirs at runtime.
 ENV HOME=/tmp XDG_CACHE_HOME=/tmp/.cache
-LABEL oasm.persist="/opt/nuclei-templates"
+# No oasm.persist label: templates are baked read-only into the image and the
+# engine only reads them at runtime. A named volume here would shadow fresh
+# baked templates with stale ones after every image rebuild.
 ENV NUCLEI_TEMPLATE_DIR=/opt/nuclei-templates NUCLEI_TEMPLATES_DIR=/opt/nuclei-templates
 RUN mkdir -p /tmp/.config/nuclei /tmp/.cache
 RUN test -n "$(ls -A /opt/nuclei-templates)" \

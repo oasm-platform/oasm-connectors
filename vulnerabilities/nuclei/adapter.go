@@ -102,11 +102,11 @@ func scanParams(cfg Config, dir string) params {
 	}
 
 	rl := 150
-	if cfg.RateLimit != nil {
+	if cfg.RateLimit != nil && *cfg.RateLimit > 0 {
 		rl = *cfg.RateLimit
 	}
 	c := 25
-	if cfg.Concurrency != nil {
+	if cfg.Concurrency != nil && *cfg.Concurrency > 0 {
 		c = *cfg.Concurrency
 	}
 	fr := cfg.FollowRedirects != nil && *cfg.FollowRedirects
@@ -166,8 +166,12 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 	}()
 
 	target, _ := inputs["target"].(string)
+	target = strings.TrimSpace(target)
 	if target == "" {
 		return fmt.Errorf("target required")
+	}
+	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
+		target = "https://" + target
 	}
 
 	dir := templateDir()
