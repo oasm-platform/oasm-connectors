@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +23,12 @@ func (a WpscanAdapter) Validate(_ context.Context, _ map[string]any) error { ret
 
 // Execute runs wpscan --url <target> --format json and streams each
 // vulnerability as a normalized Finding to out.
+//
+// Exit-code semantics (wpscan v3.x): 0 = OK, 5 = VULNERABLE — both are success.
+// 1 = CLI option error, 2 = interrupted, 3 = exception, 4 = error. stdout is
+// valid JSON in every case, so it is parsed regardless of the exit code; a
+// parseable stdout wins over a nonzero exit. Only unparseable stdout with a
+// nonzero exit is fatal.
 func (a WpscanAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
 	target, _ := inputs["target"].(string)
 	if strings.TrimSpace(target) == "" {
@@ -44,22 +52,32 @@ func (a WpscanAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 	stderr.buf = new([]byte)
 	stderr.limit = 2048
 
+	var stdout bytes.Buffer
 	cmd := exec.CommandContext(ctx, bin, buildWpscanArgs(target, cfg)...)
+	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	outBytes, err := cmd.Output()
-	if err != nil {
-		tail := string(*stderr.buf)
-		if tail != "" {
-			return fmt.Errorf("wpscan: %w\n%s", err, tail)
+	runErr := cmd.Run()
+	tail := strings.TrimSpace(string(*stderr.buf))
+
+	var scanResult wpscanOutput
+	if err := json.Unmarshal(stdout.Bytes(), &scanResult); err != nil {
+		// Unparseable stdout: fatal when the process failed; otherwise the
+		// stream simply held no findings.
+		if runErr != nil {
+			if tail != "" {
+				return fmt.Errorf("wpscan: %w: %s", runErr, tail)
+			}
+			return fmt.Errorf("wpscan: %w", runErr)
 		}
-		return fmt.Errorf("wpscan: %w", err)
+		return fmt.Errorf("wpscan: invalid JSON output: %w", err)
 	}
 
-	// Parse the single JSON blob.
-	var scanResult wpscanOutput
-	if err := json.Unmarshal(outBytes, &scanResult); err != nil {
-		return fmt.Errorf("wpscan: invalid JSON output: %w", err)
+	if scanResult.ScanAborted != "" {
+		return fmt.Errorf("wpscan: scan aborted: %s (target: %s)", scanResult.ScanAborted, scanResult.TargetURL)
+	}
+	if scanResult.NotFullyConfigured != "" {
+		return fmt.Errorf("wpscan: not fully configured: %s", scanResult.NotFullyConfigured)
 	}
 
 	findings := extractFindings(scanResult, target)
@@ -74,109 +92,182 @@ func (a WpscanAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 	return nil
 }
 
-// --- WPScan JSON structures ---
+// --- WPScan JSON structures (real v3.x schema) ---
 
 type wpscanOutput struct {
-	Target          targetInfo                 `json:"target"`
-	Vulnerabilities map[string][]wpscanVuln    `json:"vulnerabilities"`
-	Plugins         map[string]wpscanComponent `json:"plugins"`
-	Themes          map[string]wpscanComponent `json:"themes"`
-	Version         *wpscanVersionInfo         `json:"version"`
+	TargetURL          string                     `json:"target_url"`
+	ScanAborted        string                     `json:"scan_aborted"`
+	NotFullyConfigured string                     `json:"not_fully_configured"`
+	Version            *componentVersion          `json:"version"`
+	Plugins            map[string]wpscanComponent `json:"plugins"`
+	Themes             map[string]wpscanComponent `json:"themes"`
+	MainTheme          *wpscanComponent           `json:"main_theme"`
 }
 
-type targetInfo struct {
-	URL string `json:"url"`
+type wpscanComponent struct {
+	Slug            string            `json:"slug"`
+	Version         *componentVersion `json:"version"`
+	Vulnerabilities []wpscanVuln      `json:"vulnerabilities"`
+}
+
+type componentVersion struct {
+	Number          string       `json:"number"`
+	Vulnerabilities []wpscanVuln `json:"vulnerabilities"`
 }
 
 type wpscanVuln struct {
 	Title      string              `json:"title"`
-	Severity   string              `json:"severity"`
-	References map[string][]string `json:"references,omitempty"`
+	CVSS       *wpscanCVSS         `json:"cvss"`
+	FixedIn    string              `json:"fixed_in"`
+	References map[string][]string `json:"references"`
 }
 
-type wpscanComponent struct {
-	Vulnerabilities map[string][]wpscanVuln `json:"vulnerabilities"`
-}
-
-type wpscanVersionInfo struct {
-	Version         string       `json:"version"`
-	Vulnerabilities []wpscanVuln `json:"vulnerabilities"`
+type wpscanCVSS struct {
+	Score  json.RawMessage `json:"score"` // string OR number
+	Vector string          `json:"vector"`
 }
 
 // --- Finding extraction ---
 
+// extractFindings covers all 7 locations where wpscan reports vulnerabilities:
+// core version, plugins, plugin versions, themes, theme versions, main theme,
+// and main-theme version.
 func extractFindings(result wpscanOutput, target string) []connector.Finding {
 	var findings []connector.Finding
 
-	// Core vulnerabilities.
-	for _, vulns := range result.Vulnerabilities {
-		for _, v := range vulns {
-			findings = append(findings, toFinding(v, target))
-		}
-	}
-
-	// Plugin vulnerabilities.
-	for _, comp := range result.Plugins {
-		for _, vulns := range comp.Vulnerabilities {
-			for _, v := range vulns {
-				findings = append(findings, toFinding(v, target))
-			}
-		}
-	}
-
-	// Theme vulnerabilities.
-	for _, comp := range result.Themes {
-		for _, vulns := range comp.Vulnerabilities {
-			for _, v := range vulns {
-				findings = append(findings, toFinding(v, target))
-			}
-		}
-	}
-
-	// Version vulnerabilities.
 	if result.Version != nil {
-		for _, v := range result.Version.Vulnerabilities {
-			findings = append(findings, toFinding(v, target))
+		findings = appendVulns(findings, result.Version.Vulnerabilities, target)
+	}
+
+	for _, slug := range sortedKeys(result.Plugins) {
+		comp := result.Plugins[slug]
+		findings = appendVulns(findings, comp.Vulnerabilities, target)
+		if comp.Version != nil {
+			findings = appendVulns(findings, comp.Version.Vulnerabilities, target)
+		}
+	}
+
+	for _, slug := range sortedKeys(result.Themes) {
+		comp := result.Themes[slug]
+		findings = appendVulns(findings, comp.Vulnerabilities, target)
+		if comp.Version != nil {
+			findings = appendVulns(findings, comp.Version.Vulnerabilities, target)
+		}
+	}
+
+	if result.MainTheme != nil {
+		findings = appendVulns(findings, result.MainTheme.Vulnerabilities, target)
+		if result.MainTheme.Version != nil {
+			findings = appendVulns(findings, result.MainTheme.Version.Vulnerabilities, target)
 		}
 	}
 
 	return findings
 }
 
-// normalizeSeverity lowercases a wpscan severity so it matches the SDK enum
-// (wpscan emits "Critical", "High", "Medium", "Low"; the Finding contract is
-// info|low|medium|high|critical). Unknown values fall back to info — same
-// policy as the nessus adapter's mapSeverity.
-func normalizeSeverity(s string) string {
-	s = strings.ToLower(s)
-	for _, sev := range connector.Severities {
-		if s == sev {
-			return s
+func appendVulns(dst []connector.Finding, vulns []wpscanVuln, target string) []connector.Finding {
+	for _, v := range vulns {
+		if f, ok := toFinding(v, target); ok {
+			dst = append(dst, f)
 		}
 	}
-	return "info"
+	return dst
 }
 
-func toFinding(v wpscanVuln, target string) connector.Finding {
+func sortedKeys(m map[string]wpscanComponent) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// --- Severity / CVSS ---
+
+// severityFromRawScore maps a CVSS base score (JSON string or number) to the
+// SDK severity enum by band. Absent or unparseable scores are "info".
+func severityFromRawScore(raw json.RawMessage) string {
+	score, ok := parseCVSSScore(raw)
+	if !ok {
+		return "info"
+	}
+	switch {
+	case score >= 9.0:
+		return "critical"
+	case score >= 7.0:
+		return "high"
+	case score >= 4.0:
+		return "medium"
+	case score >= 0.1:
+		return "low"
+	default:
+		return "info"
+	}
+}
+
+// parseCVSSScore accepts a CVSS score encoded as a JSON string ("7.5") or a
+// JSON number (7.5). Missing/null/empty/unparseable yields ok=false.
+func parseCVSSScore(raw json.RawMessage) (float64, bool) {
+	s := strings.TrimSpace(string(raw))
+	if s == "" || s == "null" {
+		return 0, false
+	}
+	s = strings.Trim(s, `"`)
+	if s == "" {
+		return 0, false
+	}
+	score, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, false
+	}
+	return score, true
+}
+
+// --- Finding mapping ---
+
+func toFinding(v wpscanVuln, target string) (connector.Finding, bool) {
+	if strings.TrimSpace(v.Title) == "" {
+		return connector.Finding{}, false
+	}
+
 	f := connector.Finding{
 		Name:      v.Title,
-		Severity:  normalizeSeverity(v.Severity),
+		Severity:  "info",
 		MatchedAt: target,
 		Timestamp: time.Now(),
 	}
+
+	if v.CVSS != nil {
+		f.Severity = severityFromRawScore(v.CVSS.Score)
+		if score, ok := parseCVSSScore(v.CVSS.Score); ok {
+			f.CVSSScore = score
+		}
+		f.CVSSMetrics = v.CVSS.Vector
+	}
+
+	if v.FixedIn != "" {
+		f.Solution = "Fixed in " + v.FixedIn
+	}
+
 	if len(v.References) > 0 {
-		// Flatten the references map (url, wpvulndb, …) into a deterministic
-		// list: sorted keys, then values in their listed order.
+		// Flatten the references map into a deterministic list: sorted keys,
+		// values in their listed order, prefixed with the reference kind.
 		keys := make([]string, 0, len(v.References))
 		for k := range v.References {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			f.References = append(f.References, v.References[k]...)
+			for _, ref := range v.References[k] {
+				f.References = append(f.References, k+":"+ref)
+			}
 		}
 	}
-	return f
+
+	f.CVEID = append(f.CVEID, v.References["cve"]...)
+
+	return f, true
 }
 
 // limitedWriter buffers stderr, keeping at most `limit` bytes.
