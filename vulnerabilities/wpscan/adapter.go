@@ -35,16 +35,16 @@ func (a WpscanAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 		bin = "wpscan"
 	}
 
+	cfg, err := loadWpscanConfig()
+	if err != nil {
+		return err
+	}
+
 	var stderr limitedWriter
 	stderr.buf = new([]byte)
 	stderr.limit = 2048
 
-	cmd := exec.CommandContext(ctx, bin,
-		"--url", target,
-		"--format", "json",
-		"--no-banner",
-		"--random-user-agent",
-	)
+	cmd := exec.CommandContext(ctx, bin, buildWpscanArgs(target, cfg)...)
 	cmd.Stderr = &stderr
 
 	outBytes, err := cmd.Output()

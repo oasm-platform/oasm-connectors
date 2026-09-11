@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 )
@@ -9,6 +10,20 @@ func main() {
 	// Consume CLI flags (--url, --format, --no-banner, --random-user-agent).
 	// We don't validate them — just consume os.Args for realism.
 	_ = os.Args
+
+	// When FAKE_ARGS_FILE is set, capture the exact arg vector the adapter
+	// passed so tests can assert on it. Do not alter FAKE_MODE behavior.
+	if argsFile := os.Getenv("FAKE_ARGS_FILE"); argsFile != "" {
+		raw, err := json.Marshal(os.Args[1:])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "marshal args:", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(argsFile, raw, 0644); err != nil {
+			fmt.Fprintln(os.Stderr, "write args:", err)
+			os.Exit(1)
+		}
+	}
 
 	mode := os.Getenv("FAKE_MODE")
 

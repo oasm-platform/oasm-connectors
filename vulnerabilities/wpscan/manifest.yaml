@@ -10,6 +10,163 @@ supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'WordPress vulnerability scanner'
 description: 'Scans WordPress sites using WPScan to enumerate vulnerable plugins and themes, detect known CVEs, misconfigurations, and weak credentials.'
 capabilities: [vulnerabilities]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+      title: Scan target
+      description: 'Target URL or hostname to scan.'
+      examples: [https://example.com]
+      ui:placeholder: 'https://example.com'
+  additionalProperties: false
+configSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    apiToken:
+      type: string
+      title: WPScan API token
+      description: 'API token from wpscan.com used to display vulnerability data. If omitted, the WPSCAN_API_TOKEN environment variable is used.'
+      ui:widget: password
+      ui:placeholder: 'Enter WPScan API token'
+    force:
+      type: boolean
+      title: Force scan
+      description: 'Do not check whether the target is running WordPress or returns 403.'
+    ignoreMainRedirect:
+      type: boolean
+      title: Ignore main redirect
+      description: 'Ignore the main redirect (if any) and scan the target URL.'
+    disableTlsChecks:
+      type: boolean
+      title: Disable TLS checks
+      description: 'Disable SSL/TLS certificate verification.'
+    server:
+      type: string
+      enum: [apache, iis, nginx]
+      title: Web server
+      description: 'Force the supplied server module instead of auto-detecting.'
+    scope:
+      type: array
+      items:
+        type: string
+      title: Scope
+      description: 'Additional (sub-)domains to include in scope.'
+      examples: [[blog.example.com]]
+      ui:placeholder: 'e.g. blog.example.com'
+    vhost:
+      type: string
+      title: Virtual host
+      description: 'Host header to use in requests.'
+      ui:placeholder: 'e.g. internal.corp'
+    httpAuth:
+      type: string
+      title: HTTP basic auth
+      description: 'HTTP Basic authentication credentials in login:password form.'
+      ui:placeholder: 'login:password'
+    userAgent:
+      type: string
+      title: User agent
+      description: 'Custom User-Agent header for requests.'
+      ui:placeholder: 'e.g. Mozilla/5.0'
+    randomUserAgent:
+      type: boolean
+      title: Random user agent
+      description: 'Use a random User-Agent for each scan.'
+    cookieString:
+      type: string
+      title: Cookie string
+      description: 'Cookie string to send with requests, e.g. "cookie1=value1; cookie2=value2".'
+      ui:widget: password
+    headers:
+      type: string
+      title: Extra headers
+      description: 'Additional headers added to requests, separated by "; ".'
+      ui:placeholder: 'X-Forwarded-For: 127.0.0.1'
+    enumerate:
+      type: array
+      items:
+        type: string
+        enum: [vp, ap, p, vt, at, t, tt, cb, dbe, u, m]
+      title: Enumeration
+      description: 'Enumeration codes: vp/ap/p plugins, vt/at/t themes, tt timthumbs, cb config backups, dbe db exports, u users, m media.'
+    excludeContentBased:
+      type: string
+      title: Exclude content based
+      description: 'Exclude responses matching this regexp/string during enumeration.'
+      ui:placeholder: 'e.g. 404 not found'
+    excludeUsernames:
+      type: string
+      title: Exclude usernames
+      description: 'Exclude usernames matching this regexp/string.'
+      ui:placeholder: 'e.g. test.*'
+    detectionMode:
+      type: string
+      enum: [mixed, passive, aggressive]
+      title: Detection mode
+      description: 'Global detection mode used by all detections.'
+      default: mixed
+    pluginsDetection:
+      type: string
+      enum: [mixed, passive, aggressive]
+      title: Plugins detection
+      description: 'Detection mode used to enumerate plugins.'
+      default: passive
+    pluginsVersionDetection:
+      type: string
+      enum: [mixed, passive, aggressive]
+      title: Plugins version detection
+      description: 'Detection mode used to check plugins versions.'
+      default: mixed
+    themesDetection:
+      type: string
+      enum: [mixed, passive, aggressive]
+      title: Themes detection
+      description: 'Detection mode used to enumerate themes.'
+    themesVersionDetection:
+      type: string
+      enum: [mixed, passive, aggressive]
+      title: Themes version detection
+      description: 'Detection mode used to check themes versions.'
+    maxThreads:
+      type: integer
+      minimum: 1
+      default: 5
+      title: Max threads
+      description: 'Maximum number of threads to use.'
+    throttle:
+      type: integer
+      minimum: 0
+      title: Throttle
+      description: 'Milliseconds to wait before each request. When set, max threads is forced to 1.'
+    requestTimeout:
+      type: integer
+      minimum: 1
+      default: 60
+      title: Request timeout
+      description: 'Request timeout in seconds.'
+    connectTimeout:
+      type: integer
+      minimum: 1
+      default: 30
+      title: Connect timeout
+      description: 'Connection timeout in seconds.'
+    proxy:
+      type: string
+      title: Proxy
+      description: 'Proxy URL, e.g. http://127.0.0.1:8080 or socks5://127.0.0.1:9050.'
+      ui:placeholder: 'http://127.0.0.1:8080'
+    stealthy:
+      type: boolean
+      title: Stealthy
+      description: 'Alias for --random-user-agent plus passive detection modes.'
+    update:
+      type: boolean
+      title: Update database
+      description: 'Force (true) or skip (false) the WPScan database update before scanning. Omit to use the WPScan default.'
 resourceDefaults:
   cpu: 500m
   memory: 512Mi
