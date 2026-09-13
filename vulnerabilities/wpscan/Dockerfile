@@ -1,5 +1,4 @@
 # connector image (SDK+tool) — build context: repo root
-FROM wpscanteam/wpscan:v3.8.25 AS tool
 FROM golang:1.26-alpine AS builder
 WORKDIR /src
 COPY sdk/go.mod sdk/go.sum sdk/
@@ -8,7 +7,7 @@ RUN cd vulnerabilities/wpscan && GOWORK=off go mod download
 COPY sdk/ sdk/
 COPY vulnerabilities/wpscan/ vulnerabilities/wpscan/
 RUN cd vulnerabilities/wpscan && CGO_ENABLED=0 GOWORK=off go build -trimpath -o /out/connector .
-FROM wpscanteam/wpscan:v3.8.25
+FROM wpscanteam/wpscan:v3.8.27
 # ponytail: final stage is the tool image itself — wpscan is a Ruby gem at
 # /usr/local/bundle/bin/wpscan and needs the ruby runtime + gems at runtime.
 # Non-root: the upstream image ships a `wpscan` user (uid 1000, home /wpscan,

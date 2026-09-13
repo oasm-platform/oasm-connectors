@@ -29,6 +29,13 @@ func (a WpscanAdapter) Validate(_ context.Context, _ map[string]any) error { ret
 // valid JSON in every case, so it is parsed regardless of the exit code; a
 // parseable stdout wins over a nonzero exit. Only unparseable stdout with a
 // nonzero exit is fatal.
+//
+// scan_aborted and not_fully_configured are target-level, permanent,
+// non-retryable conditions (the site is up but not WordPress; or WordPress is
+// up but sitting at the install wizard /wp-admin/install.php). Both are logged
+// to stderr and treated as soft, zero-findings successes (return nil) so the
+// job does not fail or trigger the caller's retry loop. The only fatal parse
+// path is unparseable stdout with a nonzero exit.
 func (a WpscanAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
 	target, _ := inputs["target"].(string)
 	if strings.TrimSpace(target) == "" {
@@ -74,10 +81,14 @@ func (a WpscanAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 	}
 
 	if scanResult.ScanAborted != "" {
-		return fmt.Errorf("wpscan: scan aborted: %s (target: %s)", scanResult.ScanAborted, scanResult.TargetURL)
+		// Target-level, permanent, non-retryable: log and continue with zero
+		// findings (extractFindings yields nothing for an abort payload).
+		fmt.Fprintf(os.Stderr, "wpscan: scan aborted (not fatal): %s (target: %s)\n", scanResult.ScanAborted, scanResult.TargetURL)
 	}
 	if scanResult.NotFullyConfigured != "" {
-		return fmt.Errorf("wpscan: not fully configured: %s", scanResult.NotFullyConfigured)
+		// Target-level, permanent, non-retryable: log and continue with zero
+		// findings (extractFindings yields nothing for an install-mode payload).
+		fmt.Fprintf(os.Stderr, "wpscan: not fully configured (not fatal): %s (target: %s)\n", scanResult.NotFullyConfigured, scanResult.TargetURL)
 	}
 
 	findings := extractFindings(scanResult, target)

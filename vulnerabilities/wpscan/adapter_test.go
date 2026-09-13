@@ -170,35 +170,32 @@ func collect(t *testing.T, mode, target string) ([]connector.Finding, error) {
 	return findings, err
 }
 
-// TestWpscanExecute_ScanAbortedSurfacesReason covers DEFECT A: exit 4 with a
-// scan_aborted payload must surface the reason, not a bare "exit status 4".
-func TestWpscanExecute_ScanAbortedSurfacesReason(t *testing.T) {
+// TestWpscanExecute_ScanAbortedIsNotFatal covers DEFECT A: a target-level
+// scan_aborted (e.g. "does not seem to be running WordPress") is a permanent,
+// non-retryable condition. It must NOT fail the job — Execute returns nil and
+// emits zero findings. The reason is logged to stderr, not surfaced as an error.
+func TestWpscanExecute_ScanAbortedIsNotFatal(t *testing.T) {
 	findings, err := collect(t, "abort", "https://example.com")
-	if err == nil {
-		t.Fatal("expected error for aborted scan")
+	if err != nil {
+		t.Fatalf("scan_aborted must be a non-fatal, zero-findings success, got error: %v", err)
 	}
 	if len(findings) != 0 {
 		t.Fatalf("expected no findings, got %d", len(findings))
 	}
-	if !contains(err.Error(), "scan aborted") {
-		t.Fatalf("expected 'scan aborted' in error, got: %s", err.Error())
-	}
-	if !contains(err.Error(), "does not seem to be running WordPress") {
-		t.Fatalf("expected abort reason in error, got: %s", err.Error())
-	}
-	if contains(err.Error(), "exit status 4") {
-		t.Fatalf("error must not be a bare exit status, got: %s", err.Error())
-	}
 }
 
-// TestWpscanExecute_NotFullyConfigured covers DEFECT A install mode.
-func TestWpscanExecute_NotFullyConfigured(t *testing.T) {
-	_, err := collect(t, "notconfigured", "https://example.com")
-	if err == nil {
-		t.Fatal("expected error for not-fully-configured scan")
+// TestWpscanExecute_NotFullyConfiguredIsNotFatal covers the install-mode
+// condition: not_fully_configured (the site is up but sitting at the install
+// wizard) is a target-level, permanent, non-retryable state. Like scan_aborted
+// it must NOT fail the job — Execute returns nil and emits zero findings. The
+// reason is logged to stderr, not surfaced as an error.
+func TestWpscanExecute_NotFullyConfiguredIsNotFatal(t *testing.T) {
+	findings, err := collect(t, "notconfigured", "https://example.com")
+	if err != nil {
+		t.Fatalf("not_fully_configured must be a non-fatal, zero-findings success, got error: %v", err)
 	}
-	if !contains(err.Error(), "not fully configured") && !contains(err.Error(), "install mode") {
-		t.Fatalf("expected configuration reason in error, got: %s", err.Error())
+	if len(findings) != 0 {
+		t.Fatalf("expected no findings, got %d", len(findings))
 	}
 }
 

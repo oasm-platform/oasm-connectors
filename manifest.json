@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-11T07:26:35.3110351Z",
+  "generatedAt": "2026-09-13T14:47:23.3419122Z",
   "connectors": [
     {
       "name": "Nessus",
@@ -244,8 +244,8 @@
     {
       "name": "WPScan - WordPress Security Scanner",
       "slug": "wpscan",
-      "version": "3.8.25",
-      "image": "ghcr.io/oasm-platform/connector-wpscan:3.8.25",
+      "version": "3.8.27",
+      "image": "ghcr.io/oasm-platform/connector-wpscan:3.8.27",
       "author": "oasm",
       "pricingTier": [
         "free"
@@ -491,6 +491,9 @@
             "ui:placeholder": "e.g. internal.corp"
           }
         },
+        "required": [
+          "apiToken"
+        ],
         "type": "object"
       },
       "resourceDefaults": {
