@@ -6,8 +6,7 @@ func clearNessusEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
 		"OASM_CONFIG",
-		"NESSUS_URL", "NESSUS_USERNAME", "NESSUS_PASSWORD",
-		"NESSUS_ACCESS_KEY", "NESSUS_SECRET_KEY",
+		"NESSUS_URL", "NESSUS_ACCESS_KEY", "NESSUS_SECRET_KEY",
 		"NESSUS_TEMPLATE_UUID", "NESSUS_POLICY_ID", "NESSUS_FOLDER_ID",
 	} {
 		t.Setenv(k, "")
@@ -16,7 +15,7 @@ func clearNessusEnv(t *testing.T) {
 
 func TestLoadNessusConfig_FromOASMConfig(t *testing.T) {
 	clearNessusEnv(t)
-	t.Setenv("OASM_CONFIG", `{"url":"https://nessus.example.com:8834","username":"admin","password":"secret","accessKey":"ak","secretKey":"sk","templateUuid":"tpl-123","policyId":"pol-1","folderId":"42"}`)
+	t.Setenv("OASM_CONFIG", `{"url":"https://nessus.example.com:8834","accessKey":"ak","secretKey":"sk","templateUuid":"tpl-123","policyId":"pol-1","folderId":"42"}`)
 
 	cfg, err := loadNessusConfig()
 	if err != nil {
@@ -24,9 +23,6 @@ func TestLoadNessusConfig_FromOASMConfig(t *testing.T) {
 	}
 	if cfg.URL != "https://nessus.example.com:8834" {
 		t.Errorf("URL = %q", cfg.URL)
-	}
-	if cfg.Username != "admin" || cfg.Password != "secret" {
-		t.Errorf("credentials = %q/%q", cfg.Username, cfg.Password)
 	}
 	if cfg.AccessKey != "ak" || cfg.SecretKey != "sk" {
 		t.Errorf("keys = %q/%q", cfg.AccessKey, cfg.SecretKey)
@@ -38,7 +34,7 @@ func TestLoadNessusConfig_FromOASMConfig(t *testing.T) {
 
 func TestLoadNessusConfig_OASMDefaults(t *testing.T) {
 	clearNessusEnv(t)
-	t.Setenv("OASM_CONFIG", `{"url":"https://nessus.example.com:8834","username":"admin","password":"secret"}`)
+	t.Setenv("OASM_CONFIG", `{"url":"https://nessus.example.com:8834","accessKey":"ak","secretKey":"sk"}`)
 
 	cfg, err := loadNessusConfig()
 	if err != nil {
@@ -64,8 +60,8 @@ func TestLoadNessusConfig_Malformed(t *testing.T) {
 func TestLoadNessusConfig_EnvFallback(t *testing.T) {
 	clearNessusEnv(t)
 	t.Setenv("NESSUS_URL", "https://nessus.example.com:8834")
-	t.Setenv("NESSUS_USERNAME", "admin")
-	t.Setenv("NESSUS_PASSWORD", "secret")
+	t.Setenv("NESSUS_ACCESS_KEY", "ak")
+	t.Setenv("NESSUS_SECRET_KEY", "sk")
 	t.Setenv("NESSUS_TEMPLATE_UUID", "tpl-env")
 
 	cfg, err := loadNessusConfig()
@@ -82,16 +78,16 @@ func TestLoadNessusConfig_EnvFallback(t *testing.T) {
 
 func TestLoadNessusConfig_MissingURL(t *testing.T) {
 	clearNessusEnv(t)
-	t.Setenv("OASM_CONFIG", `{"username":"admin","password":"secret"}`)
+	t.Setenv("OASM_CONFIG", `{"accessKey":"ak","secretKey":"sk"}`)
 
 	if _, err := loadNessusConfig(); err == nil {
 		t.Fatal("expected error for missing url")
 	}
 }
 
-func TestLoadNessusConfig_KeyPairMismatch(t *testing.T) {
+func TestLoadNessusConfig_MissingKeys(t *testing.T) {
 	clearNessusEnv(t)
-	t.Setenv("OASM_CONFIG", `{"url":"https://nessus.example.com:8834","username":"admin","password":"secret","accessKey":"ak-only"}`)
+	t.Setenv("OASM_CONFIG", `{"url":"https://nessus.example.com:8834","accessKey":"ak-only"}`)
 
 	if _, err := loadNessusConfig(); err == nil {
 		t.Fatal("expected error for access key without secret key")

@@ -24,8 +24,6 @@ type fakeNessus struct {
 	statusIdx     int
 	alwaysRunning bool
 
-	sessionCalls int
-	keysCalls    int
 	statusCalls  int
 	foldersCalls int
 	createCalls  int
@@ -37,20 +35,6 @@ type fakeNessus struct {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
-}
-
-func (f *fakeNessus) handleSession(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	f.sessionCalls++
-	f.mu.Unlock()
-	writeJSON(w, map[string]any{"token": "fake-token"})
-}
-
-func (f *fakeNessus) handleSessionKeys(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	f.keysCalls++
-	f.mu.Unlock()
-	writeJSON(w, map[string]any{"accessKey": "ak", "secretKey": "sk"})
 }
 
 func (f *fakeNessus) handleServerStatus(w http.ResponseWriter, r *http.Request) {
@@ -146,8 +130,6 @@ func newFakeNessus(t *testing.T, statuses ...string) *fakeNessus {
 	t.Helper()
 	f := &fakeNessus{t: t, statuses: statuses}
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /session", f.handleSession)
-	mux.HandleFunc("PUT /session/keys", f.handleSessionKeys)
 	mux.HandleFunc("GET /server/status", f.handleServerStatus)
 	mux.HandleFunc("GET /folders", f.handleFolders)
 	mux.HandleFunc("POST /scans", f.handleScanCreate)
@@ -162,8 +144,6 @@ func newFakeNessus(t *testing.T, statuses ...string) *fakeNessus {
 func setNessusEnv(t *testing.T, url string) {
 	t.Helper()
 	t.Setenv("NESSUS_URL", url)
-	t.Setenv("NESSUS_USERNAME", "user")
-	t.Setenv("NESSUS_PASSWORD", "pass")
 	t.Setenv("NESSUS_ACCESS_KEY", "ak")
 	t.Setenv("NESSUS_SECRET_KEY", "sk")
 	t.Setenv("NESSUS_TEMPLATE_UUID", "")
@@ -205,8 +185,8 @@ func TestExecute_MissingTarget(t *testing.T) {
 
 func TestExecute_MissingURL(t *testing.T) {
 	t.Setenv("NESSUS_URL", "")
-	t.Setenv("NESSUS_USERNAME", "u")
-	t.Setenv("NESSUS_PASSWORD", "p")
+	t.Setenv("NESSUS_ACCESS_KEY", "ak")
+	t.Setenv("NESSUS_SECRET_KEY", "sk")
 	a := NessusAdapter{}
 	err := a.Execute(context.Background(), map[string]any{"target": "10.0.0.1"}, make(chan connector.Finding, 1))
 	if err == nil {
@@ -257,12 +237,6 @@ func TestExecute_HappyPath(t *testing.T) {
 	defer f.mu.Unlock()
 	if f.deleteCalls != 1 {
 		t.Errorf("deleteCalls = %d, want 1 (cleanup ran)", f.deleteCalls)
-	}
-	if f.sessionCalls != 1 {
-		t.Errorf("sessionCalls = %d, want 1", f.sessionCalls)
-	}
-	if f.keysCalls != 1 {
-		t.Errorf("keysCalls = %d, want 1", f.keysCalls)
 	}
 	if f.createCalls != 1 {
 		t.Errorf("createCalls = %d, want 1", f.createCalls)

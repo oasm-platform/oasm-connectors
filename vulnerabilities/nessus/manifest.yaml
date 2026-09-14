@@ -24,7 +24,7 @@ inputsSchema:
   additionalProperties: false
 configSchema:
   type: object
-  required: [url, username, password]
+  required: [url, accessKey, secretKey]
   properties:
     url:
       type: string
@@ -33,27 +33,16 @@ configSchema:
       description: 'Base URL of the Nessus instance.'
       examples: [https://nessus.local:8834]
       ui:placeholder: 'https://nessus.local:8834'
-    username:
-      type: string
-      title: Username
-      description: 'Nessus username for session authentication.'
-      examples: [administrator]
-      ui:placeholder: 'administrator'
-    password:
-      type: string
-      title: Password
-      description: 'Nessus password for session authentication.'
-      ui:widget: password
-      ui:placeholder: '••••••••'
     accessKey:
       type: string
       title: API access key
-      description: 'Nessus API access key (alternative to username/password).'
+      description: 'Nessus API access key, paired with secretKey.'
       ui:placeholder: 'Enter API access key'
     secretKey:
       type: string
       title: API secret key
       description: 'Nessus API secret key, paired with accessKey.'
+      ui:widget: password
       ui:placeholder: 'Enter API secret key'
     templateUuid:
       type: string
