@@ -55,6 +55,10 @@ func main() {
 		os.Exit(0)
 	case "empty":
 		fmt.Print(emptyOutput)
+	case "nocvss":
+		// Exit 5 (VULNERABLE): findings without CVSS (free-token scan).
+		fmt.Print(noCvssOutput)
+		os.Exit(5)
 	default:
 		fmt.Print(normalOutput)
 	}
@@ -190,4 +194,54 @@ const allLocationsOutput = `{
       ]
     }
   }
+}`
+
+// noCvssOutput exercises findings without CVSS data (free-token scan).
+const noCvssOutput = `{
+  "target_url": "https://example.com",
+  "version": {
+    "number": "6.4",
+    "vulnerabilities": [
+      {"title": "Acme <= 1.2 - Remote Code Execution", "fixed_in": "1.3", "references": {"cve": ["CVE-2021-0001"], "url": ["https://example.com/advisory/1"]}}
+    ]
+  },
+  "plugins": {
+    "acme-sqli": {
+      "slug": "acme-sqli",
+      "version": {"number": "2.0", "vulnerabilities": [
+        {"title": "Acme <= 2.0 SQL Injection", "fixed_in": "2.1", "references": {"url": ["https://example.com/advisory/2"]}}
+      ]}
+    },
+    "acme-xss": {
+      "slug": "acme-xss",
+      "version": {"number": "1.0", "vulnerabilities": [
+        {"title": "Acme 1.0 - Stored XSS", "fixed_in": "1.1", "references": {"wpvulndb": ["aaaa-0001"]}}
+      ]}
+    },
+    "acme-redirect": {
+      "slug": "acme-redirect",
+      "version": {"number": "1.0", "vulnerabilities": [
+        {"title": "Acme 1.0 - Open Redirect", "fixed_in": "1.1", "references": {"url": ["https://example.com/advisory/3"]}}
+      ]}
+    },
+    "acme-glitch": {
+      "slug": "acme-glitch",
+      "version": {"number": "1.0", "vulnerabilities": [
+        {"title": "Acme 1.0 - Unspecified Glitch", "fixed_in": "", "references": {}}
+      ]}
+    },
+    "acme-na": {
+      "slug": "acme-na",
+      "version": {"number": "1.0", "vulnerabilities": [
+        {"title": "Acme 1.0 - Authentication Bypass", "fixed_in": "1.1", "cvss": {"score": "n/a"}, "references": {"cve": ["CVE-2022-0002"]}}
+      ]}
+    },
+    "acme-scored": {
+      "slug": "acme-scored",
+      "version": {"number": "3.0", "vulnerabilities": [
+        {"title": "Acme Scored RCE", "fixed_in": "3.1", "cvss": {"score": "9.8", "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}, "references": {"cve": ["CVE-2023-0003"]}}
+      ]}
+    }
+  },
+  "vuln_api": {"error": "No WPScan API Token given"}
 }`

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -235,6 +236,48 @@ func parseCVSSScore(raw json.RawMessage) (float64, bool) {
 	return score, true
 }
 
+// --- Severity heuristic (no-CVSS) ---
+
+// titleSeverityRules maps WPScan vulnerability-title keywords to severity bands.
+// Ordered by precedence: first matching rule wins (critical -> info).
+var titleSeverityRules = []struct {
+	severity string
+	re       *regexp.Regexp
+}{
+	{"critical", regexp.MustCompile(`(?i)\b(?:rce|remote code execution|code execution|command execution|command injection|backdoor)\b`)},
+	{"high", regexp.MustCompile(`(?i)\b(?:sqli|sql injection|xxe|xml external entity|xml external entities|ssrf|server side request forgery|server-side request forgery|upload|lfi|rfi|local file inclusion|remote file inclusion|traversal|object injection|privesc|privilege escalation|privilage escalation|auth bypass|authentication bypass|no authorisation|no authorization)\b`)},
+	{"medium", regexp.MustCompile(`(?i)\b(?:file deletion|sensitive data disclosure|sensitive information disclosure|information disclosure|sensitive data exposure|idor|access control|access controls|incorrect authorisation|incorrect authorization|xss|cross site scripting|cross-site scripting|csrf|cross site request forgery|cross-site request forgery|cross frame scripting|content injection|injection|bypass|spoofing|file download|cache poisoning)\b`)},
+	{"low", regexp.MustCompile(`(?i)\b(?:redirect|redirects|redirection|redirections|csv injection|race condition|insufficient cryptography|dos|denial of service|tab nabbing|tabnabbing)\b`)},
+	{"info", regexp.MustCompile(`(?i)\b(?:fpd|full path disclosure|unknown)\b`)},
+}
+
+// resolveSeverity determines a finding severity even when WPScan omits CVSS
+// (e.g. the free API token does not return CVSS data). The returned source is
+// "" when severity came from CVSS, "title" when a title keyword matched, and
+// "title-fallback" when no keyword matched and a default was used.
+func resolveSeverity(v wpscanVuln) (severity, source string) {
+	if v.CVSS != nil {
+		if _, ok := parseCVSSScore(v.CVSS.Score); ok {
+			return severityFromRawScore(v.CVSS.Score), ""
+		}
+	}
+	if sev, ok := severityFromTitle(v.Title); ok {
+		return sev, "title"
+	}
+	return "medium", "title-fallback"
+}
+
+// severityFromTitle maps a vulnerability title to a severity band via keyword
+// rules. ok is false when no rule matches.
+func severityFromTitle(title string) (severity string, ok bool) {
+	for _, rule := range titleSeverityRules {
+		if rule.re.MatchString(title) {
+			return rule.severity, true
+		}
+	}
+	return "", false
+}
+
 // --- Finding mapping ---
 
 func toFinding(v wpscanVuln, target string) (connector.Finding, bool) {
@@ -242,19 +285,21 @@ func toFinding(v wpscanVuln, target string) (connector.Finding, bool) {
 		return connector.Finding{}, false
 	}
 
+	severity, source := resolveSeverity(v)
 	f := connector.Finding{
 		Name:      v.Title,
-		Severity:  "info",
+		Severity:  severity,
 		MatchedAt: target,
 		Timestamp: time.Now(),
 	}
-
+	if source != "" {
+		f.Tags = append(f.Tags, "severity:heuristic", "severity-source:"+source)
+	}
 	if v.CVSS != nil {
-		f.Severity = severityFromRawScore(v.CVSS.Score)
 		if score, ok := parseCVSSScore(v.CVSS.Score); ok {
 			f.CVSSScore = score
+			f.CVSSMetrics = v.CVSS.Vector
 		}
-		f.CVSSMetrics = v.CVSS.Vector
 	}
 
 	if v.FixedIn != "" {

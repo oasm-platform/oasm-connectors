@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sync"
 	"testing"
 
@@ -370,8 +371,183 @@ func TestRealFixture_ParsesCapturedScan(t *testing.T) {
 	}
 }
 
-// --- helpers ---
+// --- severity heuristic (no-CVSS) tests ---
 
+func TestResolveSeverity_ScoreBandsUnaffected(t *testing.T) {
+	v := wpscanVuln{Title: "Core RCE", CVSS: &wpscanCVSS{Score: json.RawMessage(`"0.0"`)}}
+	sev, source := resolveSeverity(v)
+	if sev != "info" || source != "" {
+		t.Fatalf("got severity=%q source=%q, want info/\"\"", sev, source)
+	}
+}
+
+func TestResolveSeverity_HeuristicTitleKeyword(t *testing.T) {
+	cases := []struct{ title, want string }{
+		{"Acme <= 1.2 - Remote Code Execution", "critical"},
+		{"Acme <= 2.0 SQL Injection", "high"},
+		{"Dignitas 1.1.9 - Privilage Escalation", "high"},
+		{"Acme 1.0 - Stored XSS", "medium"},
+		{"Acme 1.0 - Open Redirect", "low"},
+		{"Some 1.0 - Unknown Issue", "info"},
+	}
+	for _, tc := range cases {
+		sev, source := resolveSeverity(wpscanVuln{Title: tc.title})
+		if sev != tc.want || source != "title" {
+			t.Errorf("title %q: got severity=%q source=%q, want %q/title", tc.title, sev, source, tc.want)
+		}
+	}
+}
+
+func TestSeverityFromTitle_WordBoundaryTraps(t *testing.T) {
+	for _, title := range []string{"Resource Cleanup <= 1.0", "Multisite Membership 1.0", "Dosage 1.0", "Source View 1.0"} {
+		if sev, ok := severityFromTitle(title); ok {
+			t.Errorf("title %q unexpectedly matched severity=%q", title, sev)
+		}
+	}
+}
+
+func TestResolveSeverity_UnparseableScoreUsesHeuristic(t *testing.T) {
+	v := wpscanVuln{Title: "Acme 1.0 - Remote Code Execution", CVSS: &wpscanCVSS{Score: json.RawMessage(`"n/a"`)}}
+	sev, source := resolveSeverity(v)
+	if sev != "critical" || source != "title" {
+		t.Fatalf("got severity=%q source=%q, want critical/title", sev, source)
+	}
+}
+
+func TestResolveSeverity_FallbackUnknownTitle(t *testing.T) {
+	sev, source := resolveSeverity(wpscanVuln{Title: "Weird Widget 1.0 - Glitch"})
+	if sev != "medium" || source != "title-fallback" {
+		t.Fatalf("got severity=%q source=%q, want medium/title-fallback", sev, source)
+	}
+}
+
+func TestSeverityFromTitle_FullSpellingHigh(t *testing.T) {
+	cases := []string{
+		"Acme <= 1.0 - Local File Inclusion",
+		"Acme <= 1.0 - Remote File Inclusion",
+		"Acme <= 1.0 - Server-Side Request Forgery",
+		"Acme <= 1.0 - XML External Entity",
+	}
+	for _, title := range cases {
+		if sev, ok := severityFromTitle(title); !ok || sev != "high" {
+			t.Errorf("title %q: got (%q,%v), want high/true", title, sev, ok)
+		}
+	}
+}
+
+func TestSeverityFromTitle_Redirection(t *testing.T) {
+	for _, title := range []string{"Acme 1.0 - Open Redirect", "Acme 1.0 - Open Redirection"} {
+		if sev, ok := severityFromTitle(title); !ok || sev != "low" {
+			t.Errorf("title %q: got (%q,%v), want low/true", title, sev, ok)
+		}
+	}
+}
+
+func TestSeverityFromTitle_CodeExecution(t *testing.T) {
+	for _, title := range []string{"Acme 1.0 - Arbitrary Code Execution", "Acme 1.0 - Command Execution"} {
+		if sev, ok := severityFromTitle(title); !ok || sev != "critical" {
+			t.Errorf("title %q: got (%q,%v), want critical/true", title, sev, ok)
+		}
+	}
+}
+
+func TestSeverityFromTitle_Precedence(t *testing.T) {
+	cases := []struct{ title, want string }{
+		{"Acme 1.0 - Command Injection", "critical"},
+		{"Acme 1.0 - PHP Object Injection", "high"},
+		{"Acme 1.0 - Authentication Bypass", "high"},
+		{"Acme 1.0 - SQL Injection", "high"},
+	}
+	for _, tc := range cases {
+		if sev, ok := severityFromTitle(tc.title); !ok || sev != tc.want {
+			t.Errorf("title %q: got (%q,%v), want %q/true", tc.title, sev, ok, tc.want)
+		}
+	}
+}
+
+func TestResolveSeverity_UnparseableScoreWithVector(t *testing.T) {
+	v := wpscanVuln{Title: "Acme 1.0 - Remote Code Execution", CVSS: &wpscanCVSS{Score: json.RawMessage(`"n/a"`), Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}}
+	sev, source := resolveSeverity(v)
+	if sev != "critical" || source != "title" {
+		t.Fatalf("got (%q,%q), want critical/title", sev, source)
+	}
+	f, ok := toFinding(v, "https://example.com")
+	if !ok {
+		t.Fatal("toFinding returned ok=false")
+	}
+	if f.CVSSScore != 0 || f.CVSSMetrics != "" {
+		t.Errorf("unparseable score must not set CVSS fields, got score=%v metrics=%q", f.CVSSScore, f.CVSSMetrics)
+	}
+}
+
+func TestToFinding_SkipsEmptyTitle(t *testing.T) {
+	if _, ok := toFinding(wpscanVuln{Title: "   "}, "https://example.com"); ok {
+		t.Fatal("blank title should be skipped")
+	}
+}
+
+func TestWpscanExecute_HeuristicSeverityWithoutCVSS(t *testing.T) {
+	findings, err := collect(t, "nocvss", "https://example.com")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	want := map[string]string{
+		"Acme <= 1.2 - Remote Code Execution": "critical",
+		"Acme <= 2.0 SQL Injection":           "high",
+		"Acme 1.0 - Stored XSS":               "medium",
+		"Acme 1.0 - Open Redirect":            "low",
+		"Acme 1.0 - Unspecified Glitch":       "medium",
+		"Acme 1.0 - Authentication Bypass":    "high",
+		"Acme Scored RCE":                     "critical",
+	}
+	if len(findings) != len(want) {
+		t.Fatalf("got %d findings, want %d: %+v", len(findings), len(want), findings)
+	}
+	for _, f := range findings {
+		expected, ok := want[f.Name]
+		if !ok {
+			t.Fatalf("unexpected finding %q", f.Name)
+		}
+		if f.Severity != expected {
+			t.Errorf("finding %q: severity=%q, want %q", f.Name, f.Severity, expected)
+		}
+		if err := f.Validate(); err != nil {
+			t.Errorf("finding %q failed Validate: %v", f.Name, err)
+		}
+		if f.Name == "Acme Scored RCE" {
+			if f.CVSSScore != 9.8 {
+				t.Errorf("scored finding CVSSScore=%v, want 9.8", f.CVSSScore)
+			}
+			if f.CVSSMetrics == "" {
+				t.Error("scored finding CVSSMetrics should carry the vector")
+			}
+			if len(f.Tags) != 0 {
+				t.Errorf("scored finding should have no heuristic tags, got %v", f.Tags)
+			}
+			continue
+		}
+		if f.CVSSScore != 0 {
+			t.Errorf("heuristic finding %q should not have CVSSScore, got %v", f.Name, f.CVSSScore)
+		}
+		if f.CVSSMetrics != "" {
+			t.Errorf("heuristic finding %q should not have CVSSMetrics, got %q", f.Name, f.CVSSMetrics)
+		}
+		if !slices.Contains(f.Tags, "severity:heuristic") {
+			t.Errorf("heuristic finding %q missing severity:heuristic tag: %v", f.Name, f.Tags)
+		}
+		if f.Name == "Acme 1.0 - Unspecified Glitch" {
+			if !slices.Contains(f.Tags, "severity-source:title-fallback") {
+				t.Errorf("fallback finding %q missing severity-source:title-fallback: %v", f.Name, f.Tags)
+			}
+			continue
+		}
+		if !slices.Contains(f.Tags, "severity-source:title") {
+			t.Errorf("heuristic finding %q missing severity-source:title: %v", f.Name, f.Tags)
+		}
+	}
+}
+
+// --- helpers ---
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && searchString(s, substr)
 }
