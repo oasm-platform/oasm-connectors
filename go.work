@@ -4,6 +4,7 @@ use (
 	.
 	./sdk
 	./url_discovery/gau
+	./url_discovery/katana
 	./vulnerabilities/nessus
 	./vulnerabilities/nuclei
 	./vulnerabilities/wpscan

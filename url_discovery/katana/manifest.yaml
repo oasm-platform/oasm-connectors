@@ -1,0 +1,136 @@
+name: katana - Web Crawler
+slug: katana
+version: 1.7.0
+image: ghcr.io/oasm-platform/connector-katana:1.7.0
+author: 'oasm'
+pricingTier: [free]
+homepage: 'https://github.com/projectdiscovery/katana'
+repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
+supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
+shortDescription: 'Web crawler and endpoint discovery'
+description: 'Crawls a target website with katana (ProjectDiscovery) up to a configurable depth and streams every discovered HTTP/HTTPS URL as a finding for URL discovery.'
+capabilities: [url_discovery]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+      title: Target domain
+      description: 'Domain (or URL) to crawl. Scheme/path stripped to the host.'
+      examples: [example.com]
+      ui:placeholder: 'example.com'
+  additionalProperties: false
+configSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    depth:
+      type: integer
+      minimum: 1
+      maximum: 10
+      default: 3
+      title: Crawl depth
+      description: 'Maximum link depth to crawl (katana -d).'
+    jsCrawl:
+      type: boolean
+      default: true
+      title: Parse JavaScript
+      description: 'Extract endpoints from JavaScript files (katana -jc). No browser required.'
+    crawlDuration:
+      type: integer
+      minimum: 0
+      default: 0
+      title: Crawl duration (seconds)
+      description: 'Wall-clock budget for the crawl; 0 = unbounded (katana -ct). The adapter always enforces a 10 minute hard timeout.'
+    timeout:
+      type: integer
+      minimum: 1
+      default: 10
+      title: Request timeout (seconds)
+      description: 'Per-request timeout in seconds (katana -timeout).'
+    concurrency:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 10
+      title: Concurrency
+      description: 'Number of concurrent fetchers (katana -c).'
+    parallelism:
+      type: integer
+      minimum: 1
+      maximum: 10
+      default: 10
+      title: Parallelism
+      description: 'Number of concurrent inputs to process (katana -p).'
+    rateLimit:
+      type: integer
+      minimum: 1
+      default: 150
+      title: Rate limit (requests/second)
+      description: 'Maximum requests per second (katana -rl).'
+    retries:
+      type: integer
+      minimum: 0
+      default: 1
+      title: Retries
+      description: 'Number of request retries (katana -retry).'
+    proxy:
+      type: string
+      title: Proxy
+      description: 'Proxy URL, e.g. http://127.0.0.1:8080 or socks5://127.0.0.1:9050 (katana -proxy).'
+      ui:placeholder: 'http://127.0.0.1:8080'
+    headers:
+      type: array
+      items:
+        type: string
+      title: Headers
+      description: 'Header lines in "Name: Value" form, sent on every request (katana -H). Values containing commas are quoted automatically.'
+      ui:placeholder: 'X-Api-Key: …'
+    filterSimilar:
+      type: boolean
+      default: false
+      title: Filter similar URLs
+      description: 'Collapse near-duplicate URLs (katana -fsu). Dramatically reduces volume on some sites.'
+    filterSimilarThreshold:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 10
+      title: Similar-URL threshold
+      description: 'Similarity threshold percentage for -fsu (katana -fst). Only applied when filterSimilar is on.'
+    maxDomainPages:
+      type: integer
+      minimum: 0
+      default: 0
+      title: Max domain pages
+      description: 'Maximum number of pages to crawl per domain, 0 = unlimited (katana -mdp). Note: caps pages, not discovered URLs.'
+    extensionMatch:
+      type: array
+      items:
+        type: string
+      title: Match extensions
+      description: 'Only emit URLs with these extensions (katana -em), e.g. php, html.'
+    extensionFilter:
+      type: array
+      items:
+        type: string
+      title: Filter extensions
+      description: 'Drop URLs with these extensions (katana -ef), e.g. png, css.'
+    crawlScope:
+      type: string
+      title: Crawl scope regex
+      description: 'In-scope URL regex to follow (katana -cs). Default scope stays the registered domain (rdn).'
+      ui:placeholder: '.*\.example\.com'
+    maxUrls:
+      type: integer
+      minimum: 1
+      maximum: 100000
+      default: 10000
+      title: Max URLs (adapter cap)
+      description: 'Hard cap on emitted findings. When reached, the crawl is stopped and partial results are kept.'
+resourceDefaults:
+  cpu: 500m
+  memory: 512Mi
+  timeoutSeconds: 1200

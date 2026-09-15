@@ -9,6 +9,7 @@ vars:
     - "."
     - "./sdk"
     - "./url_discovery/gau"
+    - "./url_discovery/katana"
     - "./vulnerabilities/nuclei"
     - "./vulnerabilities/nessus"
     - "./vulnerabilities/wpscan"
