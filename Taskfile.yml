@@ -8,6 +8,7 @@ vars:
   MODULES:
     - "."
     - "./sdk"
+    - "./url_discovery/gau"
     - "./vulnerabilities/nuclei"
     - "./vulnerabilities/nessus"
     - "./vulnerabilities/wpscan"

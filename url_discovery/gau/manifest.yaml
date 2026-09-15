@@ -1,0 +1,77 @@
+name: gau - GetAllUrls
+slug: gau
+version: 2.2.4
+image: ghcr.io/oasm-platform/connector-gau:2.2.4
+author: 'oasm'
+pricingTier: [free]
+homepage: 'https://github.com/lc/gau'
+repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
+supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
+shortDescription: 'Historical URL discovery via public archives'
+description: 'Discovers historical/archived URLs for a domain using gau (GetAllUrls) across Wayback Machine, Common Crawl, AlienVault OTX and urlscan.io.'
+capabilities: [url_discovery]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+      title: Target domain
+      description: 'Domain (or URL) to discover historical URLs for. Scheme/path stripped to the host.'
+      examples: [example.com]
+      ui:placeholder: 'example.com'
+  additionalProperties: false
+configSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    providers:
+      type: array
+      items:
+        type: string
+        enum: [wayback, commoncrawl, otx, urlscan]
+      title: Providers
+      description: 'Archive providers to query. Default: all four.'
+      ui:placeholder: 'wayback, commoncrawl, otx, urlscan'
+    subs:
+      type: boolean
+      title: Include subdomains
+      description: 'Query providers for *.domain as well (gau --subs).'
+    threads:
+      type: integer
+      minimum: 1
+      default: 5
+      title: Threads
+      description: 'Number of worker threads per provider (gau --threads).'
+    timeout:
+      type: integer
+      minimum: 1
+      default: 45
+      title: Request timeout
+      description: 'Per-request timeout in seconds (gau --timeout).'
+    retries:
+      type: integer
+      minimum: 0
+      default: 5
+      title: Retries
+      description: 'Provider request retries (gau --retries).'
+    proxy:
+      type: string
+      title: Proxy
+      description: 'Proxy URL, e.g. http://127.0.0.1:8080 or socks5://127.0.0.1:9050.'
+      ui:placeholder: 'http://127.0.0.1:8080'
+    from:
+      type: string
+      title: From
+      description: 'Start timestamp filter YYYYMM (gau --from).'
+      ui:placeholder: '201901'
+    to:
+      type: string
+      title: To
+      description: 'End timestamp filter YYYYMM (gau --to).'
+      ui:placeholder: '202601'
+resourceDefaults:
+  cpu: 250m
+  memory: 256Mi
+  timeoutSeconds: 900

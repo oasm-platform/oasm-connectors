@@ -3,6 +3,7 @@ go 1.26
 use (
 	.
 	./sdk
+	./url_discovery/gau
 	./vulnerabilities/nessus
 	./vulnerabilities/nuclei
 	./vulnerabilities/wpscan
