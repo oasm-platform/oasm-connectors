@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/image/draw"
 	"gopkg.in/yaml.v3"
 )
 
@@ -167,13 +170,51 @@ func loadManifest(path string) (*Manifest, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	if logoPath := filepath.Join(filepath.Dir(path), "logo.png"); fileExists(logoPath) {
-		logo, err := os.ReadFile(logoPath)
+		logo, err := loadLogo(logoPath)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", logoPath, err)
+			return nil, err
 		}
 		m.Logo = base64.StdEncoding.EncodeToString(logo)
 	}
 	return &m, nil
+}
+
+// maxLogoSize caps a logo's long edge in manifest.json. Icons render at ~40px
+// in the console; 128px stays crisp on HiDPI while keeping the multi-hundred-
+// kilobyte source PNGs out of the generated manifest.
+const maxLogoSize = 128
+
+// loadLogo reads the logo and downscales it to maxLogoSize on its long edge
+// when oversized. Logos already within budget are returned verbatim — never
+// upscale or re-encode what is already small enough.
+func loadLogo(logoPath string) ([]byte, error) {
+	raw, err := os.ReadFile(logoPath)
+	if err != nil {
+		return nil, err
+	}
+	src, _, err := image.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", logoPath, err)
+	}
+	bounds := src.Bounds()
+	w, h := bounds.Dx(), bounds.Dy()
+	if w <= maxLogoSize && h <= maxLogoSize {
+		return raw, nil
+	}
+	if w >= h {
+		h = max(h*maxLogoSize/w, 1)
+		w = maxLogoSize
+	} else {
+		w = max(w*maxLogoSize/h, 1)
+		h = maxLogoSize
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, w, h))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), src, bounds, draw.Over, nil)
+	var buf bytes.Buffer
+	if err := (&png.Encoder{CompressionLevel: png.BestCompression}).Encode(&buf, dst); err != nil {
+		return nil, fmt.Errorf("%s: %w", logoPath, err)
+	}
+	return buf.Bytes(), nil
 }
 
 type output struct {
