@@ -10,6 +10,7 @@ vars:
     - "./sdk"
     - "./url_discovery/gau"
     - "./url_discovery/katana"
+    - "./vulnerabilities/acunetix"
     - "./vulnerabilities/nuclei"
     - "./vulnerabilities/nessus"
     - "./vulnerabilities/wpscan"
