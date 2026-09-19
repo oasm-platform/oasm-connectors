@@ -114,16 +114,19 @@ func TestMapVulnerabilityDetails(t *testing.T) {
 			VulnID:     "v1",
 			VTName:     "Broken Auth",
 			Severity:   4,
+			Confidence: 95,
 			Tags:       []string{"cve-2020-0001"},
 			AffectsURL: "https://example.com/admin",
 			LastSeen:   "2024-03-04",
 		},
-		Recommendation: "Patch it",
-		CVSS2:          "AV:N/AC:L/Au:N/C:P/I:P/A:P",
-		CVSS3:          "CVSS:3.1/AV:N",
-		CVSS4:          "CVSS:4.0/AV:N",
-		CVSSScore:      7.5,
-		CVSS4Score:     9.1,
+		Description:     "short desc",
+		LongDescription: "detailed desc",
+		Recommendation:  "Patch it",
+		CVSS2:           "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+		CVSS3:           "CVSS:3.1/AV:N",
+		CVSS4:           "CVSS:4.0/AV:N",
+		CVSSScore:       7.5,
+		CVSS4Score:      9.1,
 		References: []link{
 			{Rel: "cve", Href: "https://nvd.nist.gov/vuln/detail/CVE-2020-0001"},
 			{Rel: "ref", Href: ""},
@@ -136,6 +139,15 @@ func TestMapVulnerabilityDetails(t *testing.T) {
 	}
 	if f.Solution != "Patch it" {
 		t.Errorf("Solution = %q, want Patch it", f.Solution)
+	}
+	if f.Synopsis != "short desc" {
+		t.Errorf("Synopsis = %q, want short desc", f.Synopsis)
+	}
+	if f.Description != "detailed desc" {
+		t.Errorf("Description = %q, want detailed desc", f.Description)
+	}
+	if f.Confidence != 95 {
+		t.Errorf("Confidence = %v, want 95", f.Confidence)
 	}
 	if f.CVSSScore != 9.1 {
 		t.Errorf("CVSSScore = %v, want 9.1 (cvss4_score preferred)", f.CVSSScore)
@@ -176,6 +188,18 @@ func TestMapVulnerabilityDetails(t *testing.T) {
 		}
 		if f3.CVSSMetrics != "AV:N/AC:L/Au:N/C:P/I:P/A:P" {
 			t.Errorf("CVSSMetrics = %q, want the cvss2 vector", f3.CVSSMetrics)
+		}
+	})
+
+	t.Run("description falls back to short description without long description", func(t *testing.T) {
+		d4 := d
+		d4.LongDescription = ""
+		f4, ok := mapVulnerabilityDetails(d4, "fb")
+		if !ok {
+			t.Fatal("expected mapping to succeed")
+		}
+		if f4.Description != "short desc" {
+			t.Errorf("Description = %q, want short desc fallback", f4.Description)
 		}
 	})
 

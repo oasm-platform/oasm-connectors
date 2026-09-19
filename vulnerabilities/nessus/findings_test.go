@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 	"github.com/tencat-dev/nessus-client-go/nessus"
@@ -458,9 +460,11 @@ func TestMapPluginOutput_RefsGrouped(t *testing.T) {
 	if len(f.CWEIDs) != 1 || f.CWEIDs[0] != "CWE-79" {
 		t.Errorf("CWEIDs = %v, want [CWE-79]", f.CWEIDs)
 	}
-	// bid + cae both map to BIDIDs
-	if len(f.BIDIDs) != 2 || f.BIDIDs[0] != "BID-123" || f.BIDIDs[1] != "CAE-456" {
-		t.Errorf("BIDIDs = %v, want [BID-123 CAE-456]", f.BIDIDs)
+	if len(f.BIDIDs) != 1 || f.BIDIDs[0] != "BID-123" {
+		t.Errorf("BIDIDs = %v, want [BID-123]", f.BIDIDs)
+	}
+	if len(f.CEAIDs) != 1 || f.CEAIDs[0] != "CAE-456" {
+		t.Errorf("CEAIDs = %v, want [CAE-456]", f.CEAIDs)
 	}
 	if len(f.IAVAIDs) != 1 || f.IAVAIDs[0] != "IAVA-2024-001" {
 		t.Errorf("IAVAIDs = %v, want [IAVA-2024-001]", f.IAVAIDs)
@@ -915,5 +919,65 @@ func TestCollectFindings_ContextCancellation(t *testing.T) {
 	}
 	if len(out) != 0 {
 		t.Errorf("out len = %d, want 0 (cancelled before sending)", len(out))
+	}
+}
+
+func TestFinding_ToSDKFindingCarriesEnrichment(t *testing.T) {
+	f := &finding{
+		PluginName:       "Plugin A",
+		Severity:         "high",
+		Host:             "example.com",
+		AffectedURL:      "https://example.com/x",
+		Description:      "desc",
+		Synopsis:         "syn",
+		Solution:         "fix",
+		Ports:            []string{"443"},
+		VPRScore:         7.2,
+		EPSSScore:        0.5,
+		CVSSScore:        9.1,
+		CVSSVector:       "CVSS:3.1/AV:N",
+		References:       []string{"https://ref"},
+		CVEIDs:           []string{"CVE-2024-1"},
+		CWEIDs:           []string{"CWE-79"},
+		BIDIDs:           []string{"12345"},
+		CEAIDs:           []string{"CAE-1"},
+		IAVAIDs:          []string{"2024-A-0001"},
+		PublicationDate:  "2024-01-02T03:04:05Z",
+		ModificationDate: "2024-02-03T04:05:06Z",
+	}
+	got := f.toSDKFinding()
+	got.Timestamp = time.Time{}
+
+	want := connector.Finding{
+		Name:             "Plugin A",
+		Severity:         "high",
+		Description:      "desc",
+		Synopsis:         "syn",
+		Solution:         "fix",
+		MatchedAt:        "https://example.com/x",
+		Host:             "example.com",
+		Ports:            []string{"443"},
+		VPRScore:         7.2,
+		EPSSScore:        0.5,
+		CVSSScore:        9.1,
+		CVSSMetrics:      "CVSS:3.1/AV:N",
+		References:       []string{"https://ref"},
+		CVEID:            []string{"CVE-2024-1"},
+		CWEID:            []string{"CWE-79"},
+		BIDID:            []string{"12345"},
+		CEAID:            []string{"CAE-1"},
+		IAVAID:           []string{"2024-A-0001"},
+		PublicationDate:  time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC),
+		ModificationDate: time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC),
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("toSDKFinding() mismatch:\ngot:  %+v\nwant: %+v", got, want)
+	}
+}
+
+func TestFinding_ToSDKFindingMatchedAtFallsBackToHost(t *testing.T) {
+	f := &finding{PluginName: "P", Severity: "low", Host: "h.example.com"}
+	if got := f.toSDKFinding().MatchedAt; got != "h.example.com" {
+		t.Errorf("MatchedAt = %q, want host fallback", got)
 	}
 }

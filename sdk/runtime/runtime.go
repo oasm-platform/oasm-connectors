@@ -411,9 +411,25 @@ func toProtoFinding(f connector.Finding) *pb.Finding {
 		MatchedAt:   f.MatchedAt,
 		Host:        f.Host,
 		Ip:          f.IP,
+
+		Description: f.Description,
+		Synopsis:    f.Synopsis,
+		Ports:       f.Ports,
+		Authors:     f.Authors,
+		VprScore:    f.VPRScore,
+		BidId:       f.BIDID,
+		CeaId:       f.CEAID,
+		Iava:        f.IAVAID,
+		Confidence:  f.Confidence,
 	}
 	if !f.Timestamp.IsZero() {
 		out.Timestamp = timestamppb.New(f.Timestamp)
+	}
+	if !f.PublicationDate.IsZero() {
+		out.PublicationDate = timestamppb.New(f.PublicationDate)
+	}
+	if !f.ModificationDate.IsZero() {
+		out.ModificationDate = timestamppb.New(f.ModificationDate)
 	}
 	return out
 }

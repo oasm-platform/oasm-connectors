@@ -25,6 +25,19 @@ type Finding struct {
 	Host        string
 	IP          string
 	Timestamp   time.Time
+
+	Description      string
+	Synopsis         string
+	Ports            []string
+	Authors          []string
+	VPRScore         float64
+	BIDID            []string
+	CEAID            []string
+	IAVAID           []string
+	PublicationDate  time.Time
+	ModificationDate time.Time
+	// Confidence is the scanner's confidence rating (e.g. Acunetix 80/95/100).
+	Confidence float64
 }
 
 // Validate returns an error when the finding cannot be transported: a name is

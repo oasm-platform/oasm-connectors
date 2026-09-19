@@ -258,17 +258,21 @@ func resultEventToFinding(event *nucleiOutput.ResultEvent) (connector.Finding, e
 	}
 
 	f := connector.Finding{
-		Name:      name,
-		Severity:  normalizeSeverity(event.Info.SeverityHolder.Severity.String()),
-		Tags:      event.Info.Tags.ToSlice(),
-		Solution:  event.Info.Remediation,
-		MatchedAt: event.Matched,
-		Host:      event.Host,
-		IP:        event.IP,
-		Timestamp: event.Timestamp,
+		Name:        name,
+		Severity:    normalizeSeverity(event.Info.SeverityHolder.Severity.String()),
+		Tags:        event.Info.Tags.ToSlice(),
+		Solution:    event.Info.Remediation,
+		Description: event.Info.Description,
+		MatchedAt:   event.Matched,
+		Host:        event.Host,
+		IP:          event.IP,
+		Timestamp:   event.Timestamp,
 	}
 	if event.Info.Reference != nil {
 		f.References = event.Info.Reference.ToSlice()
+	}
+	if authors := event.Info.Authors.ToSlice(); len(authors) > 0 {
+		f.Authors = authors
 	}
 	if c := event.Info.Classification; c != nil {
 		f.CVEID = c.CVEID.ToSlice()

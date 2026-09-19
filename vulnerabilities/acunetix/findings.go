@@ -97,6 +97,15 @@ func hostFromURL(raw, fallback string) string {
 	return fallback
 }
 
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if s := strings.TrimSpace(v); s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
 // mapVulnerability maps a list-item vulnerability to a finding. It returns
 // false when vt_name is blank so no empty-name finding is ever emitted (that
 // would abort the whole stream). References are unavailable on list items, so
@@ -113,14 +122,15 @@ func mapVulnerability(v vulnerability, target string) (connector.Finding, bool) 
 	cves, cwes := extractIDs(v.Tags)
 
 	return connector.Finding{
-		Name:      v.VTName,
-		Severity:  mapSeverity(v.Severity),
-		Tags:      tags,
-		CVEID:     cves,
-		CWEID:     cwes,
-		MatchedAt: v.AffectsURL,
-		Host:      hostFromURL(v.AffectsURL, target),
-		Timestamp: parseTimestamp(v.LastSeen),
+		Name:       v.VTName,
+		Severity:   mapSeverity(v.Severity),
+		Tags:       tags,
+		CVEID:      cves,
+		CWEID:      cwes,
+		MatchedAt:  v.AffectsURL,
+		Host:       hostFromURL(v.AffectsURL, target),
+		Timestamp:  parseTimestamp(v.LastSeen),
+		Confidence: float64(v.Confidence),
 	}, true
 }
 
@@ -134,6 +144,8 @@ func mapVulnerabilityDetails(d vulnerabilityDetails, target string) (connector.F
 	}
 
 	f.Solution = d.Recommendation
+	f.Description = firstNonEmpty(d.LongDescription, d.Description, d.Impact, d.Details)
+	f.Synopsis = firstNonEmpty(d.Description, d.Impact, d.Details)
 
 	// cis: prefer the CVSS 4.0 score, then the highest-version cvss_score.
 	if d.CVSS4Score > 0 {

@@ -265,6 +265,7 @@ type vulnerabilityDetails struct {
 	Recommendation  string  `json:"recommendation"`
 	LongDescription string  `json:"long_description"`
 	Impact          string  `json:"impact"`
+	Details         string  `json:"details"`
 	CVSS2           string  `json:"cvss2"`
 	CVSS3           string  `json:"cvss3"`
 	CVSS4           string  `json:"cvss4"`
