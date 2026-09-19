@@ -1,0 +1,79 @@
+name: OWASP ZAP - Web Application Scanner
+slug: zap
+version: 2.17.0
+image: ghcr.io/oasm-platform/connector-zap:2.17.0
+author: 'oasm'
+pricingTier: [free]
+homepage: 'https://www.zaproxy.org'
+repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
+supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
+shortDescription: 'OWASP ZAP dynamic web application scanner'
+description: 'Runs OWASP ZAP (Zed Attack Proxy) against a target web application using the Automation Framework, then streams the discovered alerts back to the Worker as normalized findings.'
+capabilities: [vulnerabilities]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+      title: Scan target
+      description: 'Target URL to scan. A bare host is prefixed with https://.'
+      examples: [https://example.com]
+      ui:placeholder: 'https://example.com'
+  additionalProperties: false
+configSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    scanMode:
+      type: string
+      enum: [baseline, full]
+      default: baseline
+      title: Scan mode
+      description: 'baseline runs the spider and passive scanner only (safe). full additionally runs the active scanner, which actively attacks the target — use only with permission.'
+    maxSpiderDepth:
+      type: integer
+      minimum: 1
+      maximum: 20
+      default: 5
+      title: Spider depth
+      description: 'Maximum link depth the spider follows.'
+    maxSpiderDuration:
+      type: integer
+      minimum: 1
+      default: 5
+      title: Spider duration (minutes)
+      description: 'Wall-clock budget for the spider and passive scan wait.'
+    maxScanDurationInMins:
+      type: integer
+      minimum: 1
+      default: 10
+      title: Active scan duration (minutes)
+      description: 'Maximum time the active scanner may run. Only used when scanMode is full.'
+    delayInMs:
+      type: integer
+      minimum: 0
+      default: 0
+      title: Request delay (ms)
+      description: 'Delay between active scan requests, to reduce load on the target.'
+    threadPerHost:
+      type: integer
+      minimum: 1
+      default: 2
+      title: Threads per host
+      description: 'Maximum active scan threads per host.'
+    policy:
+      type: string
+      default: 'Default Policy'
+      title: Scan policy
+      description: 'Active scan policy name. Only used when scanMode is full.'
+    enableAjaxSpider:
+      type: boolean
+      default: false
+      title: AJAX spider
+      description: 'Also run the AJAX spider (requires a browser in the image; slower).'
+resourceDefaults:
+  cpu: '1'
+  memory: 2Gi
+  timeoutSeconds: 3600

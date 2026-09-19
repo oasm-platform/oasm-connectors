@@ -13,6 +13,7 @@ vars:
     - "./vulnerabilities/nuclei"
     - "./vulnerabilities/nessus"
     - "./vulnerabilities/wpscan"
+    - "./vulnerabilities/zap"
 
 tasks:
   proto:
