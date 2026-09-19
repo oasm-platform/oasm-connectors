@@ -917,3 +917,10 @@ func TestCollectFindings_ContextCancellation(t *testing.T) {
 		t.Errorf("out len = %d, want 0 (cancelled before sending)", len(out))
 	}
 }
+
+func TestToSDKFinding_MapsDescription(t *testing.T) {
+	f := &finding{PluginName: "N", Severity: "high", Description: "details"}
+	if got := f.toSDKFinding(); got.Description != "details" {
+		t.Errorf("Description = %q, want details", got.Description)
+	}
+}

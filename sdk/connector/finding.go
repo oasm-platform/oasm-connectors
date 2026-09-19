@@ -13,6 +13,7 @@ var Severities = []string{"info", "low", "medium", "high", "critical"}
 type Finding struct {
 	Name        string
 	Severity    string
+	Description string
 	Tags        []string
 	References  []string
 	CVEID       []string

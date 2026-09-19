@@ -400,6 +400,7 @@ func toProtoFinding(f connector.Finding) *pb.Finding {
 	out := &pb.Finding{
 		Name:        f.Name,
 		Severity:    f.Severity,
+		Description: f.Description,
 		Tags:        f.Tags,
 		References:  f.References,
 		CveId:       f.CVEID,

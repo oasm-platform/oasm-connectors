@@ -30,6 +30,7 @@ func TestResultEventToFinding(t *testing.T) {
 			TemplateID: "CVE-2021-1",
 			Info: model.Info{
 				Name:           "Real XSS",
+				Description:    "in-depth explanation",
 				Tags:           ss("xss"),
 				Reference:      ref("https://ref.example"),
 				SeverityHolder: severity.Holder{Severity: severity.High},
@@ -62,6 +63,7 @@ func TestResultEventToFinding(t *testing.T) {
 				want := connector.Finding{
 					Name:        "Real XSS",
 					Severity:    "high",
+					Description: "in-depth explanation",
 					Tags:        []string{"xss"},
 					References:  []string{"https://ref.example"},
 					CVEID:       []string{"CVE-2021-1"},

@@ -182,6 +182,7 @@ func (f *finding) toSDKFinding() connector.Finding {
 	return connector.Finding{
 		Name:        f.PluginName,
 		Severity:    f.Severity,
+		Description: f.Description,
 		References:  f.References,
 		CVEID:       f.CVEIDs,
 		CWEID:       f.CWEIDs,
