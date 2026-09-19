@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -55,6 +56,7 @@ const reportFixture = `{
           "name": "Cross Site Scripting (Reflected)",
           "riskcode": "3",
           "confidence": "2",
+          "desc": "<p>XSS is an attack technique...</p>",
           "solution": "<p>Encode output.</p>",
           "reference": "<p>https://owasp.org/xss</p>",
           "cweid": "79",
@@ -81,8 +83,10 @@ func TestParseReport_MapsAlerts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(findings) != 2 {
-		t.Fatalf("expected 2 findings, got %d", len(findings))
+	// One finding per affected instance: 2 for the XSS alert + 1 for the
+	// header alert.
+	if len(findings) != 3 {
+		t.Fatalf("expected 3 findings, got %d", len(findings))
 	}
 
 	f := findings[0]
@@ -104,6 +108,9 @@ func TestParseReport_MapsAlerts(t *testing.T) {
 	if f.Solution != "<p>Encode output.</p>" {
 		t.Errorf("Solution = %q", f.Solution)
 	}
+	if f.Description != "XSS is an attack technique..." {
+		t.Errorf("Description = %q", f.Description)
+	}
 	if len(f.References) != 1 || f.References[0] != "https://owasp.org/xss" {
 		t.Errorf("References = %v", f.References)
 	}
@@ -116,21 +123,34 @@ func TestParseReport_MapsAlerts(t *testing.T) {
 	if !hasTag(f.Tags, "instance-count:2") {
 		t.Errorf("missing instance-count tag: %v", f.Tags)
 	}
-	if !hasTag(f.Tags, "affected-uri:https://example.com/contact") {
-		t.Errorf("missing affected-uri tag: %v", f.Tags)
+	// The affected URI is a first-class column now, never a tag.
+	for _, tag := range f.Tags {
+		if strings.HasPrefix(tag, "affected-uri:") {
+			t.Errorf("affected URI must not be a tag: %v", f.Tags)
+		}
 	}
 
-	// Second alert falls back to the "alert" field for its name, uses the
+	// Second instance of the same alert becomes its own finding with its own
+	// affected URL.
+	if findings[1].Name != "Cross Site Scripting (Reflected)" ||
+		findings[1].MatchedAt != "https://example.com/contact" {
+		t.Errorf("second instance = %q @ %q", findings[1].Name, findings[1].MatchedAt)
+	}
+
+	// Third alert falls back to the "alert" field for its name, uses the
 	// "low" band, and drops the zero CWE id.
-	second := findings[1]
-	if second.Name != "X-Content-Type-Options Header Missing" {
-		t.Errorf("second Name = %q", second.Name)
+	third := findings[2]
+	if third.Name != "X-Content-Type-Options Header Missing" {
+		t.Errorf("third Name = %q", third.Name)
 	}
-	if second.Severity != "low" {
-		t.Errorf("second Severity = %q", second.Severity)
+	if third.Severity != "low" {
+		t.Errorf("third Severity = %q", third.Severity)
 	}
-	if second.CWEID != nil {
-		t.Errorf("second CWEID should be nil for id 0, got %v", second.CWEID)
+	if third.CWEID != nil {
+		t.Errorf("third CWEID should be nil for id 0, got %v", third.CWEID)
+	}
+	if third.MatchedAt != "https://example.com/" {
+		t.Errorf("third MatchedAt = %q", third.MatchedAt)
 	}
 }
 

@@ -12,12 +12,6 @@ import (
 	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 )
 
-// maxInstanceTags caps how many affected URIs are carried as tags per alert.
-// The SDK/worker drops MatchedAt and Transaction, so Tags is the only channel
-// that reaches Core — a handful is enough to point at the concrete URLs.
-// ponytail: fixed 5; make configurable when users ask for full instance lists.
-const maxInstanceTags = 5
-
 // --- Traditional JSON report model (subset ZAP emits) ---
 
 type zapReport struct {
@@ -73,6 +67,19 @@ func severityFromRiskCode(code string) string {
 // refParaRe extracts one reference per ZAP <p>...</p> block.
 var refParaRe = regexp.MustCompile(`(?is)<p>(.*?)</p>`)
 
+// htmlTagRe matches any HTML tag, used to flatten ZAP's HTML descriptions.
+var htmlTagRe = regexp.MustCompile(`(?s)<[^>]*>`)
+
+// htmlToText flattens a ZAP HTML blob (desc) into a single plain-text line.
+func htmlToText(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	text := htmlTagRe.ReplaceAllString(raw, " ")
+	return strings.Join(strings.Fields(html.UnescapeString(text)), " ")
+}
+
 // parseReferences flattens ZAP's HTML reference blob into a clean list.
 func parseReferences(raw string) []string {
 	raw = strings.TrimSpace(raw)
@@ -106,9 +113,57 @@ func hostFromTarget(target string) string {
 	return target
 }
 
+// alertTags carries the ZAP alert fields that have no dedicated Finding
+// column, so they survive in the vulnerability's tag array. The concrete
+// affected URI is NOT a tag: it rides on MatchedAt (see instanceURIs).
+func alertTags(a zapAlert) []string {
+	var tags []string
+	if id := strings.TrimSpace(a.PluginID); id != "" {
+		tags = append(tags, "pluginid:"+id)
+	}
+	if ref := strings.TrimSpace(a.AlertRef); ref != "" {
+		tags = append(tags, "alertref:"+ref)
+	}
+	if c := strings.TrimSpace(a.Confidence); c != "" {
+		tags = append(tags, "confidence:"+c)
+	}
+	if w := strings.TrimSpace(a.WASCID); w != "" && w != "0" {
+		tags = append(tags, "wascid:"+w)
+	}
+	if n := strings.TrimSpace(a.Count); n != "" {
+		tags = append(tags, "instance-count:"+n)
+	}
+	return tags
+}
+
+// instanceURIs returns every distinct affected URI in report order, falling
+// back to the scan target when the alert carried no instances.
+func instanceURIs(instances []zapInstance, fallback string) []string {
+	seen := make(map[string]struct{}, len(instances))
+	var uris []string
+	for _, inst := range instances {
+		u := strings.TrimSpace(inst.URI)
+		if u == "" {
+			continue
+		}
+		if _, ok := seen[u]; ok {
+			continue
+		}
+		seen[u] = struct{}{}
+		uris = append(uris, u)
+	}
+	if len(uris) == 0 {
+		return []string{fallback}
+	}
+	return uris
+}
+
 // parseReport maps a traditional-json report onto normalized findings. One
-// finding is emitted per alert (not per instance) to bound the gRPC message
-// count; affected URIs ride along as tags.
+// finding is emitted per affected instance (URI) so each lands as its own
+// vulnerability row carrying that URL in affectedUrl. The instance URI travels
+// on MatchedAt, which the worker maps onto Vulnerability.affected_url; alert
+// fields with no Finding column are preserved as tags (never as tags for the
+// affected URL itself, which is a first-class column).
 func parseReport(data []byte, target string) ([]connector.Finding, error) {
 	var rep zapReport
 	if err := json.Unmarshal(data, &rep); err != nil {
@@ -132,46 +187,30 @@ func parseReport(data []byte, target string) ([]connector.Finding, error) {
 				continue
 			}
 
-			matchedAt := target
-			if len(a.Instances) > 0 {
-				if u := strings.TrimSpace(a.Instances[0].URI); u != "" {
-					matchedAt = u
-				}
+			refs := parseReferences(a.Reference)
+			solution := strings.TrimSpace(a.Solution)
+			description := htmlToText(a.Desc)
+			severity := severityFromRiskCode(a.RiskCode)
+			var cwe []string
+			if c := strings.TrimSpace(a.CWEID); c != "" && c != "0" {
+				cwe = []string{c}
 			}
+			baseTags := alertTags(a)
 
-			f := connector.Finding{
-				Name:       name,
-				Severity:   severityFromRiskCode(a.RiskCode),
-				References: parseReferences(a.Reference),
-				Solution:   strings.TrimSpace(a.Solution),
-				MatchedAt:  matchedAt,
-				Host:       host,
-				Timestamp:  time.Now(),
+			for _, uri := range instanceURIs(a.Instances, target) {
+				findings = append(findings, connector.Finding{
+					Name:        name,
+					Severity:    severity,
+					Description: description,
+					References:  refs,
+					Solution:    solution,
+					MatchedAt:   uri,
+					Host:        host,
+					CWEID:       cwe,
+					Tags:        append([]string(nil), baseTags...),
+					Timestamp:   time.Now(),
+				})
 			}
-
-			if cwe := strings.TrimSpace(a.CWEID); cwe != "" && cwe != "0" {
-				f.CWEID = []string{cwe}
-			}
-
-			if id := strings.TrimSpace(a.PluginID); id != "" {
-				f.Tags = append(f.Tags, "pluginid:"+id)
-			}
-			if c := strings.TrimSpace(a.Confidence); c != "" {
-				f.Tags = append(f.Tags, "confidence:"+c)
-			}
-			if n := strings.TrimSpace(a.Count); n != "" {
-				f.Tags = append(f.Tags, "instance-count:"+n)
-			}
-			for i, inst := range a.Instances {
-				if i >= maxInstanceTags {
-					break
-				}
-				if u := strings.TrimSpace(inst.URI); u != "" {
-					f.Tags = append(f.Tags, "affected-uri:"+u)
-				}
-			}
-
-			findings = append(findings, f)
 		}
 	}
 

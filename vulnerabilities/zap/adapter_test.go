@@ -82,8 +82,8 @@ func TestExecute_StreamsFindings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(findings) != 2 {
-		t.Fatalf("expected 2 findings, got %d", len(findings))
+	if len(findings) != 3 {
+		t.Fatalf("expected 3 findings (one per affected URI), got %d", len(findings))
 	}
 	f := findings[0]
 	if f.Name != "Cross Site Scripting (Reflected)" {
@@ -106,8 +106,8 @@ func TestExecute_NonZeroExitWithReportIsSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("nonzero exit with a valid report must not be fatal: %v", err)
 	}
-	if len(findings) != 2 {
-		t.Fatalf("expected 2 findings, got %d", len(findings))
+	if len(findings) != 3 {
+		t.Fatalf("expected 3 findings (one per affected URI), got %d", len(findings))
 	}
 }
 
@@ -116,8 +116,8 @@ func TestExecute_WarningExitWithReportIsSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("exit 2 with a valid report must not be fatal: %v", err)
 	}
-	if len(findings) != 2 {
-		t.Fatalf("expected 2 findings, got %d", len(findings))
+	if len(findings) != 3 {
+		t.Fatalf("expected 3 findings (one per affected URI), got %d", len(findings))
 	}
 }
 
