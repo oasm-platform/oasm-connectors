@@ -7,9 +7,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
+
+// zapStartupGrace covers JVM boot and shutdown around the plan's own budgets.
+const zapStartupGrace = 5 * time.Minute
 
 // zapConfig mirrors manifest.yaml configSchema. Keys are camelCase to match
 // the OASM_CONFIG JSON shape the Worker ships per job.
@@ -52,8 +56,40 @@ func normalizeTarget(raw string) string {
 	return s
 }
 
-// --- Automation Framework plan model ---
+// isFull reports whether the configured scan mode opts into the active scanner.
+func isFull(cfg *zapConfig) bool {
+	return strings.EqualFold(strings.TrimSpace(cfg.ScanMode), "full")
+}
 
+// durations resolves the configured per-job budgets to their effective values.
+func durations(cfg *zapConfig) (spider, active int) {
+	spider, active = cfg.MaxSpiderDuration, cfg.MaxScanDurationInMins
+	if spider <= 0 {
+		spider = 5
+	}
+	if active <= 0 {
+		active = 10
+	}
+	return spider, active
+}
+
+// zapHardTimeout bounds the whole run: the plan's own budgets (spider +
+// passiveScan-wait + optional spiderAjax, all bounded by the spider duration,
+// plus activeScan) and a startup grace. A fixed constant would silently kill
+// any scan configured to outlast it, and a killed ZAP writes no report.
+func zapHardTimeout(cfg *zapConfig) time.Duration {
+	spider, active := durations(cfg)
+	total := 2 * spider
+	if cfg.EnableAjaxSpider {
+		total += spider
+	}
+	if isFull(cfg) {
+		total += active
+	}
+	return time.Duration(total)*time.Minute + zapStartupGrace
+}
+
+// --- Automation Framework plan model ---
 type zapPlan struct {
 	Env  zapEnv   `yaml:"env"`
 	Jobs []zapJob `yaml:"jobs"`
@@ -99,14 +135,7 @@ func buildAutomationPlan(target string, cfg *zapConfig, reportPath string) ([]by
 	if spiderDepth <= 0 {
 		spiderDepth = 5
 	}
-	spiderDuration := cfg.MaxSpiderDuration
-	if spiderDuration <= 0 {
-		spiderDuration = 5
-	}
-	activeDuration := cfg.MaxScanDurationInMins
-	if activeDuration <= 0 {
-		activeDuration = 10
-	}
+	spiderDuration, activeDuration := durations(cfg)
 	threads := cfg.ThreadPerHost
 	if threads <= 0 {
 		threads = 2
@@ -144,6 +173,8 @@ func buildAutomationPlan(target string, cfg *zapConfig, reportPath string) ([]by
 	if cfg.EnableAjaxSpider {
 		plan.Jobs = append(plan.Jobs, zapJob{Type: "spiderAjax", Parameters: map[string]any{
 			"context": "oasm", "url": target,
+			// Without a budget the AJAX spider runs until the hard timeout.
+			"maxDuration": spiderDuration,
 		}})
 	}
 

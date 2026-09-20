@@ -12,7 +12,8 @@ target ─► render automation plan.yaml ─► zap.sh -cmd -silent -autorun pl
 ```
 
 The adapter writes a temp dir containing `plan.yaml`, a fresh ZAP home (`-dir`) and `report.json`,
-runs ZAP to completion, parses `site[].alerts[]`, and streams one finding per alert. The temp dir is
+runs ZAP to completion, Runs `site[].alerts[]`, emitting one finding per distinct instance URI inside each alert (falling back
+to the scan target when an alert carries no instances). The temp dir is
 removed on return so warm-pool reuse stays clean.
 
 ## Scan modes
@@ -22,7 +23,9 @@ removed on return so warm-pool reuse stays clean.
 | `baseline` (default) | spider + passive scanner | Safe: only observes |
 | `full` | + active scanner | **Attacks the target** — use only with permission |
 
-The active scanner is always opt-in. `full` raises the adapter's hard timeout from 15 to 45 minutes.
+The active scanner is always opt-in. The adapter's hard timeout is derived from the plan's own
+budgets (spider + passive wait + optional AJAX + active scan) plus a 5-minute JVM startup grace, so a
+scan is never killed before ZAP can write its report.
 
 ## Configuration
 
@@ -63,13 +66,14 @@ so a reused container sees its own job's config.
 | `Name` | `alert.name` (fallback `alert.alert`) |
 | `Severity` | `riskcode` 0→info, 1→low, 2→medium, 3→high (ZAP has no critical) |
 | `Host` | `site.@host` (fallback target host) |
-| `MatchedAt` | first instance URI |
+| `MatchedAt` | the instance URI (one finding is emitted per distinct instance URI) |
 | `CWEID` | `cweid` (dropped when `0`) |
 | `References` | `<p>` blocks in `reference`, HTML-unescaped |
 | `Solution` | `solution` |
-| `Tags` | `pluginid:`, `confidence:`, `instance-count:`, `affected-uri:` (first 5 instances) |
+| `Tags` | `pluginid:`, `alertref:`, `confidence:`, `wascid:`, `instance-count:` |
 
-The Worker drops `MatchedAt` for the vulnerabilities pipeline, so affected URIs also travel as tags.
+Each affected URI becomes its own finding, so `MatchedAt` carries the concrete URL (the Worker maps
+it onto `Vulnerability.affected_url`); the alert's scalar metadata rides along as tags.
 
 ## Files
 

@@ -13,14 +13,6 @@ import (
 	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 )
 
-// Baseline is spider + passive scan only; full adds the active scanner. The
-// active scanner attacks the target, so its hard timeout is generous while
-// baseline stays tight.
-const (
-	zapBaselineHardTimeout = 15 * time.Minute
-	zapFullHardTimeout     = 45 * time.Minute
-)
-
 // ZapAdapter runs OWASP ZAP via the Automation Framework and streams the
 // alerts from its JSON report as normalized findings.
 type ZapAdapter struct{}
@@ -83,15 +75,11 @@ func (a *ZapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 		return fmt.Errorf("zap: write plan: %w", err)
 	}
 
-	hard := zapBaselineHardTimeout
-	if strings.EqualFold(strings.TrimSpace(cfg.ScanMode), "full") {
-		hard = zapFullHardTimeout
-	}
+	hard := zapHardTimeout(cfg)
 	runCtx, cancel := context.WithTimeout(ctx, hard)
 	defer cancel()
 
 	var stderr limitedWriter
-	stderr.buf = new([]byte)
 	stderr.limit = 4096
 
 	// ZAP needs a writable, isolated home dir; create it up front so -dir never
@@ -111,7 +99,7 @@ func (a *ZapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 	cmd.WaitDelay = 15 * time.Second
 
 	runErr := cmd.Run()
-	tail := strings.TrimSpace(string(*stderr.buf))
+	tail := strings.TrimSpace(string(stderr.buf))
 
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -149,14 +137,14 @@ func (a *ZapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 
 // limitedWriter buffers stderr, keeping at most `limit` bytes.
 type limitedWriter struct {
-	buf   *[]byte
+	buf   []byte
 	limit int
 }
 
 func (w *limitedWriter) Write(p []byte) (int, error) {
-	*w.buf = append(*w.buf, p...)
-	if len(*w.buf) > w.limit {
-		*w.buf = (*w.buf)[len(*w.buf)-w.limit:]
+	w.buf = append(w.buf, p...)
+	if len(w.buf) > w.limit {
+		w.buf = w.buf[len(w.buf)-w.limit:]
 	}
 	return len(p), nil
 }

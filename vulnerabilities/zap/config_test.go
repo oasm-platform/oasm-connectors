@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -120,8 +121,33 @@ func TestBuildAutomationPlan_FullAddsActiveScan(t *testing.T) {
 
 func TestBuildAutomationPlan_AjaxSpiderOptIn(t *testing.T) {
 	plan := parsePlan(t, "https://example.com", &zapConfig{EnableAjaxSpider: true})
-	if _, ok := jobByType(plan, "spiderAjax"); !ok {
-		t.Error("enableAjaxSpider=true should add a spiderAjax job")
+	ajax, ok := jobByType(plan, "spiderAjax")
+	if !ok {
+		t.Fatal("enableAjaxSpider=true should add a spiderAjax job")
+	}
+	if ajax.Parameters["maxDuration"] != 5 {
+		t.Errorf("ajax maxDuration = %v, want 5 (default spider duration)", ajax.Parameters["maxDuration"])
+	}
+}
+
+// The hard timeout must track the configured budgets, otherwise a scan with a
+// long budget is killed before ZAP writes its report.
+func TestZapHardTimeout_TracksBudgets(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  *zapConfig
+		want time.Duration
+	}{
+		{"defaults baseline", &zapConfig{}, 15 * time.Minute},
+		{"defaults full", &zapConfig{ScanMode: "full"}, 25 * time.Minute},
+		{"long spider", &zapConfig{ScanMode: "full", MaxSpiderDuration: 25}, 65 * time.Minute},
+		{"long active", &zapConfig{ScanMode: "full", MaxScanDurationInMins: 60}, 75 * time.Minute},
+		{"ajax", &zapConfig{EnableAjaxSpider: true}, 20 * time.Minute},
+	}
+	for _, c := range cases {
+		if got := zapHardTimeout(c.cfg); got != c.want {
+			t.Errorf("%s: zapHardTimeout = %s, want %s", c.name, got, c.want)
+		}
 	}
 }
 
