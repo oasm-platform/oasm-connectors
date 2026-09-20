@@ -223,6 +223,10 @@ func TestNormalizeTarget(t *testing.T) {
 		{"   ", ""},
 		{"http://EXAMPLE.com:8080", "EXAMPLE.com"},
 		{"example.com", "example.com"},
+		// userinfo and IPv6 literals must not be truncated at the first colon
+		{"http://user:pw@example.com/x", "example.com"},
+		{"https://[2001:db8::1]:8443/x", "2001:db8::1"},
+		{"[::1]:8080", "::1"},
 	}
 	for _, tc := range cases {
 		if got := normalizeTarget(tc.in); got != tc.want {

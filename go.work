@@ -9,4 +9,5 @@ use (
 	./vulnerabilities/nessus
 	./vulnerabilities/nuclei
 	./vulnerabilities/wpscan
+	./vulnerabilities/zap
 )

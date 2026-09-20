@@ -3,6 +3,7 @@ module github.com/oasm-platform/oasm-connectors/vulnerabilities/nessus
 go 1.26
 
 require (
+	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/oasm-platform/oasm-connectors/sdk v0.0.0
 	github.com/tencat-dev/nessus-client-go v0.1.5-0.20260906084052-775e34ddb8db
 )
@@ -13,7 +14,6 @@ require (
 	github.com/bytedance/sonic/loader v0.5.1 // indirect
 	github.com/cloudwego/base64x v0.1.7 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hashicorp/go-retryablehttp v0.7.8 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	golang.org/x/arch v0.29.0 // indirect

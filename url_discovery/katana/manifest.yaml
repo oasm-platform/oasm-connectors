@@ -72,7 +72,7 @@ configSchema:
       description: 'Maximum requests per second (katana -rl).'
     retries:
       type: integer
-      minimum: 0
+      minimum: 1
       default: 1
       title: Retries
       description: 'Number of request retries (katana -retry).'

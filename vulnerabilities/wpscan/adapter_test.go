@@ -347,30 +347,6 @@ func TestWpscanExecute_MapsCvssAndSolution(t *testing.T) {
 	}
 }
 
-// TestRealFixture_ParsesCapturedScan parses the captured real WP 5.4.2 scan
-// (exit 0, no API token) through the structs and asserts key fields. Skips when
-// the fixture is absent so the suite stays portable.
-func TestRealFixture_ParsesCapturedScan(t *testing.T) {
-	const path = `C:/Users/l1ttp/AppData/Local/Temp/opencode/vuln2.json`
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Skipf("real fixture not available: %v", err)
-	}
-	var parsed wpscanOutput
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		t.Fatalf("unmarshal real fixture: %v", err)
-	}
-	if parsed.TargetURL == "" {
-		t.Fatalf("target_url not parsed from real fixture: %+v", parsed)
-	}
-	if parsed.Version == nil || parsed.Version.Number != "5.4.2" {
-		t.Fatalf("core version not parsed: %+v", parsed.Version)
-	}
-	if parsed.ScanAborted != "" {
-		t.Fatalf("unexpected scan_aborted: %q", parsed.ScanAborted)
-	}
-}
-
 // --- severity heuristic (no-CVSS) tests ---
 
 func TestResolveSeverity_ScoreBandsUnaffected(t *testing.T) {

@@ -1,12 +1,16 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/tencat-dev/nessus-client-go/nessus"
 )
 
@@ -70,13 +74,32 @@ func loadNessusConfig() (*nessusConfig, error) {
 	return cfg, nil
 }
 
+// nessusHTTPTimeout bounds a single Nessus API call. The client dependency
+// ships http.Client.Timeout=0 and takes no context, so without this a stalled
+// Nessus server would block the connector until the container is killed.
+const nessusHTTPTimeout = 60 * time.Second
+
 // newNessusClient builds a client that authenticates every request with the
 // API access/secret key pair (X-ApiKeys header), then gates on
 // ServerStatus()=="ready" before returning it.
 func newNessusClient(cfg *nessusConfig) (*nessus.Client, error) {
+	// The dependency installs its own retryablehttp client with
+	// InsecureSkipVerify and no timeout; supplying our own keeps the timeout
+	// while preserving today's TLS behaviour (on-prem Nessus commonly serves a
+	// self-signed certificate).
+	// ponytail: no CA knob yet — expose a cert/config option when the SDK or
+	// the connector config grows one.
+	req := retryablehttp.NewClient()
+	req.HTTPClient.Timeout = nessusHTTPTimeout
+	req.HTTPClient.Transport = &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // #nosec G402 — see above
+	}
+
 	client, err := nessus.NewClient(
 		nessus.WithAPIURL(cfg.URL),
 		nessus.WithAPIKey(cfg.AccessKey, cfg.SecretKey),
+		nessus.WithRequest(req),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("nessus: create client: %w", err)

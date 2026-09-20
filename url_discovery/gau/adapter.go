@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"net/url"
 	"strings"
 	"time"
 
@@ -46,6 +47,13 @@ func (a GauAdapter) Execute(ctx context.Context, inputs map[string]any, out chan
 	target := normalizeTarget(raw)
 	if target == "" {
 		return fmt.Errorf("target required")
+	}
+	// The target is the last positional argv element and gau parses flags
+	// interspersed, so a target starting with "-" would be swallowed as a gau
+	// flag (e.g. "--o=out.txt" redirects output to a file) and the run would
+	// report a silent zero-finding success.
+	if strings.HasPrefix(target, "-") {
+		return fmt.Errorf("gau: invalid target %q", raw)
 	}
 
 	bin := os.Getenv("GAU_BIN")
@@ -131,11 +139,25 @@ func normalizeTarget(raw string) string {
 	if s == "" {
 		return ""
 	}
+	// net/url resolves userinfo and IPv6 literals correctly
+	// ("http://user:pw@example.com/x" -> example.com, "[::1]:8080" -> ::1);
+	// a bare "host:port" is not a URL, so it falls through to the manual strip.
+	if u, err := url.Parse(s); err == nil && u.Host != "" {
+		return u.Hostname()
+	}
+	if i := strings.LastIndex(s, "@"); i >= 0 {
+		s = s[i+1:]
+	}
 	if i := strings.Index(s, "://"); i >= 0 {
 		s = s[i+3:]
 	}
 	if i := strings.IndexAny(s, "/?#"); i >= 0 {
 		s = s[:i]
+	}
+	if strings.HasPrefix(s, "[") {
+		if i := strings.Index(s, "]"); i >= 0 {
+			return s[1:i]
+		}
 	}
 	if i := strings.Index(s, ":"); i >= 0 {
 		s = s[:i]

@@ -176,6 +176,9 @@ func (r *Runtime) Run(ctx context.Context) error {
 		case msg := <-msgCh:
 			switch m := msg.Message.(type) {
 			case *pb.WorkerMessage_Execute:
+				if m.Execute == nil {
+					continue
+				}
 				// Execution runs concurrently with the recv loop so a later
 				// Cancel can abort it via the cancel map. A single stream
 				// serves executions SEQUENTIALLY (warm-pool reuse, Phase 2);
@@ -187,12 +190,16 @@ func (r *Runtime) Run(ctx context.Context) error {
 					return ctx.Err()
 				}
 				go func() {
-					err := r.handleExecute(ctx, stream, m.Execute, inputs)
-					<-execGate
-					execErrCh <- err
+					// The gate must be released on EVERY exit path: a stuck
+					// gate would wedge every later execution on this stream.
+					defer func() { <-execGate }()
+					execErrCh <- r.handleExecute(ctx, stream, m.Execute, inputs)
 				}()
 
 			case *pb.WorkerMessage_Cancel:
+				if m.Cancel == nil {
+					continue
+				}
 				r.logger.Infof("cancel execution_id=%s", m.Cancel.ExecutionId)
 				r.cancelExecution(m.Cancel.ExecutionId)
 			}
@@ -313,9 +320,18 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	out := make(chan connector.Finding, 128)
 	errCh := make(chan error, 1)
 
+	// The adapter runs in its own goroutine; a panic there would otherwise kill
+	// the whole process (warm-pool container survives to serve the next job).
+	// close(out) must still run so the streaming loop above terminates.
 	go func() {
+		defer close(out)
+		defer func() {
+			if p := recover(); p != nil {
+				r.logger.Errorf("adapter panic: execution=%s job=%s tool=%s panic=%v", exec.ExecutionId, exec.JobId, exec.Tool, p)
+				errCh <- fmt.Errorf("retryable: adapter panic: %v", p)
+			}
+		}()
 		errCh <- r.conn.Execute(execCtx, inputs, out)
-		close(out)
 	}()
 
 	// Stream results — sends are serialized inside this goroutine; each send
@@ -329,6 +345,7 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	// silent drops — findings either ship or fail loudly.
 	n := 0
 	var invalidErr error
+	var sendErr error
 	for f := range out {
 		if err := f.Validate(); err != nil {
 			invalidErr = fmt.Errorf("fatal: finding %d invalid: %w", n, err)
@@ -349,14 +366,21 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 				r.logger.Infof("result send aborted: execution=%s err=%v", exec.ExecutionId, err)
 				break
 			}
+			// A failed send must still reach the worker as a Done error, not
+			// as a silently torn-down stream: unblock the adapter, then fall
+			// through to the Done path.
 			r.logger.Errorf("send failed: execution=%s err=%v", exec.ExecutionId, err)
-			return fmt.Errorf("retryable: %w", err)
+			sendErr = fmt.Errorf("retryable: %w", err)
+			cancel()
+			break
 		}
 		n++
 	}
 
 	// Wait for the adapter; bounded so an adapter that ignores cancellation
-	// cannot hang the stream forever.
+	// cannot hang the stream forever. Always awaited: the next execution must
+	// not start while this one is still running (the exec gate serializes
+	// process-global state such as the restored OASM_CONFIG).
 	var adapterErr error
 	select {
 	case adapterErr = <-errCh:
@@ -366,9 +390,13 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	}
 
 	// An invalid finding outranks any adapter error: it is why the stream
-	// stopped, and the worker must see it on the Done path.
-	if invalidErr != nil {
+	// stopped, and the worker must see it on the Done path. A send failure
+	// outranks the cancellation error it caused.
+	switch {
+	case invalidErr != nil:
 		adapterErr = invalidErr
+	case sendErr != nil:
+		adapterErr = sendErr
 	}
 
 	// Send Done
@@ -400,6 +428,7 @@ func toProtoFinding(f connector.Finding) *pb.Finding {
 	out := &pb.Finding{
 		Name:        f.Name,
 		Severity:    f.Severity,
+		Description: f.Description,
 		Tags:        f.Tags,
 		References:  f.References,
 		CveId:       f.CVEID,
@@ -412,15 +441,14 @@ func toProtoFinding(f connector.Finding) *pb.Finding {
 		Host:        f.Host,
 		Ip:          f.IP,
 
-		Description: f.Description,
-		Synopsis:    f.Synopsis,
-		Ports:       f.Ports,
-		Authors:     f.Authors,
-		VprScore:    f.VPRScore,
-		BidId:       f.BIDID,
-		CeaId:       f.CEAID,
-		Iava:        f.IAVAID,
-		Confidence:  f.Confidence,
+		Synopsis:   f.Synopsis,
+		Ports:      f.Ports,
+		Authors:    f.Authors,
+		VprScore:   f.VPRScore,
+		BidId:      f.BIDID,
+		CeaId:      f.CEAID,
+		Iava:       f.IAVAID,
+		Confidence: f.Confidence,
 	}
 	if !f.Timestamp.IsZero() {
 		out.Timestamp = timestamppb.New(f.Timestamp)

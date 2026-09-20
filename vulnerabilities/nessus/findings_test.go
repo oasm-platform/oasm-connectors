@@ -981,3 +981,10 @@ func TestFinding_ToSDKFindingMatchedAtFallsBackToHost(t *testing.T) {
 		t.Errorf("MatchedAt = %q, want host fallback", got)
 	}
 }
+
+func TestToSDKFinding_MapsDescription(t *testing.T) {
+	f := &finding{PluginName: "N", Severity: "high", Description: "details"}
+	if got := f.toSDKFinding(); got.Description != "details" {
+		t.Errorf("Description = %q, want details", got.Description)
+	}
+}

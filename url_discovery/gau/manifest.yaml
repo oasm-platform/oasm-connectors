@@ -52,7 +52,7 @@ configSchema:
       description: 'Per-request timeout in seconds (gau --timeout).'
     retries:
       type: integer
-      minimum: 0
+      minimum: 1
       default: 5
       title: Retries
       description: 'Provider request retries (gau --retries).'

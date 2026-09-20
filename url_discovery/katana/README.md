@@ -4,7 +4,7 @@ Runs [projectdiscovery/katana](https://github.com/projectdiscovery/katana) 1.7.0
 
 ## Requirements
 
-- Go 1.26+, Docker, Worker reachable at `WORKER_URL`
+- Go 1.26+, Docker, Worker reachable at `WORKER_GRPC_ADDR`
 - Tool binary `katana` compiled from source and pinned to `v1.7.0` in the image builder stage
 - **Network egress required at scan time**: katana fetches the target site directly.
 - **Writable `$HOME`**: katana writes `$HOME/.config/katana/{field-config,form-config}.yaml` on every run. The image sets `ENV HOME=/home/connector` (owned by uid 10001) for this reason; manual runs as a read-only user can log config-write errors.
@@ -15,8 +15,9 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 
 | Parameter | env | default | mandatory | description |
 |-----------|-----|---------|-----------|-------------|
-| Worker URL | `WORKER_URL` | `http://localhost:50051` | yes | Worker gRPC endpoint |
+| Worker address | `WORKER_GRPC_ADDR` | `localhost:50051` | yes | Worker gRPC endpoint (missing → fatal) |
 | Worker token | `WORKER_TOKEN` | `` | no | Auth token if Worker requires it |
+| Execution ID | `EXECUTION_ID` | — | yes | Job identity; the Worker routes `ExecuteJob` by it |
 | Target | `inputs.target` | — | yes | Domain (or URL): scheme/path stripped to the host |
 | katana binary | `KATANA_BIN` | `katana` | no | Override path to the katana binary |
 | Config profile | `OASM_CONFIG` | `` | no | JSON config profile (see below) |
@@ -78,7 +79,8 @@ config:
 
 ```bash
 docker build -t ghcr.io/oasm-platform/connector-katana:1.7.0 -f url_discovery/katana/Dockerfile .
-docker run --rm -e WORKER_URL=http://worker:50051 ghcr.io/oasm-platform/connector-katana:1.7.0
+docker run --rm -e WORKER_GRPC_ADDR=worker:50051 -e EXECUTION_ID=job-1 \
+  ghcr.io/oasm-platform/connector-katana:1.7.0
 ```
 
 ### Manual

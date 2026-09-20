@@ -45,6 +45,9 @@ type fakeConnectorServer struct {
 	// mid-execution, so client sends must start failing. 0 keeps the stream
 	// open until Done (default).
 	resultsBeforeClose int
+	// sendNilCancel: send a Cancel message with a nil Cancel field right after
+	// the ExecuteJob — a malformed message must not panic the runtime.
+	sendNilCancel bool
 }
 
 func newFakeConnectorServer(exec *pb.ExecuteJob) *fakeConnectorServer {
@@ -69,6 +72,11 @@ func (s *fakeConnectorServer) Connect(stream pb.ConnectorService_ConnectServer) 
 	}
 	if s.execReq != nil {
 		if err := stream.Send(&pb.WorkerMessage{Message: &pb.WorkerMessage_Execute{Execute: s.execReq}}); err != nil {
+			return err
+		}
+	}
+	if s.sendNilCancel {
+		if err := stream.Send(&pb.WorkerMessage{Message: &pb.WorkerMessage_Cancel{}}); err != nil {
 			return err
 		}
 	}
@@ -157,6 +165,83 @@ func waitRegisterCh(t *testing.T, ch <-chan *pb.Register) *pb.Register {
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for Register")
 		return nil
+	}
+}
+
+// panicAdapter panics inside Execute: the runtime must contain it (report the
+// execution as failed) instead of letting the panic kill the whole container.
+type panicAdapter struct{}
+
+func (a *panicAdapter) Validate(ctx context.Context, inputs map[string]any) error { return nil }
+func (a *panicAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
+	panic("boom")
+}
+
+func TestRunAdapterPanicFailsExecutionNotProcess(t *testing.T) {
+	t.Setenv("WORKER_GRPC_ADDR", "")
+	t.Setenv("EXECUTION_ID", "exec-panic")
+
+	srv := newFakeConnectorServer(&pb.ExecuteJob{
+		ExecutionId: "exec-panic",
+		JobId:       "job-panic",
+		Tool:        "nuclei",
+	})
+	addr := startFakeServer(t, srv)
+	t.Setenv("WORKER_GRPC_ADDR", addr)
+
+	rt := New(connector.New(&panicAdapter{}))
+	_, errCh := runRuntime(t, rt)
+	waitRegister(t, srv)
+
+	// The panicking execution is reported as a failed run; the runtime (and
+	// therefore the container) stays alive for the next job.
+	select {
+	case done := <-srv.doneCh:
+		if !strings.Contains(done.Error, "adapter panic") {
+			t.Fatalf("Done.Error = %q, want it to report the adapter panic", done.Error)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for Done after an adapter panic")
+	}
+
+	// Run exits cleanly (the worker closes the stream after Done) — never with
+	// an error that tears the stream down because of the panic.
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("Run returned %v, want nil after a contained adapter panic", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+// A Cancel message with a nil Cancel field is malformed input, not a crash:
+// the runtime must ignore it and still complete the execution.
+func TestRunIgnoresNilCancelField(t *testing.T) {
+	t.Setenv("WORKER_GRPC_ADDR", "")
+	t.Setenv("EXECUTION_ID", "exec-nil-cancel")
+
+	srv := newFakeConnectorServer(&pb.ExecuteJob{
+		ExecutionId: "exec-nil-cancel",
+		JobId:       "job-nil-cancel",
+		Tool:        "nuclei",
+	})
+	srv.sendNilCancel = true
+	addr := startFakeServer(t, srv)
+	t.Setenv("WORKER_GRPC_ADDR", addr)
+
+	adapter := &fakeAdapter{chunk: &connector.Finding{Name: "ok", Severity: "info", MatchedAt: "https://example.com"}}
+	rt := New(connector.New(adapter))
+	_, _ = runRuntime(t, rt)
+	waitRegister(t, srv)
+
+	select {
+	case done := <-srv.doneCh:
+		if done.Error != "" {
+			t.Errorf("Done.Error = %q, want empty (nil Cancel must be a no-op)", done.Error)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for Done after a nil Cancel message")
 	}
 }
 

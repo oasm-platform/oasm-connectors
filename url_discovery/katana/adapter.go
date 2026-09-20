@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -57,6 +58,12 @@ func (a KatanaAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 	target := normalizeTarget(raw)
 	if target == "" {
 		return fmt.Errorf("target required")
+	}
+	// katana's -u is a comma-separated list (string[]): a comma in the target
+	// would silently add a second host and crawl outside the registered
+	// domain the connector promises to stay in.
+	if strings.Contains(target, ",") {
+		return fmt.Errorf("katana: invalid target %q", raw)
 	}
 
 	bin := os.Getenv("KATANA_BIN")
@@ -132,11 +139,23 @@ func (a KatanaAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 		case <-ctx.Done():
 			_ = cmd.Wait()
 			return ctx.Err()
+		case <-runCtx.Done():
+			// Hard timeout: kill katana and report the timeout instead of
+			// blocking on a send nobody will read.
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+			return fmt.Errorf("katana: timed out after %s", katanaHardTimeout)
 		case out <- f:
 			emitted++
 		}
 	}
 	scanErr := scanner.Err()
+	if scanErr != nil {
+		// Nobody is draining stdout any more: without a kill katana blocks on
+		// the pipe and cmd.Wait would hang until the hard timeout, hiding the
+		// real read error.
+		_ = cmd.Process.Kill()
+	}
 
 	waitErr := cmd.Wait()
 	tail := strings.TrimSpace(string(*stderr.buf))
@@ -170,11 +189,25 @@ func normalizeTarget(raw string) string {
 	if s == "" {
 		return ""
 	}
+	// net/url resolves userinfo and IPv6 literals correctly
+	// ("http://user:pw@example.com/x" -> example.com, "[::1]:8080" -> ::1);
+	// a bare "host:port" is not a URL, so it falls through to the manual strip.
+	if u, err := url.Parse(s); err == nil && u.Host != "" {
+		return u.Hostname()
+	}
+	if i := strings.LastIndex(s, "@"); i >= 0 {
+		s = s[i+1:]
+	}
 	if i := strings.Index(s, "://"); i >= 0 {
 		s = s[i+3:]
 	}
 	if i := strings.IndexAny(s, "/?#"); i >= 0 {
 		s = s[:i]
+	}
+	if strings.HasPrefix(s, "[") {
+		if i := strings.Index(s, "]"); i >= 0 {
+			return s[1:i]
+		}
 	}
 	if i := strings.Index(s, ":"); i >= 0 {
 		s = s[:i]

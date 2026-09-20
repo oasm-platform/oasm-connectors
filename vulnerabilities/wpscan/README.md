@@ -4,7 +4,7 @@ Runs [wpscanteam/wpscan](https://github.com/wpscanteam/wpscan) 3.8.27 via the OA
 
 ## Requirements
 
-- Go 1.26+, Docker, Worker reachable at `WORKER_URL`
+- Go 1.26+, Docker, Worker reachable at `WORKER_GRPC_ADDR`
 - Tool binary `wpscan` bundled in image via multi-stage `COPY --from=wpscanteam/wpscan:3.8.27`
 
 This connector is its own Go module. All dependencies, including the SDK (pulled in via a local `replace` to `../../sdk`), are declared in this directory's `go.mod`, so run build and test commands from here.
@@ -13,8 +13,9 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 
 | Parameter | env | default | mandatory | description |
 |-----------|-----|---------|-----------|-------------|
-| Worker URL | `WORKER_URL` | `http://localhost:50051` | yes | Worker gRPC endpoint |
+| Worker address | `WORKER_GRPC_ADDR` | `localhost:50051` | yes | Worker gRPC endpoint (missing → fatal) |
 | Worker token | `WORKER_TOKEN` | `` | no | Auth token if Worker requires it |
+| Execution ID | `EXECUTION_ID` | — | yes | Job identity; the Worker routes `ExecuteJob` by it |
 | Target | `inputs.target` | — | yes | Scan target: `http(s)://` URL or bare domain |
 | WPScan binary | `WPSCAN_BIN` | `wpscan` | no | Override path to wpscan binary |
 
@@ -36,7 +37,8 @@ inputs:
 
 ```bash
 docker build -t ghcr.io/oasm-platform/connector-wpscan:3.8.27 -f vulnerabilities/wpscan/Dockerfile .
-docker run --rm -e WORKER_URL=http://worker:50051 ghcr.io/oasm-platform/connector-wpscan:3.8.27
+docker run --rm -e WORKER_GRPC_ADDR=worker:50051 -e EXECUTION_ID=job-1 \
+  ghcr.io/oasm-platform/connector-wpscan:3.8.27
 ```
 
 ### Manual

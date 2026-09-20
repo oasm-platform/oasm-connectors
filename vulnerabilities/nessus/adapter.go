@@ -76,6 +76,22 @@ func (a *NessusAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 	}
 	scanID := resp.Scan.ID
 
+	// Cancellation/timeout tears the container down, so no later cleanup would
+	// ever run: kill the running scan and delete it here, otherwise it lingers
+	// on the server and keeps holding a license. Ordinary failures keep the
+	// scan for debugging (retention-on-failure, see the delete below).
+	defer func() {
+		if ctx.Err() == nil {
+			return
+		}
+		if err := client.ScansKill(scanID); err != nil {
+			log.Printf("nessus: cleanup kill failed scan=%d: %v", scanID, err)
+		}
+		if err := client.ScansDelete(scanID); err != nil {
+			log.Printf("nessus: cleanup delete failed scan=%d: %v", scanID, err)
+		}
+	}()
+
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
@@ -97,7 +113,11 @@ poll:
 			case nessus.ScanCompleted:
 				details = d
 				break poll
-			case nessus.ScanAborted, nessus.TypeCanceled, nessus.ScanEmpty, nessus.TypeStopping:
+			case nessus.ScanEmpty:
+				// "empty" = the scan finished with no results: a valid outcome,
+				// not a failure. details stays nil → zero findings.
+				break poll
+			case nessus.ScanAborted, nessus.TypeCanceled, nessus.TypeStopping:
 				return fmt.Errorf("scan %d ended with status %s", scanID, d.Info.Status)
 			default:
 				// still running; keep polling
