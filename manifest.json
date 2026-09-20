@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-19T10:21:43.3674974Z",
+  "generatedAt": "2026-09-20T03:04:46.8298793Z",
   "connectors": [
     {
       "name": "Nessus",
@@ -664,7 +664,7 @@
           "retries": {
             "default": 5,
             "description": "Provider request retries (gau --retries).",
-            "minimum": 0,
+            "minimum": 1,
             "title": "Retries",
             "type": "integer"
           },
@@ -854,7 +854,7 @@
           "retries": {
             "default": 1,
             "description": "Number of request retries (katana -retry).",
-            "minimum": 0,
+            "minimum": 1,
             "title": "Retries",
             "type": "integer"
           },

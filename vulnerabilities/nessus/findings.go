@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sort"
@@ -209,6 +210,17 @@ func collectFindings(ctx context.Context, client *nessus.Client, r *nessus.Scans
 	sem := make(chan struct{}, pluginWorkers)
 	var wg sync.WaitGroup
 
+	// A failed plugin fetch must not be swallowed: the scan would report
+	// success while silently missing findings. Collect the failures and fail
+	// the execution instead.
+	var fetchMu sync.Mutex
+	var fetchErrs []error
+	recordFetchErr := func(err error) {
+		fetchMu.Lock()
+		fetchErrs = append(fetchErrs, err)
+		fetchMu.Unlock()
+	}
+
 	for i, v := range r.Vulnerabilities {
 		select {
 		case <-ctx.Done():
@@ -231,12 +243,14 @@ func collectFindings(ctx context.Context, client *nessus.Client, r *nessus.Scans
 			)
 			if err != nil {
 				log.Printf("nessus: plugin %d: %v", vuln.PluginID, err)
+				recordFetchErr(fmt.Errorf("plugin %d: %w", vuln.PluginID, err))
 				return
 			}
 
 			f, err := mapPluginOutput(vuln, output, target)
 			if err != nil {
 				log.Printf("nessus: plugin %d map: %v", vuln.PluginID, err)
+				recordFetchErr(fmt.Errorf("plugin %d: %w", vuln.PluginID, err))
 				return
 			}
 
@@ -245,6 +259,10 @@ func collectFindings(ctx context.Context, client *nessus.Client, r *nessus.Scans
 	}
 
 	wg.Wait()
+
+	if len(fetchErrs) > 0 {
+		return fmt.Errorf("nessus: %d of %d plugin outputs failed: %w", len(fetchErrs), len(r.Vulnerabilities), errors.Join(fetchErrs...))
+	}
 
 	// Collect non-nil results and sort by PluginID
 	var collected []*finding

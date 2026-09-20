@@ -4,7 +4,7 @@ Runs [lc/gau](https://github.com/lc/gau) 2.2.4 (GetAllUrls) via the OASM Worker 
 
 ## Requirements
 
-- Go 1.26+, Docker, Worker reachable at `WORKER_URL`
+- Go 1.26+, Docker, Worker reachable at `WORKER_GRPC_ADDR`
 - Tool binary `gau` compiled from source and pinned to `v2.2.4` in the image builder stage
 - **Network egress required at scan time**: gau queries public provider APIs (Wayback Machine, Common Crawl, AlienVault OTX, urlscan.io). No API keys are needed (a urlscan.io key is optional upstream).
 
@@ -14,8 +14,9 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 
 | Parameter | env | default | mandatory | description |
 |-----------|-----|---------|-----------|-------------|
-| Worker URL | `WORKER_URL` | `http://localhost:50051` | yes | Worker gRPC endpoint |
+| Worker address | `WORKER_GRPC_ADDR` | `localhost:50051` | yes | Worker gRPC endpoint (missing → fatal) |
 | Worker token | `WORKER_TOKEN` | `` | no | Auth token if Worker requires it |
+| Execution ID | `EXECUTION_ID` | — | yes | Job identity; the Worker routes `ExecuteJob` by it |
 | Target | `inputs.target` | — | yes | Domain (or URL): scheme/path stripped to the host |
 | gau binary | `GAU_BIN` | `gau` | no | Override path to gau binary |
 | Config profile | `OASM_CONFIG` | `` | no | JSON config profile (see below) |
@@ -55,7 +56,8 @@ config:
 
 ```bash
 docker build -t ghcr.io/oasm-platform/connector-gau:2.2.4 -f url_discovery/gau/Dockerfile .
-docker run --rm -e WORKER_URL=http://worker:50051 ghcr.io/oasm-platform/connector-gau:2.2.4
+docker run --rm -e WORKER_GRPC_ADDR=worker:50051 -e EXECUTION_ID=job-1 \
+  ghcr.io/oasm-platform/connector-gau:2.2.4
 ```
 
 ### Manual
