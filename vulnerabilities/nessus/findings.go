@@ -36,6 +36,7 @@ type finding struct {
 	CVEIDs           []string `json:"cve_ids,omitempty"`
 	CWEIDs           []string `json:"cwe_ids,omitempty"`
 	BIDIDs           []string `json:"bid_ids,omitempty"`
+	CEAIDs           []string `json:"cea_ids,omitempty"`
 	IAVAIDs          []string `json:"iava_ids,omitempty"`
 	PublicationDate  string   `json:"publication_date,omitempty"`
 	ModificationDate string   `json:"modification_date,omitempty"`
@@ -155,8 +156,10 @@ func mapPluginOutput(v *nessus.VulnerabilityResource, output *nessus.ScansPlugin
 			f.CVEIDs = append(f.CVEIDs, vals...)
 		case "cwe":
 			f.CWEIDs = append(f.CWEIDs, vals...)
-		case "bid", "cae":
+		case "bid":
 			f.BIDIDs = append(f.BIDIDs, vals...)
+		case "cae":
+			f.CEAIDs = append(f.CEAIDs, vals...)
 		case "iava":
 			f.IAVAIDs = append(f.IAVAIDs, vals...)
 		}
@@ -180,20 +183,40 @@ func mapPluginOutput(v *nessus.VulnerabilityResource, output *nessus.ScansPlugin
 // toSDKFinding converts the internal finding model to the normalized SDK
 // Finding streamed on the connector channel.
 func (f *finding) toSDKFinding() connector.Finding {
-	return connector.Finding{
-		Name:        f.PluginName,
-		Severity:    f.Severity,
-		Description: f.Description,
-		References:  f.References,
-		CVEID:       f.CVEIDs,
-		CWEID:       f.CWEIDs,
-		CVSSScore:   f.CVSSScore,
-		CVSSMetrics: f.CVSSVector,
-		EPSSScore:   f.EPSSScore,
-		Solution:    f.Solution,
-		Host:        f.Host,
-		Timestamp:   time.Now(),
+	matchedAt := f.AffectedURL
+	if matchedAt == "" {
+		matchedAt = f.Host
 	}
+	return connector.Finding{
+		Name:             f.PluginName,
+		Severity:         f.Severity,
+		References:       f.References,
+		CVEID:            f.CVEIDs,
+		CWEID:            f.CWEIDs,
+		CVSSScore:        f.CVSSScore,
+		CVSSMetrics:      f.CVSSVector,
+		VPRScore:         f.VPRScore,
+		EPSSScore:        f.EPSSScore,
+		Solution:         f.Solution,
+		Description:      f.Description,
+		Synopsis:         f.Synopsis,
+		Ports:            f.Ports,
+		BIDID:            f.BIDIDs,
+		CEAID:            f.CEAIDs,
+		IAVAID:           f.IAVAIDs,
+		MatchedAt:        matchedAt,
+		Host:             f.Host,
+		Timestamp:        time.Now(),
+		PublicationDate:  parsePluginDate(f.PublicationDate),
+		ModificationDate: parsePluginDate(f.ModificationDate),
+	}
+}
+
+func parsePluginDate(raw string) time.Time {
+	if ts, err := time.Parse(time.RFC3339, raw); err == nil {
+		return ts
+	}
+	return time.Time{}
 }
 
 func collectFindings(ctx context.Context, client *nessus.Client, r *nessus.ScansDetailsResponse, target string, out chan<- connector.Finding) error {

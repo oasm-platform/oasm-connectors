@@ -1,0 +1,73 @@
+name: Acunetix
+slug: acunetix
+version: 0.1.0
+image: ghcr.io/oasm-platform/connector-acunetix:0.1.0
+author: 'oasm'
+pricingTier: [free]
+homepage: 'https://www.acunetix.com'
+repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
+supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
+shortDescription: 'Acunetix web vulnerability scanner'
+description: 'Connects to an Acunetix instance, runs a scan against a target, and streams the discovered vulnerabilities back to the Worker.'
+capabilities: [vulnerabilities]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+      title: Scan target
+      description: 'Target URL or hostname to scan.'
+      examples: [https://example.com]
+      ui:placeholder: 'https://example.com'
+  additionalProperties: false
+configSchema:
+  type: object
+  required: [url, apiKey]
+  properties:
+    url:
+      type: string
+      format: uri
+      title: Acunetix URL
+      description: 'Base URL of the Acunetix instance (https://host:3443 for on-premises, https://app.invicti.com for Acunetix Online). /api/v1 is appended when absent.'
+      examples: [https://acunetix.local:3443]
+      ui:placeholder: 'https://acunetix.local:3443'
+    apiKey:
+      type: string
+      title: API key
+      description: 'Acunetix API key sent in the X-Auth header.'
+      ui:widget: password
+      ui:placeholder: 'Enter API key'
+    profileId:
+      type: string
+      title: Scanning profile ID
+      description: 'Scan type (profile) UUID. Defaults to Full Scan.'
+      default: '11111111-1111-1111-1111-111111111111'
+      ui:placeholder: '11111111-1111-1111-1111-111111111111'
+    criticality:
+      type: integer
+      title: Target criticality
+      description: 'Target business criticality: 30 Critical, 20 High, 10 Normal, 0 Low.'
+      enum: [30, 20, 10, 0]
+      default: 10
+    targetDescription:
+      type: string
+      title: Target description
+      description: 'Description stored on the Acunetix target created for this scan. Defaults to oasm-scan.'
+      ui:placeholder: 'oasm-scan'
+    disableTlsChecks:
+      type: boolean
+      title: Disable TLS checks
+      description: 'Skip TLS certificate verification (required for the self-signed certificate Acunetix ships by default).'
+    maxScanTime:
+      type: integer
+      title: Max scan time (minutes)
+      description: 'Maximum scan duration in minutes; 0 uses the Acunetix default.'
+      minimum: 0
+      default: 0
+  additionalProperties: false
+resourceDefaults:
+  cpu: 500m
+  memory: 512Mi
+  timeoutSeconds: 900

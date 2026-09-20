@@ -271,6 +271,9 @@ func resultEventToFinding(event *nucleiOutput.ResultEvent) (connector.Finding, e
 	if event.Info.Reference != nil {
 		f.References = event.Info.Reference.ToSlice()
 	}
+	if authors := event.Info.Authors.ToSlice(); len(authors) > 0 {
+		f.Authors = authors
+	}
 	if c := event.Info.Classification; c != nil {
 		f.CVEID = c.CVEID.ToSlice()
 		f.CWEID = c.CWEID.ToSlice()

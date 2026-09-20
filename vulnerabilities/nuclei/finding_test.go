@@ -35,6 +35,7 @@ func TestResultEventToFinding(t *testing.T) {
 				Reference:      ref("https://ref.example"),
 				SeverityHolder: severity.Holder{Severity: severity.High},
 				Remediation:    "patch it",
+				Authors:        ss("alice"),
 				Classification: &model.Classification{
 					CVEID:       ss([]string{"CVE-2021-1"}),
 					CWEID:       ss("CWE-79"),
@@ -72,6 +73,7 @@ func TestResultEventToFinding(t *testing.T) {
 					CVSSMetrics: "CVSS:3.1/AV:N/AC:L",
 					EPSSScore:   0.00054,
 					Solution:    "patch it",
+					Authors:     []string{"alice"},
 					MatchedAt:   "https://example.com",
 					Host:        "example.com",
 					IP:          "1.2.3.4",
