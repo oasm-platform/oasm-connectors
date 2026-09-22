@@ -13,6 +13,7 @@ vars:
     - "./vulnerabilities/acunetix"
     - "./vulnerabilities/nuclei"
     - "./vulnerabilities/nessus"
+    - "./vulnerabilities/nikto"
     - "./vulnerabilities/wpscan"
     - "./vulnerabilities/zap"
 

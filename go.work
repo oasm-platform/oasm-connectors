@@ -7,6 +7,7 @@ use (
 	./url_discovery/katana
 	./vulnerabilities/acunetix
 	./vulnerabilities/nessus
+	./vulnerabilities/nikto
 	./vulnerabilities/nuclei
 	./vulnerabilities/wpscan
 	./vulnerabilities/zap

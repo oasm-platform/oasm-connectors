@@ -1,0 +1,130 @@
+name: Nikto - Web Server Scanner
+slug: nikto
+version: 2.6.1
+image: ghcr.io/oasm-platform/connector-nikto:2.6.1
+author: 'oasm'
+pricingTier: [free]
+homepage: 'https://cirt.net/Nikto2'
+repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
+supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
+shortDescription: 'Signature-based web server and CGI scanner'
+description: 'Scans a web server for 7,000+ known issues: dangerous files and CGIs, outdated server software, missing security headers, and version-specific flaws. Each finding is classified from Nikto''s own test database and correlated with CVE references.'
+capabilities: [vulnerabilities]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+      title: Scan target
+      description: 'Target URL or hostname. A bare host is prefixed with https://; an explicit port is preserved (example.com:8443).'
+      examples: [https://example.com]
+      ui:placeholder: 'https://example.com'
+  additionalProperties: false
+configSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    tuning:
+      type: string
+      title: Tuning
+      description: 'Test selection codes (nikto -Tuning) controlling which checks run, e.g. "123b" or "x" to exclude. Empty runs the tuned default set.'
+      ui:placeholder: 'e.g. 123b'
+    ports:
+      type: string
+      title: Ports
+      description: 'Ports to scan (nikto -port), e.g. "80,443" or a range "8000-8100". Cannot be combined with a full URL target.'
+      ui:placeholder: '80,443'
+    ssl:
+      type: boolean
+      title: Force SSL
+      description: 'Force SSL mode on the target port (nikto -ssl).'
+    root:
+      type: string
+      title: Root path
+      description: 'Prepend this path to every request (nikto -root), e.g. /app for a site mounted under a subdirectory.'
+      ui:placeholder: '/app'
+    vhost:
+      type: string
+      title: Virtual host
+      description: 'Host header to use in requests (nikto -vhost).'
+      ui:placeholder: 'internal.corp'
+    userAgent:
+      type: string
+      title: User agent
+      description: 'Force a specific User-Agent string (nikto -useragent). By default Nikto sends a static Chrome UA.'
+      ui:placeholder: 'Mozilla/5.0'
+    maxTime:
+      type: string
+      title: Max time per host
+      description: 'Optional self-imposed budget for the whole scan (nikto -maxtime), e.g. 1h, 30m, 600s. Leave empty to let the scan run to completion with no time limit.'
+      ui:placeholder: '30m'
+    timeout:
+      type: integer
+      minimum: 1
+      default: 10
+      title: Request timeout (seconds)
+      description: 'Per-request timeout in seconds (nikto -timeout).'
+    pause:
+      type: integer
+      minimum: 0
+      title: Pause between tests (seconds)
+      description: 'Seconds to wait between tests, to reduce load on the target (nikto -Pause).'
+    headers:
+      type: array
+      items:
+        type: string
+      title: Extra headers
+      description: 'Additional headers sent with every request (nikto -Add-header), one "Name: Value" per entry.'
+      ui:placeholder: 'X-Forwarded-For: 127.0.0.1'
+    noLookup:
+      type: boolean
+      title: Skip DNS lookup
+      description: 'Skip DNS lookups of the target host (nikto -nolookup).'
+    noCookies:
+      type: boolean
+      title: Ignore cookies
+      description: 'Do not send cookies received from the server in later requests (nikto -nocookies).'
+    followRedirects:
+      type: boolean
+      title: Follow redirects
+      description: 'Follow 3xx redirects to their new location (nikto -followredirects).'
+    no404:
+      type: boolean
+      title: Skip 404 guessing
+      description: 'Disable Nikto trying to guess a bespoke 404 page (nikto -no404).'
+    evasion:
+      type: string
+      title: IDS evasion
+      description: 'LibWhisker IDS evasion technique numbers (nikto -evasion), e.g. "1234".'
+      ui:placeholder: '1234'
+    plugins:
+      type: string
+      title: Plugins
+      description: 'Plugin list to run (nikto -Plugins), e.g. "tests(report:500)" or "@@NONE;tests".'
+      ui:placeholder: 'tests(report:500)'
+    proxy:
+      type: string
+      title: Proxy
+      description: 'Proxy URL for requests (nikto -useproxy), e.g. http://127.0.0.1:8080.'
+      ui:placeholder: 'http://127.0.0.1:8080'
+    username:
+      type: string
+      title: HTTP auth username
+      description: 'Username for HTTP Basic authentication (nikto -id).'
+      ui:placeholder: 'admin'
+    password:
+      type: string
+      title: HTTP auth password
+      description: 'Password paired with the username for HTTP Basic authentication.'
+      ui:widget: password
+resourceDefaults:
+  cpu: 250m
+  memory: 512Mi
+  # Nikto scans are legitimately long: a full CGI sweep against a slow host, or
+  # a target that stalls, can run for hours. This is the connector's own
+  # declared ceiling, so it is set high enough not to cut a real scan short
+  # (24h) while still leaving the Worker a backstop against a runaway process.
+  # The Worker enforces this value; it is not visible to the connector.
+  timeoutSeconds: 86400
