@@ -119,11 +119,13 @@ Splitting is the only place the adapter rewrites nikto's text. Note that Core co
 
 Nikto reports no severity — its stdout and its JSON report both carry only an id, a message, and references. But every result carries a test id, and the id indexes nikto's own check database at `databases/db_tests`, which ships inside the image. Each row classifies the check by *what it does* (its tuning code: `8` Command Execution, `9` SQL Injection, `2` Misconfiguration, and so on). The adapter reads that file at runtime and derives from it:
 
-- **`category:<name>` tag** — exactly nikto's own wording for the check class (`category:SQL Injection`, `category:Denial of Service`). A check with several codes gets several tags.
-- **Severity from the tuning class**, not from the wording. Multi-code checks take their worst band (`8a` = command execution + auth bypass → `critical`). Tagged `severity-source:tuning:<codes>`.
+- **`category:<name>` tag** — exactly nikto's own wording for the check class (`category:SQL Injection`, `category:Denial of Service`). A check with several codes gets several tags. These are the **only** tags the finding carries: Core's summary report renders `tags[0]` as the finding's category (`summary-report.service.ts`), so the scanner-internal values below are deliberately not published as tags.
+- **Severity from the tuning class**, not from the wording. Multi-code checks take their worst band (`8a` = command execution + auth bypass → `critical`).
 - **`CVEID` and `References`** recovered from the row's reference field.
 
-Only when an id is absent from `db_tests` does the adapter fall back to keyword rules over the message, using the same ordered rubric the WPScan connector applies to its unscored titles. Those findings are tagged `severity-source:keyword` (a rule matched) or `severity-source:keyword-fallback` (nothing matched, so the conservative `medium` default applied).
+Only when an id is absent from `db_tests` does the adapter fall back to keyword rules over the message, using the same ordered rubric the WPScan connector applies to its unscored titles. Those findings carry no category tag at all.
+
+The nikto test id and the severity provenance (`tuning:<codes>`, `keyword`, `keyword-fallback`) have no field of their own on `Finding`, so they stay off the wire; the id is still what drives the enrichment above.
 
 The fallback is not an edge case: nikto defines 60 check ids in its plugins rather than in `db_tests` — including `013587`, the "Suggested security header missing" check that a default scan of any modern web server hits repeatedly. Those ids have no database row, so no category tag and a keyword-derived severity.
 
@@ -168,7 +170,7 @@ E2E_TARGET=http://nikto-target NIKTO_BIN=/path/to/nikto.pl \
   go test -tags e2e -run TestNiktoE2E_RealScan -v -count=1
 ```
 
-The test asserts that the enrichment actually fired: every finding must carry a `severity-source:` tag, and at least one must be categorised from `db_tests`. A silent enrichment failure (database not found) is reported as a test failure rather than passing quietly.
+The test asserts that the enrichment actually fired: every finding's tags must be category-only, and at least one must be categorised from `db_tests`. A silent enrichment failure (database not found) is reported as a test failure rather than passing quietly.
 
 ## 14-step trace
 

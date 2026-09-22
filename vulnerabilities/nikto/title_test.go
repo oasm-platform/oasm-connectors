@@ -1,7 +1,6 @@
 package main
 
 import (
-	"slices"
 	"testing"
 )
 
@@ -111,7 +110,7 @@ func TestParseItemLine_SingleSentenceNameEqualsDescription(t *testing.T) {
 	if f.Name != f.Description {
 		t.Errorf("Name = %q, Description = %q, want them equal", f.Name, f.Description)
 	}
-	if !slices.Contains(f.Tags, "nikto-id:000024") {
-		t.Errorf("Tags = %v", f.Tags)
-	}
+	// No db_tests category is available in a plain checkout, so the finding
+	// legitimately carries no tag at all — but never a non-category one.
+	assertOnlyCategoryTags(t, f)
 }

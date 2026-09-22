@@ -63,32 +63,26 @@ func TestNiktoE2E_RealScan(t *testing.T) {
 		}
 	}
 
-	// Report what the database enrichment recovered. Every finding must carry a
-	// severity-source tag, and at least one must be categorised from db_tests —
-	// otherwise the enrichment silently did nothing (e.g. the database was not
-	// found next to NIKTO_BIN).
+	// Report what the database enrichment recovered. At least one finding must be
+	// categorised from db_tests — otherwise the enrichment silently did nothing
+	// (e.g. the database was not found next to NIKTO_BIN).
 	t.Logf("db_tests loaded: %v", loadNiktoDB() != nil)
 	categorised, withCVE := 0, 0
 	for _, f := range findings {
-		hasSource := false
+		assertOnlyCategoryTags(t, f)
 		for _, tag := range f.Tags {
 			if strings.HasPrefix(tag, "category:") {
 				categorised++
 				break
 			}
 		}
-		for _, tag := range f.Tags {
-			if strings.HasPrefix(tag, "severity-source:") {
-				hasSource = true
-			}
-		}
-		if !hasSource {
-			t.Errorf("finding %q has no severity-source tag: %v", f.Name, f.Tags)
-		}
 		if len(f.CVEID) > 0 {
 			withCVE++
 			t.Logf("  CVE recovered: %v <- %s", f.CVEID, f.Name)
 		}
+	}
+	if categorised == 0 {
+		t.Errorf("no finding was categorised from db_tests: enrichment did not fire")
 	}
 	t.Logf("real scan produced %d findings; first: %q (%s); %d categorised from db_tests; %d with CVEs",
 		len(findings), findings[0].Name, findings[0].Severity, categorised, withCVE)

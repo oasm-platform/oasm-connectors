@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -41,6 +42,18 @@ func ensureFakeNikto(t *testing.T) string {
 		}
 	})
 	return fakeNiktoPath
+}
+
+// assertOnlyCategoryTags enforces the Tags contract: the array carries the
+// check class and nothing else, because Core's summary report renders tags[0]
+// as the finding's category (see summary-report.service.ts).
+func assertOnlyCategoryTags(t *testing.T, f connector.Finding) {
+	t.Helper()
+	for _, tag := range f.Tags {
+		if !strings.HasPrefix(tag, "category:") {
+			t.Errorf("finding %q: non-category tag %q in %v", f.Name, tag, f.Tags)
+		}
+	}
 }
 
 // collect runs Execute against the fake nikto with FAKE_MODE=mode and returns
@@ -109,9 +122,9 @@ func TestNiktoExecute_StreamsFindings(t *testing.T) {
 	if first.Host != "example.com" {
 		t.Errorf("Host = %q, want example.com", first.Host)
 	}
-	if !slices.Contains(first.Tags, "nikto-id:000024") {
-		t.Errorf("missing nikto-id tag: %v", first.Tags)
-	}
+	// Tags carry the check class only: Core's summary report renders tags[0] as
+	// the finding's category, so the nikto test id must not appear there.
+	assertOnlyCategoryTags(t, first)
 	if !slices.Equal(first.CVEID, []string{"CVE-2000-0709"}) {
 		t.Errorf("CVEID = %v, want [CVE-2000-0709]", first.CVEID)
 	}

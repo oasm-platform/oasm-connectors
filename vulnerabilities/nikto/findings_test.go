@@ -106,9 +106,7 @@ func TestRealStdout_EnrichmentFromDatabase(t *testing.T) {
 	if f.Severity != "medium" {
 		t.Errorf("Severity = %q, want medium (tuning 6)", f.Severity)
 	}
-	if !slices.Contains(f.Tags, "severity-source:tuning:6") {
-		t.Errorf("Tags = %v, want severity-source:tuning:6", f.Tags)
-	}
+	assertOnlyCategoryTags(t, f)
 
 	// A plugin-only id has no database row: no category, keyword severity.
 	g, ok := parseItemLine(
@@ -117,19 +115,16 @@ func TestRealStdout_EnrichmentFromDatabase(t *testing.T) {
 	if !ok {
 		t.Fatal("expected a finding")
 	}
-	for _, tag := range g.Tags {
-		if strings.HasPrefix(tag, "category:") {
-			t.Errorf("plugin-only id 013587 must have no category tag, got %v", g.Tags)
-		}
+	if len(g.Tags) != 0 {
+		t.Errorf("plugin-only id 013587 must carry no tag, got %v", g.Tags)
 	}
-	if !slices.Contains(g.Tags, "severity-source:keyword") {
-		t.Errorf("Tags = %v, want the keyword source (no database row exists)", g.Tags)
+	if g.Severity == "" {
+		t.Error("plugin-only id 013587 must still get a keyword severity")
 	}
 }
 
 // TestCategoriesCoverRealStdout asserts every check in the real capture ends up
-// with either a database-derived category or the explicit keyword fallback —
-// never a silently unclassified severity.
+// with a valid severity and a tag array that is either empty or category-only.
 func TestCategoriesCoverRealStdout(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("testdata", "real-cve-stdout.txt"))
 	if err != nil {
@@ -140,29 +135,11 @@ func TestCategoriesCoverRealStdout(t *testing.T) {
 		if !ok {
 			continue
 		}
-		hasCategory := slices.ContainsFunc(f.Tags, func(t string) bool {
-			return strings.HasPrefix(t, "category:")
-		})
-		hasSource := slices.ContainsFunc(f.Tags, func(t string) bool {
-			return strings.HasPrefix(t, "severity-source:")
-		})
-		if !hasSource {
-			t.Errorf("finding %q has no severity-source tag: %v", f.Name, f.Tags)
+		if !slices.Contains(connector.Severities, f.Severity) {
+			t.Errorf("finding %q has severity %q, not in the enum", f.Name, f.Severity)
 		}
-		if !hasCategory && !slices.Contains(f.Tags, "severity-source:keyword-fallback") && !strings.HasPrefix(severitySourceOf(f), "keyword") {
-			t.Errorf("finding %q is unclassified: %v", f.Name, f.Tags)
-		}
+		assertOnlyCategoryTags(t, f)
 	}
-}
-
-// severitySourceOf returns the severity-source tag of a finding, if any.
-func severitySourceOf(f connector.Finding) string {
-	for _, t := range f.Tags {
-		if strings.HasPrefix(t, "severity-source:") {
-			return strings.TrimPrefix(t, "severity-source:")
-		}
-	}
-	return ""
 }
 
 func keysOf(m map[string]connector.Finding) []string {

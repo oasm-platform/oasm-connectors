@@ -288,16 +288,18 @@ func TestResolveSeverity_FallsBackForPluginOnlyId(t *testing.T) {
 	}
 }
 
-func TestParseItemLine_TagsFallbackFindings(t *testing.T) {
-	f, ok := parseItemLine("+ [000024] Totally unclassified widget anomaly.", "https://example.com")
+// A finding with no db_tests row still gets a severity (keyword rubric), and
+// carries no tag: only db_tests categories are ever tagged.
+func TestParseItemLine_NoDatabaseRowStillScored(t *testing.T) {
+	f, ok := parseItemLine("+ [999999] Totally unclassified widget anomaly.", "https://example.com")
 	if !ok {
 		t.Fatal("expected a finding")
 	}
 	if f.Severity != "medium" {
 		t.Errorf("Severity = %q, want medium", f.Severity)
 	}
-	if !slices.Contains(f.Tags, "severity:heuristic") {
-		t.Errorf("fallback tags missing: %v", f.Tags)
+	if len(f.Tags) != 0 {
+		t.Errorf("Tags = %v, want none without a database row", f.Tags)
 	}
 }
 

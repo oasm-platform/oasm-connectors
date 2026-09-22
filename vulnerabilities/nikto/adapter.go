@@ -185,7 +185,7 @@ func parseItemLine(line, target string) (connector.Finding, bool) {
 		matchedAt = resolveURL(target, uri)
 	}
 
-	severity, severityKind, categories := resolveSeverity(id, message)
+	severity, _, categories := resolveSeverity(id, message)
 
 	f := connector.Finding{
 		Name:        titleFromMessage(message),
@@ -195,13 +195,14 @@ func parseItemLine(line, target string) (connector.Finding, bool) {
 		Host:        hostFromTarget(target),
 		Timestamp:   time.Now(),
 	}
-	if id != "" {
-		f.Tags = append(f.Tags, "nikto-id:"+id)
-	}
+	// Tags carry the check class and nothing else: Core's summary report renders
+	// tags[0] as the finding's category, so a scanner-internal tag (the nikto
+	// test id, the severity provenance) landing there would be published as a
+	// category. Those values have no field of their own on Finding, so they stay
+	// out of the wire format; the id still drives enrichment above.
 	for _, c := range categories {
 		f.Tags = append(f.Tags, "category:"+c)
 	}
-	f.Tags = append(f.Tags, "severity:heuristic", "severity-source:"+severityKind)
 
 	f.References = append(f.References, refs...)
 
