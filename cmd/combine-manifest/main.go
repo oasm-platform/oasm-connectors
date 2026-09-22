@@ -185,8 +185,9 @@ func loadManifest(path string) (*Manifest, error) {
 const maxLogoSize = 128
 
 // loadLogo reads the logo and downscales it to maxLogoSize on its long edge
-// when oversized. Logos already within budget are returned verbatim — never
-// upscale or re-encode what is already small enough.
+// when oversized, rewriting logo.png in place so the repo file and the embedded
+// base64 can never disagree. Logos already within budget are returned verbatim —
+// never upscale or re-encode what is already small enough.
 func loadLogo(logoPath string) ([]byte, error) {
 	raw, err := os.ReadFile(logoPath)
 	if err != nil {
@@ -212,6 +213,13 @@ func loadLogo(logoPath string) ([]byte, error) {
 	draw.CatmullRom.Scale(dst, dst.Bounds(), src, bounds, draw.Over, nil)
 	var buf bytes.Buffer
 	if err := (&png.Encoder{CompressionLevel: png.BestCompression}).Encode(&buf, dst); err != nil {
+		return nil, fmt.Errorf("%s: %w", logoPath, err)
+	}
+	// Overwrite the source so the next run is a no-op (a resized logo is within
+	// budget) and reviewers see the actual shipped icon in the diff. ponytail:
+	// the source is left untouched if this write fails, which surfaces as a
+	// read-only-checkout build error instead of silently diverging.
+	if err := os.WriteFile(logoPath, buf.Bytes(), 0o644); err != nil {
 		return nil, fmt.Errorf("%s: %w", logoPath, err)
 	}
 	return buf.Bytes(), nil

@@ -17,6 +17,7 @@ on:
   push:
     paths:
       - 'sdk/**'
+      - 'ports_scanner/**'
       - 'vulnerabilities/**'
       - 'url_discovery/**'
       - 'cmd/**'
@@ -26,6 +27,7 @@ on:
   pull_request:
     paths:
       - 'sdk/**'
+      - 'ports_scanner/**'
       - 'vulnerabilities/**'
       - 'url_discovery/**'
       - 'cmd/**'

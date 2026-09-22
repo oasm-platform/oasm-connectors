@@ -134,7 +134,7 @@ Schemas use plain JSON Schema plus two loosely-conventional annotation keys — 
 
 Aggregation rules:
 
-- A `logo.png` sibling is read, downscaled to a 128px long edge if larger (never upscaled or re-encoded when already within budget), and embedded base64 in `manifest.json`. Logos never appear in YAML.
+- A `logo.png` sibling is read and downscaled to a 128px long edge if larger (never upscaled or re-encoded when already within budget), then embedded base64 in `manifest.json`. An oversized `logo.png` is rewritten in place, so the repo file is byte-identical to the embedded icon. Logos never appear in YAML.
 - Duplicate slugs across the repo are a hard error.
 - `manifest.json` entries are sorted by `name`, and its `generatedAt` timestamp makes every regeneration a diff.
 
@@ -228,7 +228,7 @@ Tests need no Docker, no network, and no credentials, and are the primary gate: 
 
 ## CI and publishing
 
-The connector workflow is path-filtered to `sdk/**`, `vulnerabilities/**`, `url_discovery/**` and the workflow file itself.
+The connector workflow is path-filtered to `sdk/**`, `ports_scanner/**`, `vulnerabilities/**`, `url_discovery/**` and the workflow file itself.
 
 - **On push / pull request** — discover every `<category>/<slug>/manifest.yaml`, derive a build matrix from `slug` and `version`, run the full test suite, then build each image with `push: false`. Nothing is published.
 - **On manual dispatch** — the same pipeline, plus a push job that publishes `connector-<slug>:<version>` and `:latest` to the registry. A `dry_run` input builds and tests without publishing, and an `image_tag` input overrides the tag.

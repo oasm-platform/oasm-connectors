@@ -8,6 +8,7 @@ vars:
   MODULES:
     - "."
     - "./sdk"
+    - "./ports_scanner/nmap"
     - "./url_discovery/gau"
     - "./url_discovery/katana"
     - "./vulnerabilities/acunetix"

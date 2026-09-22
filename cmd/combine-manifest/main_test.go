@@ -345,8 +345,16 @@ func makePNG(t *testing.T, w, h int) []byte {
 // "logo" field.
 func embedLogo(t *testing.T, raw []byte) []byte {
 	t.Helper()
+	_, decoded := embedLogoIn(t, raw)
+	return decoded
+}
+
+// embedLogoIn is embedLogo plus the connector directory, so tests can assert on
+// what the pipeline left on disk.
+func embedLogoIn(t *testing.T, raw []byte) (dir string, decoded []byte) {
+	t.Helper()
 	root := t.TempDir()
-	dir := filepath.Join(root, "vulnerabilities", "nuclei")
+	dir = filepath.Join(root, "vulnerabilities", "nuclei")
 	writeManifest(t, dir, validYAML)
 	if err := os.WriteFile(filepath.Join(dir, "logo.png"), raw, 0o644); err != nil {
 		t.Fatal(err)
@@ -372,11 +380,11 @@ func embedLogo(t *testing.T, raw []byte) []byte {
 	if !ok {
 		t.Fatalf("connector object has no string \"logo\" key: %v", parsed.Connectors[0])
 	}
-	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	decoded, err = base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		t.Fatalf("logo is not valid base64: %v", err)
 	}
-	return decoded
+	return dir, decoded
 }
 
 // TestRunEmbedsLogoBase64 proves the end-to-end embed path for a logo that is
@@ -438,6 +446,41 @@ func TestRunKeepsSmallLogoUntouched(t *testing.T) {
 	raw := makePNG(t, 128, 128)
 	if got := embedLogo(t, raw); !bytes.Equal(got, raw) {
 		t.Fatalf("128x128 logo should be embedded verbatim, got %d bytes vs %d", len(got), len(raw))
+	}
+}
+
+// TestRunOverwritesOversizedLogoOnDisk: an oversized logo.png is resized to the
+// 128px frame AND written back, so the repo file is exactly what manifest.json
+// ships — no stale source PNG left for the next reader to trip over.
+func TestRunOverwritesOversizedLogoOnDisk(t *testing.T) {
+	dir, decoded := embedLogoIn(t, makePNG(t, 400, 200))
+	onDisk, err := os.ReadFile(filepath.Join(dir, "logo.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(onDisk, decoded) {
+		t.Fatalf("logo.png on disk (%d bytes) differs from the embedded logo (%d bytes)", len(onDisk), len(decoded))
+	}
+	img, _, err := image.Decode(bytes.NewReader(onDisk))
+	if err != nil {
+		t.Fatalf("rewritten logo.png is not a decodable image: %v", err)
+	}
+	if got := img.Bounds().Size(); got.X != 128 || got.Y != 64 {
+		t.Fatalf("expected a 128x64 logo.png on disk, got %dx%d", got.X, got.Y)
+	}
+}
+
+// TestRunPreservesSmallLogoOnDisk: a logo already within budget is never
+// rewritten, so an untouched checkout stays byte-identical.
+func TestRunPreservesSmallLogoOnDisk(t *testing.T) {
+	raw := makePNG(t, 40, 40)
+	dir, _ := embedLogoIn(t, raw)
+	onDisk, err := os.ReadFile(filepath.Join(dir, "logo.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(onDisk, raw) {
+		t.Fatalf("in-budget logo.png must stay byte-identical, got %d bytes vs %d", len(onDisk), len(raw))
 	}
 }
 
