@@ -19,12 +19,18 @@ on:
       - 'sdk/**'
       - 'vulnerabilities/**'
       - 'url_discovery/**'
+      - 'cmd/**'
+      - 'go.mod'
+      - 'go.sum'
       - '.github/workflows/build-connectors.yml'
   pull_request:
     paths:
       - 'sdk/**'
       - 'vulnerabilities/**'
       - 'url_discovery/**'
+      - 'cmd/**'
+      - 'go.mod'
+      - 'go.sum'
       - '.github/workflows/build-connectors.yml'
 
 permissions:
