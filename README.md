@@ -187,8 +187,27 @@ Connectors are never configured by flags or files; everything arrives as environ
 | `WORKER_TLS_CA`, `WORKER_TLS_CERT`, `WORKER_TLS_KEY` | no | mTLS for the Worker dial. Applied only when **all three** are set; otherwise the dial is plaintext. |
 | `INPUT_*` | no | Per-run inputs. `INPUT_TARGET` becomes `inputs["target"]`; keys are lowercased and the prefix stripped. |
 | `OASM_CONFIG` | no | The job's config profile as JSON. A container reused from the warm pool gets its profile replaced around each `ExecuteJob`, so adapters must read it at execution time, not at startup. |
+| `LOG_LEVEL` / `OASM_LOG_LEVEL` | no | Set to `debug` for the verbose trace (per-result lines, emitted-finding previews, dial details). INFO and above are always on. |
+| `OASM_LOG_COLOR` | no | `always` forces ANSI colour, `never` strips it. Unset means "colour only when stderr is a terminal" — which is off in a container, so the Worker's captured logs stay plain text. `NO_COLOR` (any value) also forces colour off. |
 
 Input precedence: Worker-provided per-job inputs override `INPUT_*` environment defaults.
+
+### Container logs (tracing a job)
+
+Everything the SDK prints goes to stderr, which the Worker tails from the container and keeps as the job's log. For a connector written on this SDK the SDK itself emits the trace:
+
+- `connector starting` / `worker config` — process identity, dial address, whether a token/TLS is configured.
+- `execute start` + `effective inputs` — the ExecuteJob identity, plus the inputs and config the adapter actually sees, truncated and with credential-shaped keys redacted (`token=<redacted>`). Secrets never reach these lines because the platform persists them.
+- `first finding` and per-result `streamed result N` (debug) — proof the tool produced parseable output, which is what separates "scanned and found nothing" from "output failed to parse".
+- `adapter panic: …` with a stack, `adapter error after N result(s) in <duration>`, `execution done: results=N elapsed=<duration> error=<none|…>`.
+
+Lines are coloured by level — `DEBUG` dim, `INFO` cyan, `SUCCESS` green, `WARN` yellow, `ERROR` red — with the `[level]` label always present so the text stays greppable when colour is off. `SUCCESS` is the terminal good-outcome line (`registered with worker`, `execution done: results=N`); a run that ends carrying an error logs the same line at `WARN`. Print a sample of the format (real ANSI, no connector build needed):
+
+```bash
+cd sdk && OASM_LOG_COLOR=always LOG_LEVEL=debug go test ./logging/ -run TestPrintSample -v
+```
+
+Every line carries `trace_id` plus `execution_id`, `job_id`, `tool` and `image` fields, so one job's lines can be grepped out of a warm-pool container that serves many jobs in a single log stream.
 
 ## Adding a connector
 

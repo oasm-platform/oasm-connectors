@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,6 +34,11 @@ type Runtime struct {
 }
 
 // New creates a Runtime for the given Connector.
+//
+// The base logger is deliberately job-less: nothing is known about the job until
+// env.Load in Run, which then swaps in a logger carrying execution_id/job_id/
+// tool/image/trace_id so every later line is correlated. Run's own startup lines
+// are therefore prefixed by hand.
 func New(c *connector.Connector) *Runtime {
 	return &Runtime{
 		conn:    c,
@@ -45,6 +52,42 @@ func New(c *connector.Connector) *Runtime {
 // stop after cancellation.
 // ponytail: fixed 30s; make configurable when workers report tail latencies.
 const sendTimeout = 30 * time.Second
+
+// findingPreviewLimit caps how many finding summaries a failed job leaves in
+// the container log. Enough to identify what the tool was producing, small
+// enough that a 50k-finding scan does not bury the rest of the log.
+const findingPreviewLimit = 20
+
+// renderFinding renders one finding as a single log-safe line.
+func renderFinding(f connector.Finding) string {
+	where := f.MatchedAt
+	if where == "" {
+		where = f.Host
+	}
+	if where == "" {
+		where = "-"
+	}
+	return fmt.Sprintf("%q sev=%s at=%s", f.Name, f.Severity, where)
+}
+
+// previewLines joins preview entries and marks truncation, so a preview never
+// looks like the complete result set.
+func previewLines(preview []string, total int) string {
+	out := strings.Join(preview, " | ")
+	if total > len(preview) {
+		out += fmt.Sprintf(" | …+%d more", total-len(preview))
+	}
+	return out
+}
+
+// errOrNone keeps the outcome line readable when the run failed early, before
+// any error string existed, rather than printing error=<nil>.
+func errOrNone(err error) string {
+	if err == nil {
+		return "none"
+	}
+	return err.Error()
+}
 
 // Run connects to the Worker gRPC server using env-injected config,
 // registers, and enters the execute loop. Fails fast with a clear error when
@@ -70,8 +113,14 @@ func (r *Runtime) Run(ctx context.Context) error {
 	}
 
 	inputs := env.LoadInputs()
-	r.logger.Infof("loaded %d env inputs", len(inputs))
-	r.logger.Infof("worker config: addr=%s token_set=%t execution=%s job=%s tool=%s", cfg.WorkerAddr, cfg.Token != "", cfg.ExecutionID, cfg.JobID, cfg.Tool)
+	// From here on every line is prefixed with the job identity: a warm-pool
+	// container serves many jobs in one log stream, so execution_id/job_id are
+	// what makes a failure traceable back to the job that caused it.
+	r.logger = logging.New("runtime").
+		WithFields("execution_id", cfg.ExecutionID, "job_id", cfg.JobID, "tool", cfg.Tool).
+		WithTraceID(cfg.TraceID)
+	r.logger.Infof("connector starting: pid=%d inputs=%s", os.Getpid(), logging.Summarize(inputs, 120))
+	r.logger.Infof("worker config: addr=%s token_set=%t tls=%t", cfg.WorkerAddr, cfg.Token != "", os.Getenv("WORKER_TLS_CA") != "" && os.Getenv("WORKER_TLS_CERT") != "" && os.Getenv("WORKER_TLS_KEY") != "")
 
 	// Dial Worker — mTLS when all three WORKER_TLS_* vars are set, plaintext
 	// otherwise (missing any var keeps the historical plaintext behavior).
@@ -79,6 +128,7 @@ func (r *Runtime) Run(ctx context.Context) error {
 	// Worker cert must cover the address it is dialed at.
 	caFile, certFile, keyFile, tlsEnabled := env.TLSFiles()
 	var conn *grpc.ClientConn
+	r.logger.Debugf("dialing worker addr=%s tls=%t", cfg.WorkerAddr, tlsEnabled)
 	if tlsEnabled {
 		r.logger.Info("worker mTLS enabled: WORKER_TLS_CA/CERT/KEY all set")
 		creds, err := transport.LoadMTLS(caFile, certFile, keyFile, "")
@@ -134,7 +184,7 @@ func (r *Runtime) Run(ctx context.Context) error {
 		r.logger.Errorf("registration rejected: %s", reason)
 		return fmt.Errorf("fatal: registration rejected: %s", reason)
 	}
-	r.logger.Info("registered with worker")
+	r.logger.Infof("registered with worker: addr=%s", cfg.WorkerAddr)
 
 	// Receive Worker messages in a dedicated goroutine so Cancel messages can
 	// be processed while an execution streams results. A synchronous loop
@@ -148,6 +198,7 @@ func (r *Runtime) Run(ctx context.Context) error {
 		for {
 			msg, err := stream.Recv()
 			if err != nil {
+				r.logger.Debugf("recv loop ended: %v", err)
 				select {
 				case recvErrCh <- err:
 				case <-ctx.Done():
@@ -275,7 +326,14 @@ func (r *Runtime) sendStreamMsg(abortCtx context.Context, stream pb.ConnectorSer
 // same prefix to its own errors. The SDK applies the prefix to the errors it
 // generates itself.
 func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_ConnectClient, exec *pb.ExecuteJob, envInputs map[string]any) error {
-	r.logger.Infof("execute job_id=%s tool=%s exec_id=%s", exec.JobId, exec.Tool, exec.ExecutionId)
+	// execLog is the per-execution logger: it carries the ExecuteJob's OWN
+	// identity, not the process-startup env. A warm-pool container logs several
+	// jobs into one stream, and the ExecuteJob is the authoritative source for
+	// which one a line belongs to.
+	execLog := r.logger.WithFields("execution_id", exec.ExecutionId, "job_id", exec.JobId, "tool", exec.Tool, "image", exec.Image)
+	start := time.Now()
+	execLog.Infof("execute start: inputs=%s config=%s",
+		logging.Summarize(exec.Inputs, 200), logging.Summarize(exec.Config, 200))
 
 	// Per-execution cancel handle — stored so Run's Cancel handler can abort
 	// this execution, removed when this execution finishes.
@@ -301,6 +359,9 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	for k, v := range exec.Inputs {
 		inputs[k] = v
 	}
+	// The merged view is what the adapter actually sees; log it once so a
+	// "wrong target" report always has the effective inputs next to it.
+	execLog.Infof("effective inputs: %s", logging.Summarize(inputs, 200))
 
 	// Per-job config override (Phase 2 warm pool): a REUSED container keeps its
 	// first-run OASM_CONFIG env; the worker ships the job's config profile as
@@ -312,7 +373,7 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 		prev := os.Getenv("OASM_CONFIG")
 		os.Setenv("OASM_CONFIG", raw)
 		defer os.Setenv("OASM_CONFIG", prev)
-		r.logger.Infof("config override applied: execution=%s job=%s", exec.ExecutionId, exec.JobId)
+		execLog.Infof("config override applied: profile_bytes=%d config_keys=%s", len(raw), logging.Keys(exec.Config))
 	}
 
 	// 128-buffer so a burst of findings does not stall the adapter while a
@@ -327,11 +388,17 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 		defer close(out)
 		defer func() {
 			if p := recover(); p != nil {
-				r.logger.Errorf("adapter panic: execution=%s job=%s tool=%s panic=%v", exec.ExecutionId, exec.JobId, exec.Tool, p)
+				// The stack is the only way to find the panicking line once the
+				// container is gone (warm pool keeps serving; upstream logs roll).
+				stack := logging.Truncate(string(debug.Stack()), 2000)
+				execLog.Errorf("adapter panic: %v\n%s", p, stack)
 				errCh <- fmt.Errorf("retryable: adapter panic: %v", p)
 			}
 		}()
-		errCh <- r.conn.Execute(execCtx, inputs, out)
+		execLog.Debugf("adapter starting")
+		execErr := r.conn.Execute(execCtx, inputs, out)
+		execLog.Debugf("adapter returned after %s: err=%v", time.Since(start).Round(time.Millisecond), execErr)
+		errCh <- execErr
 	}()
 
 	// Stream results — sends are serialized inside this goroutine; each send
@@ -346,12 +413,24 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	n := 0
 	var invalidErr error
 	var sendErr error
+	var preview []string
+	// firstFinding is logged at INFO even without LOG_LEVEL=debug: seeing WHICH
+	// item was emitted is what separates "scanner found nothing" from "scanner
+	// output failed to parse" when a job returns fewer results than expected.
+	var firstFinding string
 	for f := range out {
 		if err := f.Validate(); err != nil {
 			invalidErr = fmt.Errorf("fatal: finding %d invalid: %w", n, err)
-			r.logger.Errorf("invalid finding dropped: execution=%s index=%d err=%v", exec.ExecutionId, n, err)
+			execLog.Errorf("invalid finding dropped: index=%d name=%q severity=%q err=%v", n, f.Name, f.Severity, err)
 			cancel()
 			break
+		}
+		if firstFinding == "" {
+			firstFinding = renderFinding(f)
+			execLog.Infof("first finding: %s", firstFinding)
+		}
+		if len(preview) < findingPreviewLimit {
+			preview = append(preview, renderFinding(f))
 		}
 		if err := r.sendStreamMsg(execCtx, stream, &pb.ConnectorMessage{
 			Message: &pb.ConnectorMessage_Result{
@@ -363,18 +442,23 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 		}); err != nil {
 			if execCtx.Err() != nil {
 				// Cancelled: stop streaming; cancellation is reported in Done.
-				r.logger.Infof("result send aborted: execution=%s err=%v", exec.ExecutionId, err)
+				execLog.Infof("result send aborted after %d result(s): err=%v", n, err)
 				break
 			}
 			// A failed send must still reach the worker as a Done error, not
 			// as a silently torn-down stream: unblock the adapter, then fall
 			// through to the Done path.
-			r.logger.Errorf("send failed: execution=%s err=%v", exec.ExecutionId, err)
+			execLog.Errorf("send failed after %d result(s): err=%v", n, err)
 			sendErr = fmt.Errorf("retryable: %w", err)
 			cancel()
 			break
 		}
 		n++
+		// Per-result tracing at debug level; the aggregate is logged on Done.
+		execLog.Debugf("streamed result %d name=%q severity=%q", n, f.Name, f.Severity)
+	}
+	if len(preview) > 0 {
+		execLog.Debugf("emitted preview: %s", previewLines(preview, n))
 	}
 
 	// Wait for the adapter; bounded so an adapter that ignores cancellation
@@ -386,7 +470,7 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	case adapterErr = <-errCh:
 	case <-time.After(sendTimeout):
 		adapterErr = fmt.Errorf("retryable: adapter did not stop within %s after cancellation", sendTimeout)
-		r.logger.Errorf("adapter did not stop: execution=%s job=%s tool=%s", exec.ExecutionId, exec.JobId, exec.Tool)
+		execLog.Errorf("adapter did not stop within %s; abandoning execution", sendTimeout)
 	}
 
 	// An invalid finding outranks any adapter error: it is why the stream
@@ -403,21 +487,28 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	doneMsg := &pb.Done{ExecutionId: exec.ExecutionId}
 	if adapterErr != nil {
 		doneMsg.Error = adapterErr.Error()
-		r.logger.Errorf("adapter error: execution=%s job=%s tool=%s err=%v", exec.ExecutionId, exec.JobId, exec.Tool, adapterErr)
+		execLog.Errorf("adapter error after %d result(s) in %s: %v", n, time.Since(start).Round(time.Millisecond), adapterErr)
 	} else if execCtx.Err() != nil {
 		// The execution was cancelled but the adapter swallowed the error
 		// (returned nil): the worker must still learn the run did not finish.
 		doneMsg.Error = context.Canceled.Error()
+		execLog.Warnf("execution cancelled but adapter returned nil; reporting canceled: results=%d elapsed=%s", n, time.Since(start).Round(time.Millisecond))
 	}
 	// Done goes out on the parent context so it still succeeds after a
 	// protocol cancel of this execution.
 	if err := r.sendStreamMsg(ctx, stream, &pb.ConnectorMessage{
 		Message: &pb.ConnectorMessage_Done{Done: doneMsg},
 	}); err != nil {
-		r.logger.Errorf("send failed: execution=%s err=%v", exec.ExecutionId, err)
+		execLog.Errorf("done send failed: results=%d err=%v", n, err)
 		return fmt.Errorf("retryable: %w", err)
 	}
-	r.logger.Infof("execution done: execution=%s job=%s tool=%s results=%d", exec.ExecutionId, exec.JobId, exec.Tool, n)
+	// Outcome line: SUCCESS (green) for a clean run, WARN for a run that
+	// finished carrying an error — the colour alone says which at a glance.
+	if adapterErr == nil && execCtx.Err() == nil {
+		execLog.Successf("execution done: results=%d elapsed=%s", n, time.Since(start).Round(time.Millisecond))
+	} else {
+		execLog.Warnf("execution done: results=%d elapsed=%s error=%v", n, time.Since(start).Round(time.Millisecond), errOrNone(adapterErr))
+	}
 
 	return nil
 }
