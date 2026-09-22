@@ -73,6 +73,11 @@ configSchema:
       type: boolean
       title: Follow redirects
       description: 'Follow HTTP redirects during the scan.'
+    interactsh:
+      type: boolean
+      default: true
+      title: Interactsh (OAST)
+      description: 'Run out-of-band (interactsh) templates for blind vulnerabilities. Disable if the container has no egress to an interactsh server.'
 resourceDefaults:
   cpu: 500m
   memory: 4096Mi

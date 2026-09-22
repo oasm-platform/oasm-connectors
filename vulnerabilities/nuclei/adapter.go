@@ -30,6 +30,9 @@ type Config struct {
 	RateLimit       *int     `json:"rateLimit"`
 	Concurrency     *int     `json:"concurrency"`
 	FollowRedirects *bool    `json:"followRedirects"`
+	// Interactsh enables OAST/interactsh templates. nil = enabled (nuclei CLI
+	// default); set false to exclude OOB templates (e.g. no egress).
+	Interactsh *bool `json:"interactsh"`
 }
 
 // parseConfig unmarshals a JSON string into Config. An empty or malformed
@@ -110,9 +113,20 @@ func scanParams(cfg Config, dir string) params {
 		c = *cfg.Concurrency
 	}
 	fr := cfg.FollowRedirects != nil && *cfg.FollowRedirects
+	noInteractsh := cfg.Interactsh != nil && !*cfg.Interactsh
 
-	return params{templates, filters, rl, c, fr, idMode, true}
+	return params{templates, filters, rl, c, fr, idMode, noInteractsh}
 }
+
+// Values mirror nuclei CLI defaults, which the SDK does NOT inherit: the SDK's
+// DefaultOptions use a 5s timeout, so slow targets time out, the max-host-error
+// cache trips and skips the host, and the scan returns almost nothing.
+const (
+	networkTimeoutSeconds = 10
+	maxHostErrors         = 30
+	maxRetries            = 1
+	jsConcurrency         = 120
+)
 
 // sdkOptions converts resolved params into nuclei SDK option functions.
 // HostConcurrency is hardcoded to 25, matching BulkSize default from
@@ -127,12 +141,19 @@ func sdkOptions(ctx context.Context, p params) []nuclei.NucleiSDKOptions {
 		opts = append(opts, nuclei.WithTemplateFilters(p.filters))
 	}
 	opts = append(opts, nuclei.WithGlobalRateLimitCtx(ctx, p.rateLimit, time.Second))
+	// WithNetworkConfig assigns every field, so all three must be set explicitly
+	// or the zero values silently disable retries and the host-error cache.
+	opts = append(opts, nuclei.WithNetworkConfig(nuclei.NetworkConfig{
+		Timeout:      networkTimeoutSeconds,
+		MaxHostError: maxHostErrors,
+		Retries:      maxRetries,
+	}))
 	opts = append(opts, nuclei.WithConcurrency(nuclei.Concurrency{
 		TemplateConcurrency:           p.concurrency,
 		HostConcurrency:               25,
 		HeadlessHostConcurrency:       10,
 		HeadlessTemplateConcurrency:   10,
-		JavascriptTemplateConcurrency: 1,
+		JavascriptTemplateConcurrency: jsConcurrency,
 		TemplatePayloadConcurrency:    25,
 		ProbeConcurrency:              50,
 	}))

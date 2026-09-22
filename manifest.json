@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-22T07:04:44.1644096Z",
+  "generatedAt": "2026-09-22T16:50:07.370375092Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -793,6 +793,12 @@
           "followRedirects": {
             "description": "Follow HTTP redirects during the scan.",
             "title": "Follow redirects",
+            "type": "boolean"
+          },
+          "interactsh": {
+            "default": true,
+            "description": "Run out-of-band (interactsh) templates for blind vulnerabilities. Disable if the container has no egress to an interactsh server.",
+            "title": "Interactsh (OAST)",
             "type": "boolean"
           },
           "rateLimit": {
