@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-22T16:47:32.4533778Z",
+  "generatedAt": "2026-09-23T02:14:03.6986254Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -686,8 +686,8 @@
         "additionalProperties": false,
         "properties": {
           "hostTimeout": {
-            "default": 0,
-            "description": "Give up on the host after this long (nmap --host-timeout). 0 = no per-host limit; the adapter always enforces a 20 minute hard timeout for the whole run.",
+            "default": 600,
+            "description": "Give up on the host after this long (nmap --host-timeout) and report what was found. Raise it for slow or heavily filtered targets; 0 = no per-host limit. The adapter always enforces a 20 minute hard timeout for the whole run.",
             "minimum": 0,
             "title": "Per-host timeout (seconds)",
             "type": "integer"
@@ -705,16 +705,16 @@
             "ui:placeholder": "22,80,443,8000-8100"
           },
           "retries": {
-            "default": 0,
-            "description": "Maximum probe retransmissions per port (nmap --max-retries). 0 = nmap default (10).",
+            "default": 2,
+            "description": "Maximum probe retransmissions per port (nmap --max-retries). Lower is faster on filtered hosts; raise it for lossy links.",
             "maximum": 10,
             "minimum": 1,
             "title": "Max retries",
             "type": "integer"
           },
           "topPorts": {
-            "default": 0,
-            "description": "Scan the N most common ports (nmap --top-ports). Ignored when ports is set. 0 = nmap default top-1000 list.",
+            "default": 1000,
+            "description": "Scan the N most common ports (nmap --top-ports). Ignored when ports is set. 1000 = nmap's own default port list.",
             "maximum": 65535,
             "minimum": 1,
             "title": "Top ports",

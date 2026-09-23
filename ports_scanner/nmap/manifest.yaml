@@ -35,22 +35,22 @@ configSchema:
       type: integer
       minimum: 1
       maximum: 65535
-      default: 0
+      default: 1000
       title: Top ports
-      description: 'Scan the N most common ports (nmap --top-ports). Ignored when ports is set. 0 = nmap default top-1000 list.'
+      description: 'Scan the N most common ports (nmap --top-ports). Ignored when ports is set. 1000 = nmap''s own default port list.'
     hostTimeout:
       type: integer
       minimum: 0
-      default: 0
+      default: 600
       title: Per-host timeout (seconds)
-      description: 'Give up on the host after this long (nmap --host-timeout). 0 = no per-host limit; the adapter always enforces a 20 minute hard timeout for the whole run.'
+      description: 'Give up on the host after this long (nmap --host-timeout) and report what was found. Raise it for slow or heavily filtered targets; 0 = no per-host limit. The adapter always enforces a 20 minute hard timeout for the whole run.'
     retries:
       type: integer
       minimum: 1
       maximum: 10
-      default: 0
+      default: 2
       title: Max retries
-      description: 'Maximum probe retransmissions per port (nmap --max-retries). 0 = nmap default (10).'
+      description: 'Maximum probe retransmissions per port (nmap --max-retries). Lower is faster on filtered hosts; raise it for lossy links.'
     noPing:
       type: boolean
       default: true
