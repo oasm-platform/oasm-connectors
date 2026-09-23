@@ -17,6 +17,7 @@ vars:
     - "./vulnerabilities/nikto"
     - "./vulnerabilities/wpscan"
     - "./vulnerabilities/zap"
+    - "./vulnerabilities/openvas"
 
 tasks:
   proto:

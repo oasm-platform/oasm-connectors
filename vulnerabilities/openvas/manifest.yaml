@@ -1,0 +1,83 @@
+name: OpenVAS - Greenbone Vulnerability Scanner
+slug: openvas
+version: 0.1.0
+image: ghcr.io/oasm-platform/connector-openvas:0.1.0
+author: 'oasm'
+pricingTier: [free]
+homepage: 'https://openvas.org'
+repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
+supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
+shortDescription: 'OpenVAS / Greenbone vulnerability scanner'
+description: 'Connects to a Greenbone/OpenVAS gvmd instance over GMP (Greenbone Management Protocol) on TLS, creates and runs a scan task against a target, and streams the discovered vulnerabilities back to the Worker.'
+capabilities: [vulnerabilities]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      title: Scan target
+      description: 'Target host, IP or CIDR to scan (no format constraint — bare host/IP/CIDR are valid).'
+      examples: [example.com]
+      ui:placeholder: 'example.com'
+  additionalProperties: false
+configSchema:
+  type: object
+  required: [host, username, password]
+  properties:
+    host:
+      type: string
+      title: gvmd host
+      description: 'Hostname or IP of the Greenbone/OpenVAS gvmd management daemon.'
+      ui:placeholder: 'gvmd.example.com'
+    port:
+      type: integer
+      title: GMP port
+      description: 'GMP TLS/TCP port on gvmd.'
+      default: 9390
+    username:
+      type: string
+      title: GMP username
+      description: 'Greenbone user used for GMP authentication.'
+      ui:placeholder: 'admin'
+    password:
+      type: string
+      title: GMP password
+      description: 'Greenbone user password.'
+      ui:widget: password
+    caCert:
+      type: string
+      title: CA certificate (PEM)
+      description: 'PEM CA certificate used to verify the gvmd server certificate. Leave empty to use the system trust store.'
+    clientCert:
+      type: string
+      title: Client certificate (PEM)
+      description: 'PEM client certificate for mutual TLS. gvmd TCP connections normally require one.'
+    clientKey:
+      type: string
+      title: Client private key (PEM)
+      description: 'PEM private key matching clientCert.'
+      ui:widget: password
+    disableTlsChecks:
+      type: boolean
+      title: Disable TLS checks
+      description: 'Skip server certificate verification. Only for test/self-signed deployments.'
+    scannerId:
+      type: string
+      title: Scanner ID
+      description: 'GMP scanner UUID. Defaults to the built-in OpenVAS scanner.'
+      ui:placeholder: '08b69003-5fc2-4037-a479-93b440211c73'
+    configId:
+      type: string
+      title: Scan config ID
+      description: 'GMP scan config UUID. Defaults to Full and Fast.'
+      ui:placeholder: 'daba56c8-73ec-11df-a475-002264764cea'
+    portListId:
+      type: string
+      title: Port list ID
+      description: 'GMP port list UUID. When empty, gvmd applies its own default port list.'
+  additionalProperties: false
+resourceDefaults:
+  cpu: 500m
+  memory: 512Mi
+  timeoutSeconds: 3600
