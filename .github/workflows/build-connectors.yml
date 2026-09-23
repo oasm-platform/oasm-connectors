@@ -1,4 +1,4 @@
-name: Build & Push Vulnerability Connectors
+name: Build & Push All Connectors
 
 on:
   workflow_dispatch:
@@ -39,9 +39,18 @@ permissions:
   contents: read
   packages: write
 
+# Cancel superseded runs on the same ref: avoids parallel races on the
+# mutable `latest` tag and saves runners. Event name is part of the group so
+# a push-CI run can never cancel an in-flight workflow_dispatch publish
+# halfway through (mixed `latest` tags).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
 jobs:
   discover:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
@@ -72,6 +81,7 @@ jobs:
   test:
     needs: discover
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: ${{ needs.discover.outputs.matrix != '{"include":[]}' }}
     steps:
       - uses: actions/checkout@v4
@@ -93,6 +103,7 @@ jobs:
   build-test:
     needs: discover
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: ${{ needs.discover.outputs.matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
@@ -113,11 +124,13 @@ jobs:
   push:
     needs: [discover, test, build-test]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Publish only on explicit dispatch (dry_run=false). On push/pull_request
     # events `inputs` is empty, so this guard also prevents accidental
     # publishes from CI runs.
     if: ${{ github.event_name == 'workflow_dispatch' && !inputs.dry_run }}
     strategy:
+      fail-fast: false
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
