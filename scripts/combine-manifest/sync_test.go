@@ -45,7 +45,7 @@ func TestCheckedInManifestJSONCurrent(t *testing.T) {
 		normalizeLogo(t, m)
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("manifest.json stale: chạy combine-manifest và commit lại manifest.json (go run ./cmd/combine-manifest)\nchecked-in connectors: %v\nregenerated connectors: %v", want, got)
+		t.Fatalf("manifest.json stale: chạy combine-manifest và commit lại manifest.json (go run ./scripts/combine-manifest)\nchecked-in connectors: %v\nregenerated connectors: %v", want, got)
 	}
 }
 

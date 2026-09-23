@@ -11,7 +11,7 @@ The same skeleton serves every kind of tool — in-process library embedding, CL
 ```mermaid
 flowchart LR
     A["&lt;category&gt;/&lt;connector&gt;/manifest.yaml<br/>+ optional logo.png"]
-    B["cmd/combine-manifest<br/>discover · validate · downscale logo · base64 · sort"]
+    B["scripts/combine-manifest<br/>discover · validate · downscale logo · base64 · sort"]
     C["manifest.json<br/>{generatedAt, connectors[]}"]
     A -- "walk repo" --> B --> C
     C -- "read at startup" --> D["Core / catalog"]
@@ -79,7 +79,8 @@ A multi-module Go monorepo. The root module holds only the manifest tooling; eac
 
 ```
 .
-├── cmd/combine-manifest/     root module — manifest discovery/validation/aggregation
+├── scripts/combine-manifest/ root module — manifest discovery/validation/aggregation
+├── scripts/square-logo/      root module — square, white-background icon helper
 ├── sdk/                      its own module — the connector SDK (imported by every connector)
 │   ├── connector/            Adapter interface + Finding type and validation
 │   ├── runtime/              dial Worker, register, execute loop, stream findings
@@ -247,7 +248,7 @@ Tests need no Docker, no network, and no credentials, and are the primary gate: 
 
 ## CI and publishing
 
-The connector workflow is path-filtered to `sdk/**`, `ports_scanner/**`, `vulnerabilities/**`, `url_discovery/**` and the workflow file itself.
+The connector workflow is path-filtered to `sdk/**`, `ports_scanner/**`, `vulnerabilities/**`, `url_discovery/**`, `scripts/**` and the workflow file itself.
 
 - **On push / pull request** — discover every `<category>/<slug>/manifest.yaml`, derive a build matrix from `slug` and `version`, run the full test suite, then build each image with `push: false`. Nothing is published.
 - **On manual dispatch** — the same pipeline, plus a push job that publishes `connector-<slug>:<version>` and `:latest` to the registry. A `dry_run` input builds and tests without publishing, and an `image_tag` input overrides the tag.

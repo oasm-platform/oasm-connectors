@@ -52,7 +52,7 @@ var (
 	nameRe   = regexp.MustCompile(`^[a-z0-9-]+$`)
 	skipDirs = map[string]bool{
 		"sdk": true, "scripts": true, "templates": true,
-		".github": true, "node_modules": true, "cmd": true,
+		".github": true, "node_modules": true,
 	}
 )
 

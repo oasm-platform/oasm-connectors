@@ -1,7 +1,7 @@
 // Command square-logo writes a square, white-background PNG for a connector
 // icon: the input is downscaled so its longest edge fits `-size` and centred on
 // a `-size`x`-size` white canvas. Run it on logo.png, then regenerate the
-// catalog with `go run ./cmd/combine-manifest` (the logo is already within the
+// catalog with `go run ./scripts/combine-manifest` (the logo is already within the
 // 128px budget afterwards, so the aggregator leaves it verbatim).
 //
 // Usage: go run ./scripts/square-logo -in ports_scanner/nmap/logo.png -size 128

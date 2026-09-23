@@ -59,7 +59,7 @@ tasks:
   manifest:
     desc: regenerate manifest.json from <category>/<connector>/manifest.yaml
     cmds:
-      - "{{.GO}} run ./cmd/combine-manifest -root ."
+      - "{{.GO}} run ./scripts/combine-manifest -root ."
 
   default:
     desc: default task (runs test)
