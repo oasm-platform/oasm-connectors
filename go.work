@@ -4,6 +4,7 @@ use (
 	.
 	./sdk
 	./ports_scanner/nmap
+	./ports_scanner/rustscan
 	./url_discovery/gau
 	./url_discovery/katana
 	./vulnerabilities/acunetix

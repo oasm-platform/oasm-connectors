@@ -1,0 +1,68 @@
+name: RustScan - Port Scanner
+slug: rustscan
+version: 2.4.1
+image: ghcr.io/oasm-platform/connector-rustscan:2.4.1
+author: 'oasm'
+pricingTier: [free]
+homepage: 'https://github.com/bee-san/RustScan'
+repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
+supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
+shortDescription: 'Fast async TCP/UDP port scanner'
+description: 'Scans a single host with RustScan in greppable mode and streams every open port as a finding for port scanning: one finding per protocol/port. Async TCP connect scan; needs no raw sockets, no privileges and no nmap, so findings carry no service or version — run the Nmap connector alongside it for service detection.'
+capabilities: [ports_scanner]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+      title: Target host
+      description: 'Host to scan: a hostname, an IPv4 literal, or a bracketed IPv6 literal. Scheme and path are stripped; CIDR ranges, lists and wildcards are rejected.'
+      examples: [example.com, 203.0.113.10]
+      ui:placeholder: 'example.com'
+  additionalProperties: false
+configSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    ports:
+      type: string
+      title: Ports
+      description: 'Comma-separated ports handed to rustscan -p, e.g. "22,80,443". Numbers only — a range belongs in "range" (rustscan -p rejects "1-1024"). Takes precedence over range.'
+      ui:placeholder: '22,80,443'
+    range:
+      type: string
+      title: Port range
+      description: 'Inclusive start-end range handed to rustscan -r, e.g. "1-1024". Ignored when ports is set. When neither ports nor range is set, rustscan scans its own default: the full 1-65535 range.'
+      ui:placeholder: '1-1024'
+    timeoutMs:
+      type: integer
+      minimum: 0
+      maximum: 60000
+      default: 0
+      title: Port timeout (milliseconds)
+      description: 'How long to wait before a port counts as closed (rustscan -t). 0 = rustscan default (1500). Raise it for high-latency or heavily filtered targets.'
+    tries:
+      type: integer
+      minimum: 0
+      maximum: 10
+      default: 0
+      title: Tries per port
+      description: 'Probe attempts before a port counts as closed (rustscan --tries). 0 = rustscan default (1).'
+    batchSize:
+      type: integer
+      minimum: 0
+      maximum: 65535
+      default: 0
+      title: Batch size
+      description: 'Concurrent sockets per batch (rustscan -b). 0 = rustscan default (4500). Lower it on lossy links or when the target complains; raise it only up to the worker container file limit.'
+    udp:
+      type: boolean
+      default: false
+      title: UDP scan
+      description: 'Scan UDP ports instead of TCP (rustscan --udp). Findings are then reported with the udp protocol prefix, e.g. "udp/53".'
+resourceDefaults:
+  cpu: 500m
+  memory: 512Mi
+  timeoutSeconds: 1800
