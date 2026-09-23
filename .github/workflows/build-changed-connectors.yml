@@ -1,0 +1,130 @@
+name: Build Changed Connectors
+
+# Incremental publish: on push to main, build + push only the connector
+# images whose folder changed. Full build stays available via
+# build-connectors.yml (workflow_dispatch).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sdk/**'
+      - 'ports_scanner/**'
+      - 'url_discovery/**'
+      - 'vulnerabilities/**'
+      - '.github/workflows/build-changed-connectors.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed connectors
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZERO=0000000000000000000000000000000000000000
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+          build_all=0
+          declare -A changed=()
+
+          if [ "$BEFORE" = "$ZERO" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            build_all=1
+          else
+            while IFS= read -r f; do
+              case "$f" in
+                sdk/*) build_all=1 ;;
+                */*/*) changed["$(dirname "$f")"]=1 ;;
+              esac
+            done < <(git diff --name-only "$BEFORE" "$AFTER")
+          fi
+
+          dirs=""
+          if [ "$build_all" = 1 ]; then
+            for d in */*/; do
+              [ -f "$d/manifest.yaml" ] && [ -f "$d/Dockerfile" ] && dirs="$dirs${d%/}"$'\n'
+            done
+          else
+            for d in "${!changed[@]}"; do
+              # normalize depth-2 path segments to the connector dir
+              while [ ! -f "$d/manifest.yaml" ] && [ "$d" != "${d%/*}" ]; do d="${d%/*}"; done
+              [ -f "$d/manifest.yaml" ] && [ -f "$d/Dockerfile" ] && dirs="$dirs$d"$'\n'
+            done
+          fi
+
+          include=""
+          while IFS= read -r dir; do
+            [ -n "$dir" ] || continue
+            slug="$(sed -n 's/^slug:[[:space:]]*//p' "$dir/manifest.yaml")"
+            version="$(sed -n 's/^version:[[:space:]]*//p' "$dir/manifest.yaml")"
+            if [ -z "$slug" ] || [ -z "$version" ]; then
+              echo "::warning::skip $dir: missing slug/version"
+              continue
+            fi
+            entry="$(jq -nc --arg dir "$dir" --arg slug "$slug" --arg version "$version" '{dir:$dir,slug:$slug,version:$version}')"
+            include="$include${include:+,}$entry"
+          done <<< "$dirs"
+
+          matrix="{\"include\":[${include}]}"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "matrix=$matrix"
+
+  test:
+    needs: detect
+    runs-on: ubuntu-latest
+    if: ${{ needs.detect.outputs.matrix != '{"include":[]}' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+      - name: Run go tests (root + sdk + each connector)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          GOWORK=off go test ./... -count=1
+          (cd sdk && GOWORK=off go test ./... -count=1)
+          for d in */*/; do
+            [ -f "$d/go.mod" ] || continue
+            (cd "$d" && GOWORK=off go test ./... -count=1)
+          done
+
+  push:
+    needs: [detect, test]
+    runs-on: ubuntu-latest
+    if: ${{ needs.detect.outputs.matrix != '{"include":[]}' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push ${{ matrix.dir }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dir }}/Dockerfile
+          push: true
+          cache-from: type=gha,scope=${{ matrix.slug }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.slug }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/connector-${{ matrix.slug }}:${{ matrix.version }}
+            ghcr.io/${{ github.repository_owner }}/connector-${{ matrix.slug }}:latest
