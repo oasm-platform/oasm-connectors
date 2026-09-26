@@ -1,0 +1,22 @@
+# Trivy ignore list for connector images — consumed by
+# .github/workflows/scan-and-push.yml via the `trivyignores` input. The action
+# fails the job if this file is missing, so keep it even while it is empty.
+#
+# Syntax: one vulnerability ID per line, optionally followed by an expiry and a
+# reason.
+#
+#   CVE-2024-1234  # expires:2026-12-31 reason:alpine 3.20 base, fix lands in 3.21
+#
+# An entry without `expires:` never expires. Do not add any.
+#
+# Policy for this repo:
+#   * Only findings inherited from a base image belong here. The connector
+#     binary is built from ./sdk in this repo, so a finding that points at it is
+#     ours to fix, never to ignore.
+#   * CRITICAL is not ignorable. If a base image ships one, bump the tag in that
+#     connector's Dockerfile.
+#   * Every entry carries a reason and an expiry, and the author removes it when
+#     the expiry passes.
+#
+# Adding an entry means the gate stops seeing that finding for every connector
+# sharing the base image — keep the list short enough to review.

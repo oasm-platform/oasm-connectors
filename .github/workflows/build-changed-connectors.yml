@@ -17,6 +17,9 @@ on:
 permissions:
   contents: read
   packages: write
+  # Trivy findings land in the Security tab via SARIF; the reusable workflow can
+  # only narrow the token it is handed, so the grant has to be here too.
+  security-events: write
 
 jobs:
   detect:
@@ -101,30 +104,19 @@ jobs:
             (cd "$d" && GOWORK=off go test ./... -count=1)
           done
 
+  # Builds, scans and gates every changed image before it reaches GHCR — see
+  # .github/workflows/scan-and-push.yml. A CRITICAL finding fails this job, so
+  # the `latest` and version tags for that connector are left pointing at the
+  # last good image instead of the new one.
   push:
     needs: [detect, test]
-    runs-on: ubuntu-latest
     if: ${{ needs.detect.outputs.matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push ${{ matrix.dir }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ matrix.dir }}/Dockerfile
-          push: true
-          cache-from: type=gha,scope=${{ matrix.slug }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.slug }}
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/connector-${{ matrix.slug }}:${{ matrix.version }}
-            ghcr.io/${{ github.repository_owner }}/connector-${{ matrix.slug }}:latest
+    uses: ./.github/workflows/scan-and-push.yml
+    with:
+      dir: ${{ matrix.dir }}
+      slug: ${{ matrix.slug }}
+      tag: ${{ matrix.version }}
+      fail_on: ${{ vars.CONNECTOR_SCAN_GATE || 'CRITICAL' }}

@@ -1,0 +1,259 @@
+name: Build, Scan & Publish Connector Image
+
+# Reusable supply-chain gate for connector images: build → scan → (publish).
+#
+# The image is loaded into the local Docker Engine, scanned there, and only
+# pushed to GHCR when the scan passes — so a vulnerable build never reaches the
+# registry. Callers keep their own discover/test matrix and forward one
+# connector per call:
+#
+#   publish:
+#     needs: [discover, test]
+#     strategy:
+#       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+#     uses: ./.github/workflows/scan-and-push.yml
+#     with:
+#       dir:  ${{ matrix.dir }}
+#       slug: ${{ matrix.slug }}
+#       tag:  ${{ matrix.tag }}
+#
+# `push: false` runs the identical build + report without publishing, which is
+# what pull-request CI uses.
+#
+# Actions are pinned to commit SHAs: this job is the gate, so a floating tag on
+# the scanner itself would defeat the point. Bump with
+# `gh api repos/OWNER/REPO/git/ref/tags/vX.Y.Z` and keep the `# vX.Y.Z` comment
+# in sync. The rest of the repo still uses major-version tags.
+
+on:
+  workflow_call:
+    inputs:
+      dir:
+        description: 'Connector directory relative to the repo root, e.g. vulnerabilities/nuclei'
+        required: true
+        type: string
+      slug:
+        description: 'Connector slug; becomes the image name connector-<slug>'
+        required: true
+        type: string
+      tag:
+        description: 'Image tag — the connector version, or an explicit override'
+        required: true
+        type: string
+      push:
+        description: 'Push to GHCR once the gate passes. false = build + report only.'
+        required: false
+        default: true
+        type: boolean
+      fail_on:
+        description: >-
+          Severity gate. The job fails (and the push is skipped) when a finding at
+          or above this severity survives .trivyignore. NONE = report only, never
+          blocks. A comma-separated list is a valid threshold too.
+        required: false
+        default: 'CRITICAL'
+        type: string
+      report_severity:
+        description: 'Severities included in the job report, the SARIF and the step summary'
+        required: false
+        default: 'CRITICAL,HIGH,MEDIUM'
+        type: string
+      ignore_unfixed:
+        description: >-
+          Gate only on vulnerabilities that have an upstream fix. Unfixed findings
+          come from the base image and cannot be actioned without replacing it, so
+          they are reported but not gated by default.
+        required: false
+        default: true
+        type: boolean
+      upload_sarif:
+        description: 'Publish findings to GitHub code scanning (Security tab)'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  image:
+    name: ${{ inputs.slug }}:${{ inputs.tag }}
+    runs-on: ubuntu-latest
+    # ZAP and the nuclei template bundle make the build the slow part; 45 is
+    # generous enough that only a genuinely stuck build trips it.
+    timeout-minutes: 45
+    # Granted by the caller too — a called workflow can only narrow the token it
+    # is handed, never widen it.
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      security-events: write # SARIF upload
+    env:
+      IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/connector-${{ inputs.slug }}
+      IMAGE_REF: ghcr.io/${{ github.repository_owner }}/connector-${{ inputs.slug }}:${{ inputs.tag }}
+      # Load-bearing, not cosmetic. By default Trivy looks in the local engine
+      # first but silently falls back to the registry, so a scan could pass on an
+      # already-published image of the same tag instead of the one just built —
+      # a gate that never fires. `docker` restricts it to the local daemon and
+      # fails closed when the image is missing.
+      TRIVY_IMAGE_SRC: docker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      # `load: true` rather than `push: true` is the whole point: the image has
+      # to be scannable before it exists in the registry. The publish step below
+      # re-runs the same build against the GHA cache written here, so that pass is
+      # a cache hit rather than a rebuild.
+      - name: Build ${{ inputs.dir }} (${{ inputs.tag }})
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: ${{ inputs.dir }}/Dockerfile
+          load: true
+          push: false
+          tags: ${{ env.IMAGE_REF }}
+          cache-from: type=gha,scope=${{ inputs.slug }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.slug }}
+
+      - name: Login to GHCR
+        if: ${{ inputs.push }}
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Everything below inspects the locally loaded image, so every reporting
+      # step runs before the gate — a failed gate still leaves a full report,
+      # an SBOM and a code-scanning entry behind.
+      - name: Report vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REF }}
+          format: table
+          severity: ${{ inputs.report_severity }}
+          ignore-unfixed: false
+          exit-code: 0
+          hide-progress: true
+          timeout: 10m
+          trivyignores: ${{ github.workspace }}/.trivyignore
+
+      - name: Collect scan report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REF }}
+          format: json
+          output: ${{ runner.temp }}/trivy-report.json
+          severity: ${{ inputs.report_severity }}
+          ignore-unfixed: false
+          exit-code: 0
+          hide-progress: true
+          timeout: 10m
+          trivyignores: ${{ github.workspace }}/.trivyignore
+
+      - name: Publish scan summary
+        shell: bash
+        env:
+          REPORT: ${{ runner.temp }}/trivy-report.json
+          REPORT_SEVERITIES: ${{ inputs.report_severity }}
+          GATE_SEVERITY: ${{ inputs.fail_on }}
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.ignore_unfixed }}" = "true" ]; then
+            gate_clause="or higher, counting only findings that have a fix available"
+          else
+            gate_clause="or higher, unfixed findings included"
+          fi
+          {
+            echo "### 🛡️ \`${IMAGE_REF}\`"
+            echo
+            echo "| Severity | Findings |"
+            echo "| --- | ---: |"
+            for severity in CRITICAL HIGH MEDIUM LOW UNKNOWN; do
+              count="$(jq --arg severity "$severity" \
+                '[.Results[]?.Vulnerabilities[]? | select(.Severity == $severity)] | length' \
+                "$REPORT")"
+              printf '| %s | %s |\n' "$severity" "$count"
+            done
+            echo
+            echo "Counts cover ${REPORT_SEVERITIES}, unfixed findings included."
+            echo "Publishing is gated on **${GATE_SEVERITY}** ${gate_clause}."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload scan report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-report-${{ inputs.slug }}-${{ inputs.tag }}
+          path: ${{ runner.temp }}/trivy-report.json
+          retention-days: 30
+          if-no-files-found: error
+
+      # SPDX SBOM of the exact image that ships. Self-uploads as a workflow
+      # artifact, so it is the record of what a published tag contained even
+      # after the base image is rebuilt.
+      - name: Generate SBOM
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          image: ${{ env.IMAGE_REF }}
+          format: spdx-json
+          artifact-name: sbom-${{ inputs.slug }}-${{ inputs.tag }}
+          syft-version: v1.52.0
+          upload-release-assets: false
+          dependency-snapshot: false
+
+      - name: Produce SARIF
+        if: ${{ inputs.upload_sarif }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REF }}
+          format: sarif
+          output: ${{ runner.temp }}/trivy.sarif
+          # trivy-action drops the severity filter for SARIF unless told otherwise,
+          # which would flood the Security tab with LOW/UNKNOWN noise.
+          limit-severities-for-sarif: true
+          severity: ${{ inputs.report_severity }}
+          ignore-unfixed: false
+          exit-code: 0
+          hide-progress: true
+          timeout: 10m
+          trivyignores: ${{ github.workspace }}/.trivyignore
+
+      - name: Upload SARIF to code scanning
+        # Forks get a read-only GITHUB_TOKEN and code scanning needs GHAS on
+        # private repos, so this channel is best effort: a reporting failure must
+        # never be mistaken for a finding.
+        if: ${{ inputs.upload_sarif && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: ${{ runner.temp }}/trivy.sarif
+          category: connector-image-${{ inputs.slug }}
+
+      # Last step before the push: a non-zero exit here fails the job, so the
+      # publish step below is skipped. `fail_on: NONE` matches no finding and
+      # turns the gate into a report.
+      - name: Enforce vulnerability gate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REF }}
+          format: table
+          severity: ${{ inputs.fail_on }}
+          ignore-unfixed: ${{ inputs.ignore_unfixed }}
+          exit-code: 1
+          hide-progress: true
+          timeout: 10m
+          trivyignores: ${{ github.workspace }}/.trivyignore
+
+      - name: Push to GHCR
+        if: ${{ inputs.push }}
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: ${{ inputs.dir }}/Dockerfile
+          push: true
+          cache-from: type=gha,scope=${{ inputs.slug }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.slug }}
+          tags: |
+            ${{ env.IMAGE_REF }}
+            ${{ env.IMAGE_REPO }}:latest
