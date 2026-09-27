@@ -244,12 +244,30 @@ jobs:
       # gate was never actually off, it was just always failing. A genuinely
       # invalid threshold still fails here on purpose: bad config must not
       # silently publish.
+      #
+      # `scanners: vuln` is load-bearing, not tidiness. Left unset, Trivy falls
+      # back to its default `vuln,secret`, and `exit-code: 1` then fails the job
+      # on a *secret* finding too — a category that has no severity and cannot
+      # be compared against `fail_on` at all. That is not hypothetical: the
+      # nuclei image bakes nuclei-templates, which is a detection-rule corpus
+      # and is full of example credentials by design (22 RSA private keys used
+      # as exploit payloads, example JWTs, and a GCP service-account pattern in
+      # http/global-matchers/secrets-patterns-rules.yaml that Trivy rates
+      # CRITICAL). Those are the patterns the scanner is supposed to look for,
+      # not leaks, and they blocked the nuclei publish.
+      #
+      # Secret scanning is deliberately left enabled on the reporting steps
+      # above, which run with `exit-code: 0` and so surface those findings
+      # without being able to fail the build. Gating on secrets is a separate
+      # policy and needs its own ignore list; it does not belong to a severity
+      # gate.
       - name: Enforce vulnerability gate
         if: ${{ inputs.fail_on != 'NONE' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE_REF }}
           format: table
+          scanners: vuln
           severity: ${{ inputs.fail_on }}
           ignore-unfixed: ${{ inputs.ignore_unfixed }}
           exit-code: 1
