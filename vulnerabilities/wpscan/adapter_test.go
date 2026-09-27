@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"sync"
 	"testing"
 
@@ -490,15 +489,18 @@ func TestWpscanExecute_HeuristicSeverityWithoutCVSS(t *testing.T) {
 		if err := f.Validate(); err != nil {
 			t.Errorf("finding %q failed Validate: %v", f.Name, err)
 		}
+		// Severity provenance is never published: Core renders tags[0] as the
+		// finding's category, so a "severity:heuristic" tag would reach users
+		// as the category itself.
+		if len(f.Tags) != 0 {
+			t.Errorf("finding %q should carry no tags, got %v", f.Name, f.Tags)
+		}
 		if f.Name == "Acme Scored RCE" {
 			if f.CVSSScore != 9.8 {
 				t.Errorf("scored finding CVSSScore=%v, want 9.8", f.CVSSScore)
 			}
 			if f.CVSSMetrics == "" {
 				t.Error("scored finding CVSSMetrics should carry the vector")
-			}
-			if len(f.Tags) != 0 {
-				t.Errorf("scored finding should have no heuristic tags, got %v", f.Tags)
 			}
 			continue
 		}
@@ -507,18 +509,6 @@ func TestWpscanExecute_HeuristicSeverityWithoutCVSS(t *testing.T) {
 		}
 		if f.CVSSMetrics != "" {
 			t.Errorf("heuristic finding %q should not have CVSSMetrics, got %q", f.Name, f.CVSSMetrics)
-		}
-		if !slices.Contains(f.Tags, "severity:heuristic") {
-			t.Errorf("heuristic finding %q missing severity:heuristic tag: %v", f.Name, f.Tags)
-		}
-		if f.Name == "Acme 1.0 - Unspecified Glitch" {
-			if !slices.Contains(f.Tags, "severity-source:title-fallback") {
-				t.Errorf("fallback finding %q missing severity-source:title-fallback: %v", f.Name, f.Tags)
-			}
-			continue
-		}
-		if !slices.Contains(f.Tags, "severity-source:title") {
-			t.Errorf("heuristic finding %q missing severity-source:title: %v", f.Name, f.Tags)
 		}
 	}
 }

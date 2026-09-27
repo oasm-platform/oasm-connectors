@@ -99,9 +99,10 @@ func TestRealStdout_EnrichmentFromDatabase(t *testing.T) {
 		t.Errorf("CVEID = %v, want CVE-2000-0709 (from the stdout advisory URL)", f.CVEID)
 	}
 	// Category from the database's tuning field (000024 is tuning "6", Denial
-	// of Service).
-	if !slices.Contains(f.Tags, "category:Denial of Service") {
-		t.Errorf("Tags = %v, want category:Denial of Service", f.Tags)
+	// of Service), published bare: Core renders tags[0] verbatim as the
+	// finding's category, so a prefix would be visible in the UI.
+	if !slices.Contains(f.Tags, "Denial of Service") {
+		t.Errorf("Tags = %v, want Denial of Service", f.Tags)
 	}
 	if f.Severity != "medium" {
 		t.Errorf("Severity = %q, want medium (tuning 6)", f.Severity)

@@ -115,10 +115,13 @@ func mapVulnerability(v vulnerability, target string) (connector.Finding, bool) 
 		return connector.Finding{}, false
 	}
 
+	// Only Acunetix's own tags are published, verbatim. The vulnerability's
+	// status (Fixed/Ignored/Open/False Positive) is scanner bookkeeping with no
+	// field of its own on Finding, and it would compete for the slot Core's
+	// summary report renders as the finding's category (summary-report.service.ts)
+	// — an untagged finding must fall back to "General" rather than be labelled
+	// "status:fixed".
 	tags := append([]string(nil), v.Tags...)
-	if v.Status != "" {
-		tags = append(tags, "status:"+v.Status)
-	}
 	cves, cwes := extractIDs(v.Tags)
 
 	return connector.Finding{

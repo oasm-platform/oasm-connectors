@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -70,11 +69,8 @@ func TestNiktoE2E_RealScan(t *testing.T) {
 	categorised, withCVE := 0, 0
 	for _, f := range findings {
 		assertOnlyCategoryTags(t, f)
-		for _, tag := range f.Tags {
-			if strings.HasPrefix(tag, "category:") {
-				categorised++
-				break
-			}
+		if len(f.Tags) > 0 {
+			categorised++
 		}
 		if len(f.CVEID) > 0 {
 			withCVE++

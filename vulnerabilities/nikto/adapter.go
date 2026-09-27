@@ -195,14 +195,15 @@ func parseItemLine(line, target string) (connector.Finding, bool) {
 		Host:        hostFromTarget(target),
 		Timestamp:   time.Now(),
 	}
-	// Tags carry the check class and nothing else: Core's summary report renders
-	// tags[0] as the finding's category, so a scanner-internal tag (the nikto
-	// test id, the severity provenance) landing there would be published as a
-	// category. Those values have no field of their own on Finding, so they stay
-	// out of the wire format; the id still drives enrichment above.
-	for _, c := range categories {
-		f.Tags = append(f.Tags, "category:"+c)
-	}
+	// Tags carry the check class and nothing else — and they carry it verbatim.
+	// Core's summary report renders tags[0] as the finding's category
+	// (summary-report.service.ts) with no post-processing, so a "category:"-style
+	// prefix would reach users as a category literally reading
+	// "category:SQL Injection". The same reasoning keeps the scanner-internal
+	// values (the nikto test id, the severity provenance) off the wire: they have
+	// no field of their own on Finding, and they would land in the same slot. The
+	// id still drives the enrichment above.
+	f.Tags = append(f.Tags, categories...)
 
 	f.References = append(f.References, refs...)
 

@@ -285,15 +285,18 @@ func toFinding(v wpscanVuln, target string) (connector.Finding, bool) {
 		return connector.Finding{}, false
 	}
 
-	severity, source := resolveSeverity(v)
+	// Severity provenance stays off the wire. Core's summary report renders
+	// tags[0] as the finding's category verbatim (summary-report.service.ts),
+	// so publishing "severity:heuristic" would label every finding WPScan left
+	// unscored with that bookkeeping string as its category — and Finding has no
+	// field to carry it in. The band it qualifies is already on Severity, and
+	// resolveSeverity still reports the source for callers that want it.
+	severity, _ := resolveSeverity(v)
 	f := connector.Finding{
 		Name:      v.Title,
 		Severity:  severity,
 		MatchedAt: target,
 		Timestamp: time.Now(),
-	}
-	if source != "" {
-		f.Tags = append(f.Tags, "severity:heuristic", "severity-source:"+source)
 	}
 	if v.CVSS != nil {
 		if score, ok := parseCVSSScore(v.CVSS.Score); ok {
