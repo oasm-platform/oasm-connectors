@@ -1,8 +1,8 @@
 # connector image (SDK+tool) — built from ./Dockerfile, not upstream image
 name: Nuclei
 slug: nuclei
-version: 3.4.1
-image: ghcr.io/oasm-platform/connector-nuclei:3.4.1
+version: 3.11.1
+image: ghcr.io/oasm-platform/connector-nuclei:3.11.1
 author: 'oasm'
 pricingTier: [free]
 homepage: 'https://projectdiscovery.io'

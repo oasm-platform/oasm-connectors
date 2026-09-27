@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-23T03:31:42.5969298Z",
+  "generatedAt": "2026-09-27T04:21:24.5728427Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -733,8 +733,8 @@
     {
       "name": "Nuclei",
       "slug": "nuclei",
-      "version": "3.4.1",
-      "image": "ghcr.io/oasm-platform/connector-nuclei:3.4.1",
+      "version": "3.11.1",
+      "image": "ghcr.io/oasm-platform/connector-nuclei:3.11.1",
       "author": "oasm",
       "pricingTier": [
         "free"
@@ -1062,8 +1062,8 @@
     {
       "name": "WPScan - WordPress Security Scanner",
       "slug": "wpscan",
-      "version": "3.8.27",
-      "image": "ghcr.io/oasm-platform/connector-wpscan:3.8.27",
+      "version": "4.1.0",
+      "image": "ghcr.io/oasm-platform/connector-wpscan:4.1.0",
       "author": "oasm",
       "pricingTier": [
         "free"

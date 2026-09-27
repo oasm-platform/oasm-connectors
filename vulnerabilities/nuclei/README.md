@@ -1,12 +1,12 @@
 # Nuclei Connector
 
 Reference connector proving Core → Worker (docker.sock) → Connector SDK → tool → back.
-Embeds [projectdiscovery/nuclei](https://github.com/projectdiscovery/nuclei) v3.4.1 as a Go library (`github.com/projectdiscovery/nuclei/v3/lib`) and scans in-process.
+Embeds [projectdiscovery/nuclei](https://github.com/projectdiscovery/nuclei) v3.11.1 as a Go library (`github.com/projectdiscovery/nuclei/v3/lib`) and scans in-process.
 
 ## Requirements
 
 - Go 1.26+, Docker, Worker reachable at `WORKER_GRPC_ADDR`
-- Nuclei v3.4.1 embedded as a Go library dependency (`github.com/projectdiscovery/nuclei/v3/lib`); scans run in-process
+- Nuclei v3.11.1 embedded as a Go library dependency (`github.com/projectdiscovery/nuclei/v3/lib`); scans run in-process
 
 This connector is its own Go module. All dependencies, including the SDK (pulled in via a local `replace` to `../../sdk`), are declared in this directory's `go.mod`, so run build and test commands from here.
 
@@ -26,7 +26,7 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 ```yaml
 # Connector profile submitted to the Worker (ExecutionCommand spec)
 slug: nuclei
-image: ghcr.io/oasm-platform/connector-nuclei:3.4.1
+image: ghcr.io/oasm-platform/connector-nuclei:3.11.1
 inputs:
   target: https://example.com
 config: # matches configSchema in manifest.yaml
@@ -42,9 +42,9 @@ config: # matches configSchema in manifest.yaml
 ### Docker
 
 ```bash
-docker build -t ghcr.io/oasm-platform/connector-nuclei:3.4.1 -f vulnerabilities/nuclei/Dockerfile .
+docker build -t ghcr.io/oasm-platform/connector-nuclei:3.11.1 -f vulnerabilities/nuclei/Dockerfile .
 docker run --rm -e WORKER_GRPC_ADDR=worker:50051 -e EXECUTION_ID=job-1 \
-  ghcr.io/oasm-platform/connector-nuclei:3.4.1
+  ghcr.io/oasm-platform/connector-nuclei:3.11.1
 ```
 
 ### Manual
@@ -57,7 +57,7 @@ cd vulnerabilities/nuclei && go run .
 
 - `adapter.go` — `NucleiAdapter` (tool-specific parsing stub); `Validate` + `Execute`
 - `main.go` — wires `NucleiAdapter` + SDK (`sdk/connector`, `sdk/runtime`)
-- `manifest.yaml` — source of truth for `manifest.json` (image `ghcr.io/oasm-platform/connector-nuclei:3.4.1` is a single binary embedding the nuclei library)
+- `manifest.yaml` — source of truth for `manifest.json` (image `ghcr.io/oasm-platform/connector-nuclei:3.11.1` is a single binary embedding the nuclei library)
 - `Dockerfile` — `golang:1.26-alpine` builder → `alpine:3.20` non-root single-binary image; templates baked at build time via `cmd/templates` + installer API
 
 ## Testing

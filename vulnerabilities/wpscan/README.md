@@ -1,11 +1,11 @@
 # WPScan Connector
 
-Runs [wpscanteam/wpscan](https://github.com/wpscanteam/wpscan) 3.8.27 via the OASM Worker gRPC bridge. Scans WordPress sites for known vulnerabilities in core, plugins, themes, and version.
+Runs [wpscanteam/wpscan](https://github.com/wpscanteam/wpscan) 4.1.0 via the OASM Worker gRPC bridge. Scans WordPress sites for known vulnerabilities in core, plugins, themes, and version.
 
 ## Requirements
 
 - Go 1.26+, Docker, Worker reachable at `WORKER_GRPC_ADDR`
-- Tool binary `wpscan` bundled in image via multi-stage `COPY --from=wpscanteam/wpscan:3.8.27`
+- Tool binary `wpscan` bundled in image via multi-stage `COPY --from=wpscanteam/wpscan:4.1.0`
 
 This connector is its own Go module. All dependencies, including the SDK (pulled in via a local `replace` to `../../sdk`), are declared in this directory's `go.mod`, so run build and test commands from here.
 
@@ -26,7 +26,7 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 ```yaml
 # Connector profile submitted to the Worker (ExecutionCommand spec)
 slug: wpscan
-image: ghcr.io/oasm-platform/connector-wpscan:3.8.27
+image: ghcr.io/oasm-platform/connector-wpscan:4.1.0
 inputs:
   target: https://example.com
 ```
@@ -36,9 +36,9 @@ inputs:
 ### Docker
 
 ```bash
-docker build -t ghcr.io/oasm-platform/connector-wpscan:3.8.27 -f vulnerabilities/wpscan/Dockerfile .
+docker build -t ghcr.io/oasm-platform/connector-wpscan:4.1.0 -f vulnerabilities/wpscan/Dockerfile .
 docker run --rm -e WORKER_GRPC_ADDR=worker:50051 -e EXECUTION_ID=job-1 \
-  ghcr.io/oasm-platform/connector-wpscan:3.8.27
+  ghcr.io/oasm-platform/connector-wpscan:4.1.0
 ```
 
 ### Manual
@@ -51,8 +51,8 @@ cd vulnerabilities/wpscan && go run .
 
 - `adapter.go` — `WpscanAdapter` (tool-specific parsing); `Validate` (no-op) + `Execute`
 - `main.go` — wires `WpscanAdapter` + SDK (`sdk/connector`, `sdk/runtime`)
-- `manifest.yaml` — source of truth for `manifest.json` (image `ghcr.io/oasm-platform/connector-wpscan:3.8.27` is SDK+tool bundle, not upstream)
-- `Dockerfile` — `golang:1.26-alpine` builder → `wpscanteam/wpscan:3.8.27` non-root final stage
+- `manifest.yaml` — source of truth for `manifest.json` (image `ghcr.io/oasm-platform/connector-wpscan:4.1.0` is SDK+tool bundle, not upstream)
+- `Dockerfile` — `golang:1.26-alpine` builder → `wpscanteam/wpscan:4.1.0` non-root final stage
 - `testdata/fake-wpscan/` — test stub that outputs canned JSON; driven by `FAKE_MODE` env
 
 ## Testing

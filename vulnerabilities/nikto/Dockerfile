@@ -14,9 +14,18 @@ RUN cd vulnerabilities/nikto && CGO_ENABLED=0 GOWORK=off go build -trimpath -o /
 # — this is the repository the upstream Dockerfile publishes to.
 FROM hackllc/nikto:2.6.1
 # The base image already runs as the non-root `nikto` user (uid 100) and puts
-# /opt/nikto on PATH, so `nikto.pl` resolves by name. COPY must happen as root
-# (the base image's default USER is nikto) before dropping back to nikto.
+# /opt/nikto on PATH, so `nikto.pl` resolves by name. Package management must
+# happen as root (the base image's default USER is nikto, and apk cannot write
+# its log otherwise) before dropping back to nikto.
 USER root
+# The base image pins alpine 3.23.3, which ships openssl 3.5.5-r0 and so carries
+# CVE-2026-31789 (heap overflow in X.509 parsing, fixed in 3.5.6-r0). Upstream
+# publishes no newer tag — 2.6.1 is the newest, and `rolling` is the same alpine
+# with the same openssl — so the patch has to be applied here. This is the one
+# floating input in the build: whatever alpine has shipped as of build time.
+# `.trivyignore` forbids ignoring a CRITICAL, which leaves this as the fix.
+# `apk update` first: the base image carries no package index.
+RUN apk update --no-cache && apk upgrade --no-cache
 COPY --from=builder /out/connector /usr/local/bin/connector
 USER nikto
 ENV HOME=/home/nikto
