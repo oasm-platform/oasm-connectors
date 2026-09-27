@@ -61,6 +61,17 @@ tasks:
     cmds:
       - "{{.GO}} run ./scripts/combine-manifest -root ."
 
+  ci-scope:
+    desc: report which connectors the last commit would rebuild and test
+    cmds:
+      - "bash .github/scripts/detect-changed-connectors.sh --base HEAD~1 --head HEAD"
+    silent: false
+
+  ci-test:
+    desc: unit-test the CI change detector
+    cmds:
+      - "bash .github/scripts/detect-changed-connectors_test.sh"
+
   default:
     desc: default task (runs test)
     deps: [test]

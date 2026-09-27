@@ -1,18 +1,39 @@
 name: Build Changed Connectors
 
-# Incremental publish: on push to main, build + push only the connector
-# images whose folder changed. Full build stays available via
-# build-connectors.yml (workflow_dispatch).
+# Incremental publish. On push to main only the connector images whose inputs
+# actually changed are built, scanned and pushed; every other tag in GHCR keeps
+# pointing at the last good build. With a dozen tools in the catalogue that is
+# the difference between one runner and a dozen — each image costs a build, a
+# Trivy scan, an SBOM and a SARIF upload.
+#
+# How a change is scoped (see .github/scripts/detect-changed-connectors.sh):
+#
+#   <category>/<slug>/**            -> that connector
+#   a build-context input of some    -> those connectors. Derived from each
+#   connector (sdk/ today)              Dockerfile's COPY sources, so a new
+#                                      shared input is picked up automatically
+#   .dockerignore                   -> everything; it filters every context
+#   root module files (go.mod,      -> no image. Those files build nothing,
+#   go.work, scripts/**,               so the root module's tests are the gate
+#   manifest.json, Taskfile.yml)
+#   docs, .trivyignore, CI config   -> nothing at all
+#
+# The trigger is a denylist, not a list of connector globs: a new category added
+# to the repo has to publish on its first push, and an over-narrow `paths:`
+# filter is how that silently breaks. The detector is the real gate, and it
+# skips every downstream job when there is nothing to do.
+#
+# A full rebuild of the whole catalogue stays one dispatch away, via
+# build-connectors.yml.
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'sdk/**'
-      - 'ports_scanner/**'
-      - 'url_discovery/**'
-      - 'vulnerabilities/**'
-      - '.github/workflows/build-changed-connectors.yml'
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.playwright-mcp/**'
 
 permissions:
   contents: read
@@ -21,88 +42,85 @@ permissions:
   # only narrow the token it is handed, so the grant has to be here too.
   security-events: write
 
+# One publish at a time. Two runs racing on the mutable `latest` tag can leave
+# the older image owning it, and cancelling the superseded run is the safe
+# direction: the newer commit is the one that should win.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # Job id left as `detect` — branch protection may reference the check by that
+  # name. It also tests itself on every run: a wrong answer here either skips a
+  # publish or rebuilds the whole catalogue.
   detect:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
+      matrix: ${{ steps.detect.outputs.matrix }}
+      test_dirs: ${{ steps.detect.outputs.test_dirs }}
+      has_build: ${{ steps.detect.outputs.has_build }}
+      has_test: ${{ steps.detect.outputs.has_test }}
     steps:
       - uses: actions/checkout@v4
         with:
+          # The base commit has to be in the clone for the diff; a shallow
+          # fetch only carries the head. blob:none keeps that history cheap.
           fetch-depth: 0
+          filter: blob:none
+
+      - name: Test the detector
+        run: bash .github/scripts/detect-changed-connectors_test.sh
 
       - name: Detect changed connectors
-        id: matrix
+        id: detect
         shell: bash
+        env:
+          BASE: ${{ github.event.before }}
+          HEAD: ${{ github.sha }}
         run: |
           set -euo pipefail
-          ZERO=0000000000000000000000000000000000000000
-          BEFORE="${{ github.event.before }}"
-          AFTER="${{ github.sha }}"
-          build_all=0
-          declare -A changed=()
+          chmod +x .github/scripts/detect-changed-connectors.sh
+          .github/scripts/detect-changed-connectors.sh --base "$BASE" --head "$HEAD" >>"$GITHUB_OUTPUT"
 
-          if [ "$BEFORE" = "$ZERO" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            build_all=1
-          else
-            while IFS= read -r f; do
-              case "$f" in
-                sdk/*) build_all=1 ;;
-                */*/*) changed["$(dirname "$f")"]=1 ;;
-              esac
-            done < <(git diff --name-only "$BEFORE" "$AFTER")
-          fi
-
-          dirs=""
-          if [ "$build_all" = 1 ]; then
-            for d in */*/; do
-              [ -f "$d/manifest.yaml" ] && [ -f "$d/Dockerfile" ] && dirs="$dirs${d%/}"$'\n'
-            done
-          else
-            for d in "${!changed[@]}"; do
-              # normalize depth-2 path segments to the connector dir
-              while [ ! -f "$d/manifest.yaml" ] && [ "$d" != "${d%/*}" ]; do d="${d%/*}"; done
-              [ -f "$d/manifest.yaml" ] && [ -f "$d/Dockerfile" ] && dirs="$dirs$d"$'\n'
-            done
-          fi
-
-          include=""
-          while IFS= read -r dir; do
-            [ -n "$dir" ] || continue
-            slug="$(sed -n 's/^slug:[[:space:]]*//p' "$dir/manifest.yaml")"
-            version="$(sed -n 's/^version:[[:space:]]*//p' "$dir/manifest.yaml")"
-            if [ -z "$slug" ] || [ -z "$version" ]; then
-              echo "::warning::skip $dir: missing slug/version"
-              continue
-            fi
-            entry="$(jq -nc --arg dir "$dir" --arg slug "$slug" --arg version "$version" '{dir:$dir,slug:$slug,version:$version}')"
-            include="$include${include:+,}$entry"
-          done <<< "$dirs"
-
-          matrix="{\"include\":[${include}]}"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "matrix=$matrix"
-
+  # Only the modules that moved. A connector is an independent Go module, so an
+  # untouched one cannot regress from a change in its neighbour — but its test
+  # suite is also the slowest part of CI, and nuclei alone drags in a dependency
+  # tree worth minutes of downloads.
+  #
+  # The detector guarantees a changed connector always maps to a module, so this
+  # job is never skipped while there is an image to publish: a skipped `test`
+  # would cascade into a skipped `push`.
   test:
     needs: detect
+    if: needs.detect.outputs.has_test == 'true'
     runs-on: ubuntu-latest
-    if: ${{ needs.detect.outputs.matrix != '{"include":[]}' }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.x'
-      - name: Run go tests (root + sdk + each connector)
+      - name: Run go tests (changed modules only)
         shell: bash
+        env:
+          TEST_DIRS: ${{ needs.detect.outputs.test_dirs }}
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          GOWORK=off go test ./... -count=1
-          (cd sdk && GOWORK=off go test ./... -count=1)
-          for d in */*/; do
-            [ -f "$d/go.mod" ] || continue
-            (cd "$d" && GOWORK=off go test ./... -count=1)
-          done
+          failed=""
+          while IFS= read -r dir; do
+            [ -n "$dir" ] || continue
+            echo "::group::go test $dir"
+            if ! (cd "$dir" && GOWORK=off go test ./... -count=1); then
+              failed="$failed $dir"
+            fi
+            echo "::endgroup::"
+          done < <(printf '%s\n' "$TEST_DIRS")
+          if [ -n "$failed" ]; then
+            echo "::error::failing modules:$failed"
+            exit 1
+          fi
 
   # Builds, scans and gates every changed image before it reaches GHCR — see
   # .github/workflows/scan-and-push.yml. A CRITICAL finding fails this job, so
@@ -110,7 +128,7 @@ jobs:
   # last good image instead of the new one.
   push:
     needs: [detect, test]
-    if: ${{ needs.detect.outputs.matrix != '{"include":[]}' }}
+    if: needs.detect.outputs.has_build == 'true'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
@@ -118,5 +136,5 @@ jobs:
     with:
       dir: ${{ matrix.dir }}
       slug: ${{ matrix.slug }}
-      tag: ${{ matrix.version }}
+      tag: ${{ matrix.tag }}
       fail_on: ${{ vars.CONNECTOR_SCAN_GATE || 'CRITICAL' }}

@@ -1,5 +1,19 @@
 name: Build & Push All Connectors
 
+# Two entry points, one pipeline:
+#
+#   pull_request        build + test only what the PR changed, publish nothing
+#   workflow_dispatch   build + test the whole catalogue, then publish
+#
+# Both derive their matrix from the same detector the push-to-main pipeline
+# uses (.github/scripts/detect-changed-connectors.sh), so a PR that touches one
+# connector builds one image instead of all of them, and a dispatch still means
+# "rebuild everything".
+#
+# Pushes to main are not handled here: build-changed-connectors.yml builds and
+# publishes exactly the changed connectors, and running both would build the
+# same images twice.
+
 on:
   workflow_dispatch:
     inputs:
@@ -17,32 +31,12 @@ on:
         required: false
         default: ''
         type: string
-  # CI on every change touching the connectors: build + test only — images
-  # are published solely via workflow_dispatch (see the push job's guard).
-  push:
-    paths:
-      - 'sdk/**'
-      - 'ports_scanner/**'
-      - 'vulnerabilities/**'
-      - 'url_discovery/**'
-      - 'scripts/**'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/build-connectors.yml'
-      - '.github/workflows/scan-and-push.yml'
-      - '.trivyignore'
   pull_request:
-    paths:
-      - 'sdk/**'
-      - 'ports_scanner/**'
-      - 'vulnerabilities/**'
-      - 'url_discovery/**'
-      - 'scripts/**'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/build-connectors.yml'
-      - '.github/workflows/scan-and-push.yml'
-      - '.trivyignore'
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.playwright-mcp/**'
 
 permissions:
   contents: read
@@ -60,57 +54,90 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Job id left as `discover` — branch protection may reference the check by that
+  # name. It runs the same detector as the push-to-main pipeline, so both derive
+  # their matrix from one implementation, and tests it on every run.
   discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
+      matrix: ${{ steps.detect.outputs.matrix }}
+      test_dirs: ${{ steps.detect.outputs.test_dirs }}
+      has_build: ${{ steps.detect.outputs.has_build }}
+      has_test: ${{ steps.detect.outputs.has_test }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The pull request's base commit has to be in the clone for the diff.
+          # blob:none keeps that history cheap.
+          fetch-depth: 0
+          filter: blob:none
 
-      - name: Discover connectors and build matrix
-        id: matrix
+      - name: Test the detector
+        run: bash .github/scripts/detect-changed-connectors_test.sh
+
+      - name: Detect connectors to build
+        id: detect
         shell: bash
         env:
-          IMAGE_TAG_OVERRIDE: ${{ inputs.image_tag }}
+          # A dispatch has no baseline to diff against — it rebuilds the whole
+          # catalogue on purpose. A pull request is scoped to what it changed.
+          FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           set -euo pipefail
-          include=""
-          for d in */*/; do
-            [ -f "$d/manifest.yaml" ] || continue
-            dir="${d%/}"
-            slug="$(sed -n 's/^slug:[[:space:]]*//p' "$d/manifest.yaml")"
-            version="$(sed -n 's/^version:[[:space:]]*//p' "$d/manifest.yaml")"
-            [ -n "$slug" ] && [ -n "$version" ] || { echo "::warning::skip $dir: missing slug/version"; continue; }
-            tag="${IMAGE_TAG_OVERRIDE:-$version}"
-            entry="$(jq -nc --arg dir "$dir" --arg slug "$slug" --arg version "$version" --arg tag "$tag" '{dir:$dir,slug:$slug,version:$version,tag:$tag}')"
-            include="$include${include:+,}$entry"
-          done
-          matrix="{\"include\":[${include}]}"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "matrix=$matrix"
+          args=(--root . --head "${GITHUB_SHA}")
+          if [ "$FORCE_ALL" = "true" ]; then
+            args+=(--force-all)
+          else
+            # An empty base is the script's "no baseline" case, which selects
+            # everything — the safe direction for a gate.
+            args+=(--base "$BASE")
+          fi
+          if [ -n "$IMAGE_TAG" ]; then
+            args+=(--tag-override "$IMAGE_TAG")
+          fi
+          chmod +x .github/scripts/detect-changed-connectors.sh
+          .github/scripts/detect-changed-connectors.sh "${args[@]}" >>"$GITHUB_OUTPUT"
 
+  # Job id deliberately left as `test` — branch protection may reference the
+  # check by that name. Only the modules that moved are tested: a connector is
+  # an independent Go module, so an untouched one cannot regress from a change
+  # in its neighbour, and its dependency tree is the slowest part of CI.
+  #
+  # On a dispatch the detector selects the whole catalogue, so this never skips
+  # while `push` is waiting on it.
   test:
     needs: discover
+    if: needs.discover.outputs.has_test == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: ${{ needs.discover.outputs.matrix != '{"include":[]}' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.x'
-      - name: Run go tests (root + sdk + each connector)
+      - name: Run go tests (changed modules only)
         shell: bash
+        env:
+          TEST_DIRS: ${{ needs.discover.outputs.test_dirs }}
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          GOWORK=off go test ./... -count=1
-          (cd sdk && GOWORK=off go test ./... -count=1)
-          for d in */*/; do
-            [ -f "$d/go.mod" ] || continue
-            (cd "$d" && GOWORK=off go test ./... -count=1)
-          done
+          failed=""
+          while IFS= read -r dir; do
+            [ -n "$dir" ] || continue
+            echo "::group::go test $dir"
+            if ! (cd "$dir" && GOWORK=off go test ./... -count=1); then
+              failed="$failed $dir"
+            fi
+            echo "::endgroup::"
+          done < <(printf '%s\n' "$TEST_DIRS")
+          if [ -n "$failed" ]; then
+            echo "::error::failing modules:$failed"
+            exit 1
+          fi
 
   # Job id deliberately left as `build-test` — branch protection may reference the
   # check by that name. It also scans now, via the shared gate, but with the
@@ -119,7 +146,7 @@ jobs:
   # image they did not touch. The push job below is where a finding blocks.
   build-test:
     needs: discover
-    if: ${{ needs.discover.outputs.matrix != '{"include":[]}' }}
+    if: needs.discover.outputs.has_build == 'true'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
@@ -133,9 +160,9 @@ jobs:
 
   push:
     needs: [discover, test, build-test]
-    # Publish only on explicit dispatch (dry_run=false). On push/pull_request
-    # events `inputs` is empty, so this guard also prevents accidental
-    # publishes from CI runs.
+    # Publish only on explicit dispatch (dry_run=false). On pull_request
+    # `inputs` is empty, so this guard also prevents accidental publishes
+    # from CI runs.
     if: ${{ github.event_name == 'workflow_dispatch' && !inputs.dry_run }}
     strategy:
       fail-fast: false
