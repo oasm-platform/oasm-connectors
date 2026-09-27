@@ -1,0 +1,4 @@
+# CI-only shell scripts, executed by bash on a Linux runner where a stray CR
+# turns every line into "command not found". Normalize them at checkout so a
+# Windows contributor cannot commit a workflow-breaking line ending.
+*.sh text eol=lf
