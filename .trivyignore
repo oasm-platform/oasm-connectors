@@ -15,8 +15,23 @@
 #     ours to fix, never to ignore.
 #   * CRITICAL is not ignorable. If a base image ships one, bump the tag in that
 #     connector's Dockerfile.
+#   * The one exception is a default gem that the base image's own runtime
+#     shadows: present on disk, never loaded, and not removable by any package
+#     operation. `gem uninstall` refuses default gems, and editing a gemspec's
+#     version to quiet the scanner would hide a real vulnerability, so those get
+#     a documented, expiring entry instead. Prove the shadowing before adding
+#     one — see the json entry below.
 #   * Every entry carries a reason and an expiry, and the author removes it when
 #     the expiry passes.
 #
 # Adding an entry means the gate stops seeing that finding for every connector
 # sharing the base image — keep the list short enough to review.
+
+# json 2.18.0 is a default gem of the Ruby 4.0.0 that wpscanteam/wpscan:v4.1.0
+# ships, so it is compiled into the interpreter and RubyGems refuses to
+# uninstall it. The connector image installs json 2.21.1 alongside it, and
+# RubyGems activates the higher version, so the flagged 2.18.0 is never loaded:
+# `ruby -rjson -e 'puts JSON::VERSION'` prints 2.21.1 in the built image. Drop
+# this entry once upstream ships a Ruby whose default json is >= 2.19.2, at which
+# point the vulnerable copy is gone rather than shadowed.
+CVE-2026-33210  # expires:2026-12-31 reason:shadowed ruby default gem, 2.21.1 is what loads
