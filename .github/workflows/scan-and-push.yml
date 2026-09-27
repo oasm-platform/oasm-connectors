@@ -48,8 +48,9 @@ on:
       fail_on:
         description: >-
           Severity gate. The job fails (and the push is skipped) when a finding at
-          or above this severity survives .trivyignore. NONE = report only, never
-          blocks. A comma-separated list is a valid threshold too.
+          or above this severity survives .trivyignore. NONE turns the gate off and
+          leaves the run reporting only. A comma-separated list is a valid
+          threshold too.
         required: false
         default: 'CRITICAL'
         type: string
@@ -158,12 +159,15 @@ jobs:
           REPORT: ${{ runner.temp }}/trivy-report.json
           REPORT_SEVERITIES: ${{ inputs.report_severity }}
           GATE_SEVERITY: ${{ inputs.fail_on }}
+          IGNORE_UNFIXED: ${{ inputs.ignore_unfixed }}
         run: |
           set -euo pipefail
-          if [ "${{ inputs.ignore_unfixed }}" = "true" ]; then
-            gate_clause="or higher, counting only findings that have a fix available"
+          if [ "$GATE_SEVERITY" = "NONE" ]; then
+            gate_note="The vulnerability gate is **disabled** — this run reports only, nothing is blocked."
+          elif [ "$IGNORE_UNFIXED" = "true" ]; then
+            gate_note="Publishing is gated on **${GATE_SEVERITY}** or higher, counting only findings that have a fix available."
           else
-            gate_clause="or higher, unfixed findings included"
+            gate_note="Publishing is gated on **${GATE_SEVERITY}** or higher, unfixed findings included."
           fi
           {
             echo "### 🛡️ \`${IMAGE_REF}\`"
@@ -178,7 +182,7 @@ jobs:
             done
             echo
             echo "Counts cover ${REPORT_SEVERITIES}, unfixed findings included."
-            echo "Publishing is gated on **${GATE_SEVERITY}** ${gate_clause}."
+            echo "$gate_note"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload scan report
@@ -231,9 +235,17 @@ jobs:
           category: connector-image-${{ inputs.slug }}
 
       # Last step before the push: a non-zero exit here fails the job, so the
-      # publish step below is skipped. `fail_on: NONE` matches no finding and
-      # turns the gate into a report.
+      # publish step below is skipped.
+      #
+      # `fail_on: NONE` skips this step instead of forwarding it. Trivy's
+      # --severity is an enum (UNKNOWN/LOW/MEDIUM/HIGH/CRITICAL) with no
+      # match-nothing member, so passing NONE through made Trivy exit 1 on a
+      # flag parse error and turned every report-only run into a red one — the
+      # gate was never actually off, it was just always failing. A genuinely
+      # invalid threshold still fails here on purpose: bad config must not
+      # silently publish.
       - name: Enforce vulnerability gate
+        if: ${{ inputs.fail_on != 'NONE' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE_REF }}
