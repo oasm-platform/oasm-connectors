@@ -115,6 +115,20 @@ func TestResultEventToFinding(t *testing.T) {
 			wantErr: "no name",
 		},
 		{
+			name: "engine error event (host skipped) is rejected",
+			event: func() *nucleiOutput.ResultEvent {
+				ev := fullEvent()
+				// Nuclei emits this synthetic event once per remaining
+				// template after marking the host unresponsive; it has the
+				// template Info but no match.
+				ev.Matched = ""
+				ev.IP = ""
+				ev.Error = "host was skipped as it was found unresponsive"
+				return ev
+			},
+			wantErr: "engine error",
+		},
+		{
 			name: "unknown severity normalizes to info",
 			event: func() *nucleiOutput.ResultEvent {
 				ev := fullEvent()

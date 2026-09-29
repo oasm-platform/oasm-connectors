@@ -30,6 +30,10 @@ type Config struct {
 	RateLimit       *int     `json:"rateLimit"`
 	Concurrency     *int     `json:"concurrency"`
 	FollowRedirects *bool    `json:"followRedirects"`
+	// Interactsh enables out-of-band interaction detection (SSRF/RCE/XXE via a
+	// public interactsh server). Absent → enabled, so a plain scan matches
+	// `nuclei -u <target>`; set false in air-gapped/no-egress environments.
+	Interactsh *bool `json:"interactsh"`
 }
 
 // parseConfig unmarshals a JSON string into Config. An empty or malformed
@@ -79,7 +83,7 @@ type params struct {
 // When TemplateIds is set, only filters.IDs is populated: severity/tags/excludeTags
 // are dropped because mixing -id with template selection filters made nuclei
 // silently match nothing. When no config is provided the manifest.yaml defaults
-// apply: rateLimit=150, concurrency=25.
+// apply: rateLimit=150, concurrency=25, interactsh=enabled.
 func scanParams(cfg Config, dir string) params {
 	templates := []string{dir}
 	var filters nuclei.TemplateFilters
@@ -111,7 +115,15 @@ func scanParams(cfg Config, dir string) params {
 	}
 	fr := cfg.FollowRedirects != nil && *cfg.FollowRedirects
 
-	return params{templates, filters, rl, c, fr, idMode, true}
+	// Interactsh is enabled unless the operator opts out: blind/OOB templates
+	// (RCE, SSRF, XXE) silently produce zero findings without it, which is why
+	// a bare connector scan used to return far fewer results than the CLI.
+	interactsh := true
+	if cfg.Interactsh != nil {
+		interactsh = *cfg.Interactsh
+	}
+
+	return params{templates, filters, rl, c, fr, idMode, !interactsh}
 }
 
 // sdkOptions converts resolved params into nuclei SDK option functions.
@@ -226,6 +238,14 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 		}
 		return fmt.Errorf("nuclei scan: %w", scanErr)
 	}
+
+	// A reachable target never produces zero findings AND skipped events:
+	// skipped results come from nuclei's "host was skipped as it was found
+	// unresponsive" events. Surfacing that as a failure beats reporting a
+	// silent empty scan the operator cannot distinguish from a clean target.
+	if findings == 0 && skipped > 0 {
+		return fmt.Errorf("nuclei scan: 0 findings but %d template results were skipped (target marked unresponsive) — check target reachability and container network egress", skipped)
+	}
 	return nil
 }
 
@@ -248,7 +268,16 @@ func normalizeSeverity(s string) string {
 // stream. Severity "unknown" normalizes to "info" via normalizeSeverity,
 // mirroring the old JSONL parser's no-drop behaviour. StringSlice fields use
 // ToSlice() because stringslice models a single string OR a []string.
+//
+// Engine error events are rejected: when a target is marked permanently
+// unresponsive, nuclei still calls the result callback once per remaining
+// template with a synthetic event (Info populated, Matched/IP empty,
+// Error="host was skipped as it was found unresponsive"). Emitting those would
+// turn every skipped template into a bogus vulnerability.
 func resultEventToFinding(event *nucleiOutput.ResultEvent) (connector.Finding, error) {
+	if event.Error != "" {
+		return connector.Finding{}, fmt.Errorf("finding event carries an engine error: %s", event.Error)
+	}
 	name := event.Info.Name
 	if name == "" {
 		name = event.TemplateID

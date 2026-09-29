@@ -30,12 +30,17 @@ image: ghcr.io/oasm-platform/connector-nuclei:3.11.1
 inputs:
   target: https://example.com
 config: # matches configSchema in manifest.yaml
-  severity: [medium, high, critical]
+  severity: [info, low, medium, high, critical]
+  interactsh: true
   tags: [cves]
   rateLimit: 150
   concurrency: 25
   followRedirects: true
 ```
+
+`interactsh` (default `true`) enables out-of-band detection for blind SSRF/RCE/XXE
+templates; it needs outbound access to a public interactsh server. Set it to
+`false` in air-gapped environments (OOB templates then return nothing).
 
 ## Deployment
 

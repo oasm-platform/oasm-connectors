@@ -95,7 +95,7 @@ func TestParseConfig(t *testing.T) {
 		},
 		{
 			name: "valid JSON with all fields",
-			raw:  `{"severity":["high","critical"],"tags":["cve"],"excludeTags":["dos"],"templateIds":["CVE-2021-1"],"rateLimit":100,"concurrency":30,"followRedirects":true}`,
+			raw:  `{"severity":["high","critical"],"tags":["cve"],"excludeTags":["dos"],"templateIds":["CVE-2021-1"],"rateLimit":100,"concurrency":30,"followRedirects":true,"interactsh":false}`,
 			check: func(t *testing.T, cfg Config) {
 				if len(cfg.Severity) != 2 || cfg.Severity[0] != "high" || cfg.Severity[1] != "critical" {
 					t.Errorf("severity = %v", cfg.Severity)
@@ -117,6 +117,9 @@ func TestParseConfig(t *testing.T) {
 				}
 				if cfg.FollowRedirects == nil || !*cfg.FollowRedirects {
 					t.Errorf("followRedirects = %v", cfg.FollowRedirects)
+				}
+				if cfg.Interactsh == nil || *cfg.Interactsh {
+					t.Errorf("interactsh = %v, want explicit false", cfg.Interactsh)
 				}
 			},
 		},

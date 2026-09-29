@@ -43,6 +43,9 @@ func TestScanParams(t *testing.T) {
 				if p.idMode {
 					t.Errorf("idMode = true, want false")
 				}
+				if p.noInteractsh {
+					t.Errorf("noInteractsh = true, want false (interactsh on by default)")
+				}
 			},
 		},
 		{
@@ -142,6 +145,26 @@ func TestScanParams(t *testing.T) {
 			check: func(t *testing.T, p params) {
 				if p.followRedirects {
 					t.Error("followRedirects = true, want false")
+				}
+			},
+		},
+		{
+			name: "interactsh true disables noInteractsh",
+			cfg:  Config{Interactsh: boolPtr(true)},
+			dir:  defaultTemplateDir,
+			check: func(t *testing.T, p params) {
+				if p.noInteractsh {
+					t.Error("noInteractsh = true, want false when interactsh=true")
+				}
+			},
+		},
+		{
+			name: "interactsh false enables noInteractsh",
+			cfg:  Config{Interactsh: boolPtr(false)},
+			dir:  defaultTemplateDir,
+			check: func(t *testing.T, p params) {
+				if !p.noInteractsh {
+					t.Error("noInteractsh = false, want true when interactsh=false")
 				}
 			},
 		},

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-27T04:21:24.5728427Z",
+  "generatedAt": "2026-09-29T02:48:47.8311108Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -795,6 +795,12 @@
             "title": "Follow redirects",
             "type": "boolean"
           },
+          "interactsh": {
+            "default": true,
+            "description": "Detect blind/OOB vulnerabilities (SSRF, RCE, XXE) via a public interactsh server. Requires outbound network access; disable in air-gapped networks.",
+            "title": "Out-of-band detection (Interactsh)",
+            "type": "boolean"
+          },
           "rateLimit": {
             "default": 150,
             "description": "Maximum HTTP requests per second.",
@@ -803,6 +809,9 @@
           },
           "severity": {
             "default": [
+              "info",
+              "low",
+              "medium",
               "high",
               "critical"
             ],

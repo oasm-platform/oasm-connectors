@@ -34,7 +34,12 @@ configSchema:
         enum: [info, low, medium, high, critical]
       title: Severity levels
       description: 'Only report findings at the selected severity levels.'
-      default: [high, critical]
+      default: [info, low, medium, high, critical]
+    interactsh:
+      type: boolean
+      default: true
+      title: Out-of-band detection (Interactsh)
+      description: 'Detect blind/OOB vulnerabilities (SSRF, RCE, XXE) via a public interactsh server. Requires outbound network access; disable in air-gapped networks.'
     tags:
       type: array
       items:
