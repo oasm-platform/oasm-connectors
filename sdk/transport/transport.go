@@ -1,54 +1,49 @@
+// Package transport dials the Worker gRPC endpoint, plaintext or mTLS.
 package transport
 
 import (
-	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"os"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// DefaultWorkerAddr is the default Worker gRPC endpoint.
-const DefaultWorkerAddr = "localhost:50051"
-
-// DialOpts controls how Dial connects to Worker.
-// ponytail: minimal surface — only Insecure toggle; mTLS creds come from LoadMTLS/BuildTLSConfig.
-type DialOpts struct {
-	Insecure bool
-}
-
-// Dial creates a lazy gRPC ClientConn to the Worker endpoint.
-// Target is required; empty target returns an error.
-// ponytail: no streaming/multiplex here — just the hidden dial; caller never touches grpc directly.
-func Dial(target string, opts DialOpts) (*grpc.ClientConn, error) {
-	if target == "" {
-		return nil, fmt.Errorf("target required")
-	}
-	_ = opts
-	cred := insecure.NewCredentials()
-	return grpc.NewClient(target, grpc.WithTransportCredentials(cred))
-}
-
-// DialWithTLSCreds dials Worker with explicit TransportCredentials (mTLS).
-func DialWithTLSCreds(target string, creds credentials.TransportCredentials) (*grpc.ClientConn, error) {
+// Dial creates a lazy gRPC ClientConn to the Worker. nil creds means
+// plaintext (the Worker falls back to it when WORKER_TLS_* is unset).
+func Dial(target string, creds credentials.TransportCredentials) (*grpc.ClientConn, error) {
 	if target == "" {
 		return nil, fmt.Errorf("target required")
 	}
 	if creds == nil {
-		return nil, fmt.Errorf("credentials required")
+		creds = insecure.NewCredentials()
 	}
 	return grpc.NewClient(target, grpc.WithTransportCredentials(creds))
 }
 
-// Connect dials Worker with insecure fallback and mTLS-ready signature.
-// If target is empty, DefaultWorkerAddr is used. Context is currently unused
-// (lazy dial) but kept for API compatibility and future dial-blocking.
-// ponytail: ceiling is lazy insecure dial; blocking dial + TLS switch via DialWithTLSCreds.
-func Connect(ctx context.Context, target string) (*grpc.ClientConn, error) {
-	_ = ctx
-	if target == "" {
-		target = DefaultWorkerAddr
+// LoadMTLS builds mTLS credentials for connector -> Worker: caFile verifies
+// the Worker, certFile/keyFile is the connector client cert. An empty
+// serverName lets gRPC derive it from the dial address.
+func LoadMTLS(caFile, certFile, keyFile, serverName string) (credentials.TransportCredentials, error) {
+	caPEM, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, fmt.Errorf("read ca file: %w", err)
 	}
-	return Dial(target, DialOpts{Insecure: true})
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(caPEM) {
+		return nil, fmt.Errorf("failed to append CA cert")
+	}
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load key pair: %w", err)
+	}
+	return credentials.NewTLS(&tls.Config{
+		RootCAs:      pool,
+		Certificates: []tls.Certificate{cert},
+		ServerName:   serverName,
+		MinVersion:   tls.VersionTLS12,
+	}), nil
 }

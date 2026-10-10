@@ -16,7 +16,7 @@ import (
 	"github.com/oasm-platform/oasm-connectors/sdk/logging"
 	pb "github.com/oasm-platform/oasm-connectors/sdk/proto/gen"
 	"github.com/oasm-platform/oasm-connectors/sdk/transport"
-	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -127,24 +127,18 @@ func (r *Runtime) Run(ctx context.Context) error {
 	// Empty serverName lets gRPC derive it from the dial address, so the
 	// Worker cert must cover the address it is dialed at.
 	caFile, certFile, keyFile, tlsEnabled := env.TLSFiles()
-	var conn *grpc.ClientConn
+	var creds credentials.TransportCredentials
 	r.logger.Debugf("dialing worker addr=%s tls=%t", cfg.WorkerAddr, tlsEnabled)
 	if tlsEnabled {
 		r.logger.Info("worker mTLS enabled: WORKER_TLS_CA/CERT/KEY all set")
-		creds, err := transport.LoadMTLS(caFile, certFile, keyFile, "")
-		if err != nil {
+		if creds, err = transport.LoadMTLS(caFile, certFile, keyFile, ""); err != nil {
 			// Bad CA/cert/key material is operator config, not transient.
 			return fmt.Errorf("fatal: load mTLS credentials: %w", err)
 		}
-		conn, err = transport.DialWithTLSCreds(cfg.WorkerAddr, creds)
-		if err != nil {
-			return fmt.Errorf("retryable: dial worker (mTLS): %w", err)
-		}
-	} else {
-		conn, err = transport.Connect(ctx, cfg.WorkerAddr)
-		if err != nil {
-			return fmt.Errorf("retryable: dial worker: %w", err)
-		}
+	}
+	conn, err := transport.Dial(cfg.WorkerAddr, creds)
+	if err != nil {
+		return fmt.Errorf("retryable: dial worker (tls=%t): %w", tlsEnabled, err)
 	}
 	defer conn.Close()
 

@@ -4,6 +4,10 @@ Runs [Acunetix](https://www.acunetix.com) web scans via the OASM Worker gRPC bri
 Authenticates, finds or creates the target, schedules a scan, polls until completion,
 collects every vulnerability (paginated list + per-vulnerability details) as JSONL, then cleans up.
 
+API reference: the Swagger spec served by your own instance at `https://<host>:3443/api/v1/`
+(Acunetix Scanner API, `X-Auth` header). Not vendored here — it is licensed under the
+Acunetix Service Agreement.
+
 ## Requirements
 
 - Go 1.26+, Worker reachable at `WORKER_URL`
