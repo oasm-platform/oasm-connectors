@@ -30,7 +30,7 @@ RUN set -eux; \
     GOWORK=off go mod edit -replace=github.com/jackc/pgx/v5=github.com/jackc/pgx/v5@v5.11.0; \
     GOWORK=off CGO_ENABLED=0 go build -mod=mod -trimpath -o /out/katana github.com/projectdiscovery/katana/cmd/katana; \
     rm -rf /src/katana-toolchain
-FROM alpine:3.20
+FROM alpine:3.22
 RUN apk add --no-cache ca-certificates && adduser -D -u 10001 connector
 # katana writes $HOME/.config/katana/{field-config,form-config}.yaml on first run;
 # the image must give the non-root user a writable HOME or katana logs write errors.

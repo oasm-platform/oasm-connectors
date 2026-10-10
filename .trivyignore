@@ -5,7 +5,7 @@
 # Syntax: one vulnerability ID per line, optionally followed by an expiry and a
 # reason.
 #
-#   CVE-2024-1234  # expires:2026-12-31 reason:alpine 3.20 base, fix lands in 3.21
+#   CVE-2024-1234  # expires:2026-12-31 reason:alpine 3.22 base, fix lands in 3.23
 #
 # An entry without `expires:` never expires. Do not add any.
 #
