@@ -17,19 +17,28 @@ import (
 // (ExecuteJob.config["oasm_config"]) for reused containers whose env holds
 // stale first-run values.
 
-// envRecordingAdapter records the OASM_CONFIG env it observed and the inputs
-// it received per execution — the config-override observability seam.
+// envRecordingAdapter records the config profile (via connector.LoadConfig)
+// and the raw OASM_CONFIG env it observed, plus the inputs it received per
+// execution — the config-override observability seam.
 type envRecordingAdapter struct {
 	mu     sync.Mutex
-	cfgs   []string
+	cfgs   []int
+	envs   []string
 	inputs []map[string]any
 	chunk  *connector.Finding
 }
 
 func (a *envRecordingAdapter) Validate(ctx context.Context, inputs map[string]any) error { return nil }
 func (a *envRecordingAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
+	cfg, err := connector.LoadConfig[struct {
+		RateLimit int `json:"rateLimit"`
+	}](ctx)
+	if err != nil {
+		return err
+	}
 	a.mu.Lock()
-	a.cfgs = append(a.cfgs, os.Getenv("OASM_CONFIG"))
+	a.cfgs = append(a.cfgs, cfg.RateLimit)
+	a.envs = append(a.envs, os.Getenv("OASM_CONFIG"))
 	a.inputs = append(a.inputs, inputs)
 	a.mu.Unlock()
 	if a.chunk != nil {
@@ -42,13 +51,13 @@ func (a *envRecordingAdapter) Execute(ctx context.Context, inputs map[string]any
 	return nil
 }
 
-func (a *envRecordingAdapter) cfg(i int) string {
+func (a *envRecordingAdapter) cfg(i int) (rate int, env string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if i < len(a.cfgs) {
-		return a.cfgs[i]
+		return a.cfgs[i], a.envs[i]
 	}
-	return "<none>"
+	return -1, "<none>"
 }
 
 func (a *envRecordingAdapter) input(i int, key string) string {
@@ -163,9 +172,18 @@ func TestRunReusesStreamForSecondExecuteWithConfigOverride(t *testing.T) {
 		}
 	}
 
-	// The second execution's config override reached the adapter.
-	if got := adapter.cfg(1); got != `{"rateLimit":42}` {
-		t.Fatalf("adapter saw OASM_CONFIG=%q on execution #2, want the in-band override {\"rateLimit\":42}", got)
+	// Execution #1 has no in-band config: it falls back to the first-run env.
+	if rate, _ := adapter.cfg(0); rate != 5 {
+		t.Fatalf("execution #1 rateLimit = %d, want 5 from OASM_CONFIG env", rate)
+	}
+	// Execution #2's in-band override reaches the adapter through ctx, and
+	// the process env is never mutated (no global state across executions).
+	rate, env := adapter.cfg(1)
+	if rate != 42 {
+		t.Fatalf("execution #2 rateLimit = %d, want the in-band override 42", rate)
+	}
+	if env != `{"rateLimit":5}` {
+		t.Fatalf("OASM_CONFIG env = %q during execution #2, want it untouched", env)
 	}
 	// Per-job inputs still merge per execution.
 	if got := adapter.input(1, "target"); got != "https://two.example.com" {

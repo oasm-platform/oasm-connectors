@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -34,19 +33,6 @@ type Config struct {
 	// public interactsh server). Absent → enabled, so a plain scan matches
 	// `nuclei -u <target>`; set false in air-gapped/no-egress environments.
 	Interactsh *bool `json:"interactsh"`
-}
-
-// parseConfig unmarshals a JSON string into Config. An empty or malformed
-// string returns a zero Config (no error for empty; error for malformed).
-func parseConfig(raw string) (Config, error) {
-	if strings.TrimSpace(raw) == "" {
-		return Config{}, nil
-	}
-	var cfg Config
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return Config{}, err
-	}
-	return cfg, nil
 }
 
 // defaultTemplateDir is where the Dockerfile bakes the template collection
@@ -197,12 +183,12 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 	}
 	log.Printf("nuclei: using templates dir=%s entries=%d", dir, len(entries))
 
-	cfg, err := parseConfig(os.Getenv("OASM_CONFIG"))
+	cfg, err := connector.LoadConfig[Config](ctx)
 	if err != nil {
-		return fmt.Errorf("invalid OASM_CONFIG: %w", err)
+		return err
 	}
 
-	p := scanParams(cfg, dir)
+	p := scanParams(*cfg, dir)
 	nuclei.DefaultConfig.SetTemplatesDir(p.templates[0])
 
 	engine, err := nuclei.NewNucleiEngineCtx(ctx, sdkOptions(ctx, p)...)

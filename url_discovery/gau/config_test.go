@@ -13,7 +13,7 @@ import (
 
 func TestLoadGauConfig_UnsetIsZeroConfig(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "")
-	cfg, err := loadGauConfig()
+	cfg, err := connector.LoadConfig[gauConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestLoadGauConfig_UnsetIsZeroConfig(t *testing.T) {
 
 func TestLoadGauConfig_ParsesCamelCaseKeys(t *testing.T) {
 	t.Setenv("OASM_CONFIG", `{"providers":["wayback"],"subs":true,"threads":3,"timeout":10,"retries":2,"proxy":"http://p","from":"201901","to":"202601"}`)
-	cfg, err := loadGauConfig()
+	cfg, err := connector.LoadConfig[gauConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestLoadGauConfig_ParsesCamelCaseKeys(t *testing.T) {
 
 func TestLoadGauConfig_InvalidJSONErrors(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "{not json")
-	if _, err := loadGauConfig(); err == nil {
+	if _, err := connector.LoadConfig[gauConfig](t.Context()); err == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
 }

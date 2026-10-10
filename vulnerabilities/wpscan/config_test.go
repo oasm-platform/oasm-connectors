@@ -133,7 +133,7 @@ func TestBuildWpscanArgs_UpdateTriState(t *testing.T) {
 
 func TestLoadWpscanConfig_EmptyIsNoop(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "")
-	cfg, err := loadWpscanConfig()
+	cfg, err := connector.LoadConfig[wpscanConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

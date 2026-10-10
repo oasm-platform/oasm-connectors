@@ -66,11 +66,11 @@ func TestDebugLiveScan(t *testing.T) {
 		timeout = d
 	}
 
-	cfg, err := parseConfig(os.Getenv("OASM_CONFIG"))
+	cfg, err := connector.LoadConfig[Config](t.Context())
 	if err != nil {
 		t.Fatalf("OASM_CONFIG: %v", err)
 	}
-	p := scanParams(cfg, dir)
+	p := scanParams(*cfg, dir)
 
 	// Knob overrides — applied after scanParams so we compare "what the
 	// connector does today" against "the same wiring with one thing changed".

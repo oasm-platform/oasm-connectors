@@ -60,11 +60,11 @@ type NmapAdapter struct{}
 
 // Validate rejects malformed inputs/cfg before any process or network resource
 // is spent. It is pure: no DNS, no socket.
-func (a NmapAdapter) Validate(_ context.Context, inputs map[string]any) error {
+func (a NmapAdapter) Validate(ctx context.Context, inputs map[string]any) error {
 	if _, err := targetFrom(inputs); err != nil {
 		return err
 	}
-	cfg, err := loadNmapConfig()
+	cfg, err := connector.LoadConfig[nmapConfig](ctx)
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func (a NmapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 		return err
 	}
 
-	cfg, err := loadNmapConfig()
+	cfg, err := connector.LoadConfig[nmapConfig](ctx)
 	if err != nil {
 		return err
 	}

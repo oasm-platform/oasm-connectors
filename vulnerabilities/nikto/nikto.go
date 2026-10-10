@@ -1,9 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -30,20 +27,6 @@ type niktoConfig struct {
 	Username       string   `json:"username"`
 	Password       string   `json:"password"`
 	No404          bool     `json:"no404"`
-}
-
-// loadNiktoConfig reads the per-job config profile from OASM_CONFIG. An unset
-// or empty value yields a zero config (all nikto defaults), not an error.
-func loadNiktoConfig() (*niktoConfig, error) {
-	raw := strings.TrimSpace(os.Getenv("OASM_CONFIG"))
-	if raw == "" {
-		return &niktoConfig{}, nil
-	}
-	var cfg niktoConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
-	}
-	return &cfg, nil
 }
 
 // niktoConfigFile overrides every setting the adapter drives on the command

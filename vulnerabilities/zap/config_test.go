@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 	"gopkg.in/yaml.v3"
 )
 
@@ -13,7 +14,7 @@ const testReportPath = "/tmp/work/report.json"
 
 func TestLoadZapConfig_EmptyIsNoop(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "")
-	cfg, err := loadZapConfig()
+	cfg, err := connector.LoadConfig[zapConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -24,7 +25,7 @@ func TestLoadZapConfig_EmptyIsNoop(t *testing.T) {
 
 func TestLoadZapConfig_InvalidErrors(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "{bad json")
-	if _, err := loadZapConfig(); err == nil {
+	if _, err := connector.LoadConfig[zapConfig](t.Context()); err == nil {
 		t.Fatal("expected error for invalid OASM_CONFIG")
 	}
 }

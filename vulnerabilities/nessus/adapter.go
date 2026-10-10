@@ -37,7 +37,7 @@ func (a *NessusAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 		return fmt.Errorf("target required")
 	}
 
-	cfg, err := loadNessusConfig()
+	cfg, err := loadNessusConfig(ctx)
 	if err != nil {
 		return err
 	}

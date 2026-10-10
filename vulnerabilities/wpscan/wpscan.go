@@ -1,9 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -38,20 +35,6 @@ type wpscanConfig struct {
 	Proxy                   string   `json:"proxy"`
 	Stealthy                bool     `json:"stealthy"`
 	Update                  *bool    `json:"update"`
-}
-
-// loadWpscanConfig reads the per-job config profile from OASM_CONFIG. An unset
-// or empty value yields a zero config (all wpscan defaults), not an error.
-func loadWpscanConfig() (*wpscanConfig, error) {
-	raw := strings.TrimSpace(os.Getenv("OASM_CONFIG"))
-	if raw == "" {
-		return &wpscanConfig{}, nil
-	}
-	var cfg wpscanConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
-	}
-	return &cfg, nil
 }
 
 // buildWpscanArgs assembles the wpscan CLI arg vector. Zero values are omitted

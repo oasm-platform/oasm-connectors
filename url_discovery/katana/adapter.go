@@ -71,7 +71,7 @@ func (a KatanaAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 		bin = "katana"
 	}
 
-	cfg, err := loadKatanaConfig()
+	cfg, err := connector.LoadConfig[katanaConfig](ctx)
 	if err != nil {
 		return err
 	}

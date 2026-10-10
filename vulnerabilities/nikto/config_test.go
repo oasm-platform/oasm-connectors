@@ -13,7 +13,7 @@ import (
 
 func TestLoadNiktoConfig_EmptyIsZeroConfig(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "")
-	cfg, err := loadNiktoConfig()
+	cfg, err := connector.LoadConfig[niktoConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -27,7 +27,7 @@ func TestLoadNiktoConfig_EmptyIsZeroConfig(t *testing.T) {
 
 func TestLoadNiktoConfig_ParsesCamelCaseKeys(t *testing.T) {
 	t.Setenv("OASM_CONFIG", `{"tuning":"123b","ports":"80,443","ssl":true,"timeout":15,"headers":["X-Test: 1"],"noCookies":true,"followRedirects":true,"evasion":"1","username":"u","password":"p"}`)
-	cfg, err := loadNiktoConfig()
+	cfg, err := connector.LoadConfig[niktoConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestLoadNiktoConfig_ParsesCamelCaseKeys(t *testing.T) {
 
 func TestLoadNiktoConfig_InvalidJSONErrors(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "{not json")
-	_, err := loadNiktoConfig()
+	_, err := connector.LoadConfig[niktoConfig](t.Context())
 	if err == nil {
 		t.Fatal("expected error for malformed OASM_CONFIG")
 	}

@@ -46,7 +46,7 @@ func (a *ZapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 		bin = "zap.sh"
 	}
 
-	cfg, err := loadZapConfig()
+	cfg, err := connector.LoadConfig[zapConfig](ctx)
 	if err != nil {
 		return err
 	}

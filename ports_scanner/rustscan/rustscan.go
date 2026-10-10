@@ -1,10 +1,7 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -23,21 +20,6 @@ type rustscanConfig struct {
 	Tries     int    `json:"tries"`     // rustscan --tries: 0 = rustscan default (1)
 	BatchSize int    `json:"batchSize"` // rustscan -b: concurrent sockets, 0 = rustscan default (4500)
 	UDP       bool   `json:"udp"`       // rustscan --udp
-}
-
-// loadRustscanConfig reads the per-job config profile from OASM_CONFIG. An unset
-// or empty value yields a zero config (defaults applied in buildRustscanArgs),
-// not an error; malformed JSON is an error.
-func loadRustscanConfig() (*rustscanConfig, error) {
-	raw := strings.TrimSpace(os.Getenv("OASM_CONFIG"))
-	if raw == "" {
-		return &rustscanConfig{}, nil
-	}
-	var cfg rustscanConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
-	}
-	return &cfg, nil
 }
 
 // portInRange keeps every validated port inside the TCP/UDP port space; a value

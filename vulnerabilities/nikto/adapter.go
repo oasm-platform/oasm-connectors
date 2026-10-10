@@ -58,7 +58,7 @@ func (a NiktoAdapter) Execute(ctx context.Context, inputs map[string]any, out ch
 		bin = "nikto.pl"
 	}
 
-	cfg, err := loadNiktoConfig()
+	cfg, err := connector.LoadConfig[niktoConfig](ctx)
 	if err != nil {
 		return err
 	}

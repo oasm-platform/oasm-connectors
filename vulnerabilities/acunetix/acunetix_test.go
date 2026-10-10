@@ -38,7 +38,7 @@ func TestLoadAcunetixConfigOASMConfigFull(t *testing.T) {
 		"maxScanTime": 3600
 	}`)
 
-	cfg, err := loadAcunetixConfig()
+	cfg, err := loadAcunetixConfig(t.Context())
 	if err != nil {
 		t.Fatalf("loadAcunetixConfig: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestLoadAcunetixConfigOASMConfigPartialDefaults(t *testing.T) {
 	clearAcunetixEnv(t)
 	t.Setenv("OASM_CONFIG", `{"url":"https://acunetix:3443","apiKey":"k"}`)
 
-	cfg, err := loadAcunetixConfig()
+	cfg, err := loadAcunetixConfig(t.Context())
 	if err != nil {
 		t.Fatalf("loadAcunetixConfig: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestLoadAcunetixConfigOASMConfigMalformed(t *testing.T) {
 	clearAcunetixEnv(t)
 	t.Setenv("OASM_CONFIG", `{"url": "https://x"`)
 
-	_, err := loadAcunetixConfig()
+	_, err := loadAcunetixConfig(t.Context())
 	if err == nil {
 		t.Fatal("expected error for malformed OASM_CONFIG")
 	}
@@ -107,7 +107,7 @@ func TestLoadAcunetixConfigMissingURL(t *testing.T) {
 	clearAcunetixEnv(t)
 	t.Setenv("OASM_CONFIG", `{"apiKey":"k"}`)
 
-	_, err := loadAcunetixConfig()
+	_, err := loadAcunetixConfig(t.Context())
 	if err == nil || !strings.Contains(err.Error(), "URL required") {
 		t.Fatalf("err = %v, want URL required", err)
 	}
@@ -117,7 +117,7 @@ func TestLoadAcunetixConfigMissingAPIKey(t *testing.T) {
 	clearAcunetixEnv(t)
 	t.Setenv("OASM_CONFIG", `{"url":"https://x"}`)
 
-	_, err := loadAcunetixConfig()
+	_, err := loadAcunetixConfig(t.Context())
 	if err == nil || !strings.Contains(err.Error(), "API key required") {
 		t.Fatalf("err = %v, want API key required", err)
 	}
@@ -133,7 +133,7 @@ func TestLoadAcunetixConfigLegacyEnvFallback(t *testing.T) {
 	t.Setenv("ACUNETIX_INSECURE", "true")
 	t.Setenv("ACUNETIX_MAX_SCAN_TIME", "120")
 
-	cfg, err := loadAcunetixConfig()
+	cfg, err := loadAcunetixConfig(t.Context())
 	if err != nil {
 		t.Fatalf("loadAcunetixConfig: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestLoadAcunetixConfigInsecureTruthTable(t *testing.T) {
 			t.Setenv("ACUNETIX_API_KEY", "k")
 			t.Setenv("ACUNETIX_INSECURE", tc.in)
 
-			cfg, err := loadAcunetixConfig()
+			cfg, err := loadAcunetixConfig(t.Context())
 			if tc.wantErr {
 				if err == nil || !strings.Contains(err.Error(), "invalid ACUNETIX_INSECURE") {
 					t.Fatalf("err = %v, want invalid ACUNETIX_INSECURE", err)

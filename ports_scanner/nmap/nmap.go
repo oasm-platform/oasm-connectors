@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -21,21 +19,6 @@ type nmapConfig struct {
 	HostTimeout int    `json:"hostTimeout"` // nmap --host-timeout seconds, 0 = nmap default (no limit)
 	Retries     int    `json:"retries"`     // nmap --max-retries N
 	NoPing      *bool  `json:"noPing"`      // nmap -Pn; nil defaults to true
-}
-
-// loadNmapConfig reads the per-job config profile from OASM_CONFIG. An unset or
-// empty value yields a zero config (defaults applied in buildNmapArgs), not an
-// error; malformed JSON is an error.
-func loadNmapConfig() (*nmapConfig, error) {
-	raw := strings.TrimSpace(os.Getenv("OASM_CONFIG"))
-	if raw == "" {
-		return &nmapConfig{}, nil
-	}
-	var cfg nmapConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
-	}
-	return &cfg, nil
 }
 
 // noPingEnabled reports whether -Pn should be emitted: nil (key absent)

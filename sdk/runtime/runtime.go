@@ -359,14 +359,11 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 
 	// Per-job config override (Phase 2 warm pool): a REUSED container keeps its
 	// first-run OASM_CONFIG env; the worker ships the job's config profile as
-	// JSON in ExecuteJob.config["oasm_config"]. Adapters read OASM_CONFIG via
-	// os.Getenv at Execute time, so restore the env var around the adapter
-	// run. The execGate guarantees a single in-flight execution, making this
-	// process-global mutation race-free.
+	// JSON in ExecuteJob.config["oasm_config"]. It rides on the execution ctx
+	// (connector.LoadConfig reads it first, env second) — no process-global
+	// state, so nothing leaks into the next execution.
 	if raw := exec.Config["oasm_config"]; raw != "" {
-		prev := os.Getenv("OASM_CONFIG")
-		os.Setenv("OASM_CONFIG", raw)
-		defer os.Setenv("OASM_CONFIG", prev)
+		execCtx = connector.WithConfig(execCtx, raw)
 		execLog.Infof("config override applied: profile_bytes=%d config_keys=%s", len(raw), logging.Keys(exec.Config))
 	}
 

@@ -65,7 +65,7 @@ func collect(t *testing.T, mode, target string) ([]connector.Finding, error) {
 
 func TestLoadRustscanConfig_UnsetIsZeroConfig(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "")
-	cfg, err := loadRustscanConfig()
+	cfg, err := connector.LoadConfig[rustscanConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestLoadRustscanConfig_UnsetIsZeroConfig(t *testing.T) {
 
 func TestLoadRustscanConfig_ParsesAndRejects(t *testing.T) {
 	t.Setenv("OASM_CONFIG", `{"ports":"22,80","range":"1-1024","timeoutMs":2000,"tries":2,"batchSize":1000,"udp":true}`)
-	cfg, err := loadRustscanConfig()
+	cfg, err := connector.LoadConfig[rustscanConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestLoadRustscanConfig_ParsesAndRejects(t *testing.T) {
 	}
 
 	t.Setenv("OASM_CONFIG", "{not json")
-	if _, err := loadRustscanConfig(); err == nil {
+	if _, err := connector.LoadConfig[rustscanConfig](t.Context()); err == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
 }

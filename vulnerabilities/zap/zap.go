@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -26,21 +24,6 @@ type zapConfig struct {
 	ThreadPerHost         int    `json:"threadPerHost"`         // activeScan threads per host
 	Policy                string `json:"policy"`                // activeScan policy, default "Default Policy"
 	EnableAjaxSpider      bool   `json:"enableAjaxSpider"`      // needs a browser; default off
-}
-
-// loadZapConfig reads the per-job config profile from OASM_CONFIG. An unset or
-// empty value yields a zero config (defaults applied in buildAutomationPlan),
-// not an error; malformed JSON is an error.
-func loadZapConfig() (*zapConfig, error) {
-	raw := strings.TrimSpace(os.Getenv("OASM_CONFIG"))
-	if raw == "" {
-		return &zapConfig{}, nil
-	}
-	var cfg zapConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
-	}
-	return &cfg, nil
 }
 
 // normalizeTarget turns a bare host or partial URL into the full URL ZAP

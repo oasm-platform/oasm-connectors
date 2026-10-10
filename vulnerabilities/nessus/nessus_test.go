@@ -17,7 +17,7 @@ func TestLoadNessusConfig_FromOASMConfig(t *testing.T) {
 	clearNessusEnv(t)
 	t.Setenv("OASM_CONFIG", `{"url":"https://nessus.example.com:8834","accessKey":"ak","secretKey":"sk","templateUuid":"tpl-123","policyId":"pol-1","folderId":"42"}`)
 
-	cfg, err := loadNessusConfig()
+	cfg, err := loadNessusConfig(t.Context())
 	if err != nil {
 		t.Fatalf("loadNessusConfig: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestLoadNessusConfig_OASMDefaults(t *testing.T) {
 	clearNessusEnv(t)
 	t.Setenv("OASM_CONFIG", `{"url":"https://nessus.example.com:8834","accessKey":"ak","secretKey":"sk"}`)
 
-	cfg, err := loadNessusConfig()
+	cfg, err := loadNessusConfig(t.Context())
 	if err != nil {
 		t.Fatalf("loadNessusConfig: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestLoadNessusConfig_Malformed(t *testing.T) {
 	clearNessusEnv(t)
 	t.Setenv("OASM_CONFIG", `{not json`)
 
-	if _, err := loadNessusConfig(); err == nil {
+	if _, err := loadNessusConfig(t.Context()); err == nil {
 		t.Fatal("expected error for malformed OASM_CONFIG")
 	}
 }
@@ -64,7 +64,7 @@ func TestLoadNessusConfig_EnvFallback(t *testing.T) {
 	t.Setenv("NESSUS_SECRET_KEY", "sk")
 	t.Setenv("NESSUS_TEMPLATE_UUID", "tpl-env")
 
-	cfg, err := loadNessusConfig()
+	cfg, err := loadNessusConfig(t.Context())
 	if err != nil {
 		t.Fatalf("loadNessusConfig: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestLoadNessusConfig_MissingURL(t *testing.T) {
 	clearNessusEnv(t)
 	t.Setenv("OASM_CONFIG", `{"accessKey":"ak","secretKey":"sk"}`)
 
-	if _, err := loadNessusConfig(); err == nil {
+	if _, err := loadNessusConfig(t.Context()); err == nil {
 		t.Fatal("expected error for missing url")
 	}
 }
@@ -89,7 +89,7 @@ func TestLoadNessusConfig_MissingKeys(t *testing.T) {
 	clearNessusEnv(t)
 	t.Setenv("OASM_CONFIG", `{"url":"https://nessus.example.com:8834","accessKey":"ak-only"}`)
 
-	if _, err := loadNessusConfig(); err == nil {
+	if _, err := loadNessusConfig(t.Context()); err == nil {
 		t.Fatal("expected error for access key without secret key")
 	}
 }

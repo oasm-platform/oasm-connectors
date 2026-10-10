@@ -37,7 +37,7 @@ func (a *AcunetixAdapter) Execute(ctx context.Context, inputs map[string]any, ou
 	}
 	address := canonicalTarget(raw)
 
-	cfg, err := loadAcunetixConfig()
+	cfg, err := loadAcunetixConfig(ctx)
 	if err != nil {
 		return err
 	}

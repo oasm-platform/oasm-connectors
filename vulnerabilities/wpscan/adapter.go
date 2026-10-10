@@ -51,7 +51,7 @@ func (a WpscanAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 		bin = "wpscan"
 	}
 
-	cfg, err := loadWpscanConfig()
+	cfg, err := connector.LoadConfig[wpscanConfig](ctx)
 	if err != nil {
 		return err
 	}

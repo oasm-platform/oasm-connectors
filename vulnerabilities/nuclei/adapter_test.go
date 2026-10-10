@@ -177,6 +177,15 @@ func TestParseConfig_MalformedReturnsError(t *testing.T) {
 	}
 }
 
+// parseConfig decodes raw through the SDK loader the adapter uses.
+func parseConfig(raw string) (Config, error) {
+	cfg, err := connector.LoadConfig[Config](connector.WithConfig(context.Background(), raw))
+	if err != nil {
+		return Config{}, err
+	}
+	return *cfg, nil
+}
+
 // ---------------------------------------------------------------------------
 // Execute integration: OASM_CONFIG env → scanParams used
 // ---------------------------------------------------------------------------

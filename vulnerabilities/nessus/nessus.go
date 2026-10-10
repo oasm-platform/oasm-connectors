@@ -1,16 +1,16 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 	"github.com/tencat-dev/nessus-client-go/nessus"
 )
 
@@ -36,18 +36,17 @@ type configProfile struct {
 }
 
 // loadNessusConfig reads the Nessus connection + scan settings. The primary
-// source is OASM_CONFIG (the per-job config profile) — the SDK runtime
-// overrides that env var per execution so a warm-pool reused container sees
-// its own job's config rather than its first-run env. NESSUS_* env vars remain
-// as a legacy fallback for direct-runtime use. URL, access key and secret key
-// are required; the rest fall back to sane defaults.
-func loadNessusConfig() (*nessusConfig, error) {
+// source is the per-job config profile (connector.LoadConfig: ctx, then
+// OASM_CONFIG), so a warm-pool reused container sees its own job's config.
+// NESSUS_* env vars remain as a legacy fallback when no profile was shipped.
+// URL, access key and secret key are required.
+func loadNessusConfig(ctx context.Context) (*nessusConfig, error) {
 	cfg := &nessusConfig{}
 
-	if raw := strings.TrimSpace(os.Getenv("OASM_CONFIG")); raw != "" {
-		var p configProfile
-		if err := json.Unmarshal([]byte(raw), &p); err != nil {
-			return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
+	if connector.HasConfig(ctx) {
+		p, err := connector.LoadConfig[configProfile](ctx)
+		if err != nil {
+			return nil, err
 		}
 		cfg.URL = p.URL
 		cfg.AccessKey = p.AccessKey

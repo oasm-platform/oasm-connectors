@@ -64,7 +64,7 @@ func collect(t *testing.T, mode, target string) ([]connector.Finding, error) {
 
 func TestLoadNmapConfig_UnsetIsZeroConfig(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "")
-	cfg, err := loadNmapConfig()
+	cfg, err := connector.LoadConfig[nmapConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestLoadNmapConfig_UnsetIsZeroConfig(t *testing.T) {
 
 func TestLoadNmapConfig_ParsesAndRejects(t *testing.T) {
 	t.Setenv("OASM_CONFIG", `{"ports":"22,80","topPorts":100,"hostTimeout":300,"retries":2,"noPing":false}`)
-	cfg, err := loadNmapConfig()
+	cfg, err := connector.LoadConfig[nmapConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestLoadNmapConfig_ParsesAndRejects(t *testing.T) {
 	}
 	// An omitted noPing must stay nil so the adapter keeps the -Pn default.
 	t.Setenv("OASM_CONFIG", `{"topPorts":10}`)
-	omitted, err := loadNmapConfig()
+	omitted, err := connector.LoadConfig[nmapConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestLoadNmapConfig_ParsesAndRejects(t *testing.T) {
 	}
 
 	t.Setenv("OASM_CONFIG", "{not json")
-	if _, err := loadNmapConfig(); err == nil {
+	if _, err := connector.LoadConfig[nmapConfig](t.Context()); err == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
 }

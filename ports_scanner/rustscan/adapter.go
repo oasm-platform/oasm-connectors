@@ -37,11 +37,11 @@ type RustscanAdapter struct{}
 
 // Validate rejects malformed inputs/cfg before any process or network resource
 // is spent. It is pure: no DNS, no socket.
-func (a RustscanAdapter) Validate(_ context.Context, inputs map[string]any) error {
+func (a RustscanAdapter) Validate(ctx context.Context, inputs map[string]any) error {
 	if _, err := targetFrom(inputs); err != nil {
 		return err
 	}
-	cfg, err := loadRustscanConfig()
+	cfg, err := connector.LoadConfig[rustscanConfig](ctx)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (a RustscanAdapter) Execute(ctx context.Context, inputs map[string]any, out
 	if err != nil {
 		return err
 	}
-	cfg, err := loadRustscanConfig()
+	cfg, err := connector.LoadConfig[rustscanConfig](ctx)
 	if err != nil {
 		return err
 	}

@@ -4,9 +4,9 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
-	"net/url"
 	"strings"
 	"time"
 
@@ -61,7 +61,7 @@ func (a GauAdapter) Execute(ctx context.Context, inputs map[string]any, out chan
 		bin = "gau"
 	}
 
-	cfg, err := loadGauConfig()
+	cfg, err := connector.LoadConfig[gauConfig](ctx)
 	if err != nil {
 		return err
 	}
