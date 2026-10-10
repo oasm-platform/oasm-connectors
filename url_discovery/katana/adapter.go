@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -55,7 +54,7 @@ func (a KatanaAdapter) Validate(_ context.Context, _ map[string]any) error { ret
 // maxUrls cap kills the process, keeps the partial findings and returns success.
 func (a KatanaAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
 	raw, _ := inputs["target"].(string)
-	target := normalizeTarget(raw)
+	target := connector.HostOnly(raw)
 	if target == "" {
 		return fmt.Errorf("target required")
 	}
@@ -89,16 +88,14 @@ func (a KatanaAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 	runCtx, cancel := context.WithTimeout(ctx, katanaHardTimeout)
 	defer cancel()
 
-	var stderr limitedWriter
-	stderr.buf = new([]byte)
-	stderr.limit = 2048
+	stderr := connector.NewTailWriter(2048)
 
 	cmd := exec.CommandContext(runCtx, bin, buildKatanaArgs(target, cfg)...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("katana: stdout pipe: %w", err)
 	}
-	cmd.Stderr = &stderr
+	cmd.Stderr = stderr
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("katana: start: %w", err)
@@ -158,7 +155,7 @@ func (a KatanaAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 	}
 
 	waitErr := cmd.Wait()
-	tail := strings.TrimSpace(string(*stderr.buf))
+	tail := stderr.String()
 
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -180,51 +177,4 @@ func (a KatanaAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 		return fmt.Errorf("katana: reading output: %w", scanErr)
 	}
 	return nil
-}
-
-// normalizeTarget strips scheme/path/query/port, leaving the bare host katana
-// expects as its -u target: "https://example.com/a/b?x=1" -> "example.com".
-func normalizeTarget(raw string) string {
-	s := strings.TrimSpace(raw)
-	if s == "" {
-		return ""
-	}
-	// net/url resolves userinfo and IPv6 literals correctly
-	// ("http://user:pw@example.com/x" -> example.com, "[::1]:8080" -> ::1);
-	// a bare "host:port" is not a URL, so it falls through to the manual strip.
-	if u, err := url.Parse(s); err == nil && u.Host != "" {
-		return u.Hostname()
-	}
-	if i := strings.LastIndex(s, "@"); i >= 0 {
-		s = s[i+1:]
-	}
-	if i := strings.Index(s, "://"); i >= 0 {
-		s = s[i+3:]
-	}
-	if i := strings.IndexAny(s, "/?#"); i >= 0 {
-		s = s[:i]
-	}
-	if strings.HasPrefix(s, "[") {
-		if i := strings.Index(s, "]"); i >= 0 {
-			return s[1:i]
-		}
-	}
-	if i := strings.Index(s, ":"); i >= 0 {
-		s = s[:i]
-	}
-	return s
-}
-
-// limitedWriter buffers stderr, keeping at most `limit` bytes.
-type limitedWriter struct {
-	buf   *[]byte
-	limit int
-}
-
-func (w *limitedWriter) Write(p []byte) (int, error) {
-	*w.buf = append(*w.buf, p...)
-	if len(*w.buf) > w.limit {
-		*w.buf = (*w.buf)[len(*w.buf)-w.limit:]
-	}
-	return len(p), nil
 }

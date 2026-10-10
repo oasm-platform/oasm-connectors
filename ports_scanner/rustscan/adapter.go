@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -38,7 +37,7 @@ type RustscanAdapter struct{}
 // Validate rejects malformed inputs/cfg before any process or network resource
 // is spent. It is pure: no DNS, no socket.
 func (a RustscanAdapter) Validate(ctx context.Context, inputs map[string]any) error {
-	if _, err := targetFrom(inputs); err != nil {
+	if _, err := connector.SingleHost(inputs); err != nil {
 		return err
 	}
 	cfg, err := connector.LoadConfig[rustscanConfig](ctx)
@@ -72,21 +71,6 @@ func validateConfig(cfg *rustscanConfig) error {
 	return nil
 }
 
-// targetFrom extracts a single host from the inputs. The scheme/path strip is
-// deliberately NOT applied to a slash-bearing non-URL ("10.0.0.0/24"): unrolling
-// a CIDR would silently turn a network request into a single-host scan.
-func targetFrom(inputs map[string]any) (string, error) {
-	raw, _ := inputs["target"].(string)
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return "", fmt.Errorf("target required")
-	}
-	if host := normalizeTarget(trimmed); host != "" {
-		return host, nil
-	}
-	return "", fmt.Errorf("invalid target %q (single host only, no CIDR/range/list)", raw)
-}
-
 // Execute runs rustscan in greppable mode and streams one Finding per open port.
 //
 // Exit-code semantics, verified against 2.3.0 and 2.4.1: 0 means the scan
@@ -96,7 +80,7 @@ func targetFrom(inputs map[string]any) (string, error) {
 // exit 1 with both streams empty, so the error names the target instead of
 // shipping an empty tail.
 func (a RustscanAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
-	target, err := targetFrom(inputs)
+	target, err := connector.SingleHost(inputs)
 	if err != nil {
 		return err
 	}
@@ -117,7 +101,7 @@ func (a RustscanAdapter) Execute(ctx context.Context, inputs map[string]any, out
 	// binary is handed an address it cannot re-interpret as a list or a CIDR.
 	// An unresolvable target is fatal — rustscan would only fail seconds later
 	// with an empty stderr and exit 1.
-	ip := resolveIPv4(target)
+	ip := connector.ResolveIPv4(target)
 	if ip == "" {
 		return fmt.Errorf("fatal: rustscan: cannot resolve %q", target)
 	}
@@ -125,9 +109,7 @@ func (a RustscanAdapter) Execute(ctx context.Context, inputs map[string]any, out
 	runCtx, cancel := context.WithTimeout(ctx, rustscanHardTimeout)
 	defer cancel()
 
-	var stderr limitedWriter
-	stderr.buf = new([]byte)
-	stderr.limit = 2048
+	stderr := connector.NewTailWriter(2048)
 
 	proto := "tcp"
 	if cfg.UDP {
@@ -139,7 +121,7 @@ func (a RustscanAdapter) Execute(ctx context.Context, inputs map[string]any, out
 	if err != nil {
 		return fmt.Errorf("rustscan: stdout pipe: %w", err)
 	}
-	cmd.Stderr = &stderr
+	cmd.Stderr = stderr
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("rustscan: start: %w", err)
@@ -175,7 +157,7 @@ func (a RustscanAdapter) Execute(ctx context.Context, inputs map[string]any, out
 	}
 
 	waitErr := cmd.Wait()
-	tail := strings.TrimSpace(string(*stderr.buf))
+	tail := stderr.String()
 
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -268,36 +250,3 @@ func openPortFinding(target, ip, proto, portID string) connector.Finding {
 
 // portString renders "tcp/443" from the protocol and port.
 func portString(proto, portID string) string { return proto + "/" + portID }
-
-// resolveIPv4 returns the first IPv4 address of host, or host verbatim when it
-// already is an IP literal, or "" when it cannot be resolved.
-func resolveIPv4(host string) string {
-	h := strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
-	if net.ParseIP(h) != nil {
-		return h
-	}
-	addrs, err := net.LookupHost(h)
-	if err != nil {
-		return ""
-	}
-	for _, a := range addrs {
-		if net.ParseIP(a) != nil && strings.Contains(a, ".") {
-			return a
-		}
-	}
-	return ""
-}
-
-// limitedWriter buffers stderr, keeping at most `limit` bytes.
-type limitedWriter struct {
-	buf   *[]byte
-	limit int
-}
-
-func (w *limitedWriter) Write(p []byte) (int, error) {
-	*w.buf = append(*w.buf, p...)
-	if len(*w.buf) > w.limit {
-		*w.buf = (*w.buf)[len(*w.buf)-w.limit:]
-	}
-	return len(p), nil
-}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -44,6 +45,14 @@ func New(c *connector.Connector) *Runtime {
 		conn:    c,
 		logger:  logging.New("runtime"),
 		cancels: make(map[string]context.CancelFunc),
+	}
+}
+
+// Main is a connector binary's whole main(): run the adapter against the
+// Worker until the stream closes, exiting non-zero on failure.
+func Main(name string, a connector.Adapter) {
+	if err := New(connector.New(a)).Run(context.Background()); err != nil {
+		log.Fatalf("%s connector: %v", name, err)
 	}
 }
 

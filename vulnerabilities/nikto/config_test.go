@@ -62,24 +62,6 @@ func TestLoadNiktoConfig_InvalidJSONErrors(t *testing.T) {
 	}
 }
 
-func TestNormalizeTarget(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"example.com", "https://example.com"},
-		{"https://example.com", "https://example.com"},
-		{"http://example.com", "http://example.com"},
-		{"example.com:8443", "https://example.com:8443"},
-		{"https://example.com:8443/app", "https://example.com:8443/app"},
-		{"  example.com  ", "https://example.com"},
-		{"", ""},
-		{"   ", ""},
-	}
-	for _, tc := range cases {
-		if got := normalizeTarget(tc.in); got != tc.want {
-			t.Errorf("normalizeTarget(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-}
-
 // TestBuildNiktoArgs_Defaults asserts the always-present flags for a zero config.
 // -maxtime is deliberately absent: the adapter imposes no scan budget of its
 // own (see timeout_test.go), so an unset maxTime leaves nikto unbounded.

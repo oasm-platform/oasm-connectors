@@ -198,32 +198,6 @@ func TestExecute_PassesBuiltArgsToBinary(t *testing.T) {
 	}
 }
 
-func TestTargetFrom(t *testing.T) {
-	cases := []struct{ in, want, wantErr string }{
-		{in: "example.com", want: "example.com"},
-		{in: " 203.0.113.10 ", want: "203.0.113.10"},
-		{in: "[2001:db8::1]", want: "[2001:db8::1]"},
-		{in: "https://example.com/a/b?x=1", want: "example.com"},
-		{in: "http://user:pw@example.com:8080/x", want: "example.com"},
-		{in: "example.com:80", want: "example.com"},
-		{in: "10.0.0.0/24", wantErr: "invalid target"},
-		{in: "https://10.0.0.0/24", wantErr: "invalid target"},
-		{in: "", wantErr: "target required"},
-	}
-	for _, c := range cases {
-		got, err := targetFrom(map[string]any{"target": c.in})
-		if c.wantErr != "" {
-			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
-				t.Errorf("targetFrom(%q) error = %v, want %q", c.in, err, c.wantErr)
-			}
-			continue
-		}
-		if err != nil || got != c.want {
-			t.Errorf("targetFrom(%q) = %q, %v; want %q", c.in, got, err, c.want)
-		}
-	}
-}
-
 // S2 happy: one Finding per OPEN port only — the filtered port is dropped.
 func TestExecute_StreamsOpenPortFindings(t *testing.T) {
 	findings, err := collect(t, "default", "localhost")

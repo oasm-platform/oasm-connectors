@@ -48,7 +48,7 @@ func (a NiktoAdapter) Validate(_ context.Context, _ map[string]any) error { retu
 // partial results still reach the caller.
 func (a NiktoAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
 	raw, _ := inputs["target"].(string)
-	target := normalizeTarget(raw)
+	target := connector.WebURL(raw)
 	if target == "" {
 		return fmt.Errorf("target required")
 	}
@@ -82,11 +82,10 @@ func (a NiktoAdapter) Execute(ctx context.Context, inputs map[string]any, out ch
 		return fmt.Errorf("nikto: write config: %w", err)
 	}
 
-	var stderr limitedWriter
-	stderr.limit = 2048
+	stderr := connector.NewTailWriter(2048)
 
 	cmd := exec.CommandContext(ctx, bin, buildNiktoArgs(target, cfg, configPath)...)
-	cmd.Stderr = &stderr
+	cmd.Stderr = stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("nikto: stdout pipe: %w", err)
@@ -98,7 +97,7 @@ func (a NiktoAdapter) Execute(ctx context.Context, inputs map[string]any, out ch
 	emitted, scanErr := scanItems(ctx, stdout, target, out)
 
 	waitErr := cmd.Wait()
-	tail := strings.TrimSpace(string(stderr.buf))
+	tail := stderr.String()
 
 	// The adapter imposes NO ceiling of its own: a nikto run is bounded only by
 	// the caller's context (the Worker cancels it at the job's timeoutSeconds)
@@ -192,7 +191,7 @@ func parseItemLine(line, target string) (connector.Finding, bool) {
 		Description: message,
 		Severity:    severity,
 		MatchedAt:   matchedAt,
-		Host:        hostFromTarget(target),
+		Host:        connector.HostOf(target),
 		Timestamp:   time.Now(),
 	}
 	// Tags carry the check class and nothing else — and they carry it verbatim.

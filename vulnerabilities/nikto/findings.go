@@ -1,7 +1,6 @@
 package main
 
 import (
-	"net/url"
 	"regexp"
 )
 
@@ -94,26 +93,4 @@ func resolveSeverityFromMessage(message string) (severity, source string) {
 		}
 	}
 	return "medium", "keyword-fallback"
-}
-
-// hostFromTarget is the fallback Host when the item carries no host of its own.
-func hostFromTarget(target string) string {
-	if u, err := url.Parse(target); err == nil && u.Host != "" {
-		return u.Host
-	}
-	return target
-}
-
-// limitedWriter buffers stderr, keeping at most `limit` bytes.
-type limitedWriter struct {
-	buf   []byte
-	limit int
-}
-
-func (w *limitedWriter) Write(p []byte) (int, error) {
-	w.buf = append(w.buf, p...)
-	if len(w.buf) > w.limit {
-		w.buf = w.buf[len(w.buf)-w.limit:]
-	}
-	return len(p), nil
 }

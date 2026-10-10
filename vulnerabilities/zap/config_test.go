@@ -30,21 +30,6 @@ func TestLoadZapConfig_InvalidErrors(t *testing.T) {
 	}
 }
 
-func TestNormalizeTarget(t *testing.T) {
-	cases := map[string]string{
-		"":                       "",
-		"  ":                     "",
-		"example.com":            "https://example.com",
-		"https://example.com":    "https://example.com",
-		"http://a.example/x?y=1": "http://a.example/x?y=1",
-	}
-	for in, want := range cases {
-		if got := normalizeTarget(in); got != want {
-			t.Errorf("normalizeTarget(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func parsePlan(t *testing.T, target string, cfg *zapConfig) zapPlan {
 	t.Helper()
 	raw, err := buildAutomationPlan(target, cfg, testReportPath)

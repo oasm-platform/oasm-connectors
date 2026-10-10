@@ -26,19 +26,6 @@ type zapConfig struct {
 	EnableAjaxSpider      bool   `json:"enableAjaxSpider"`      // needs a browser; default off
 }
 
-// normalizeTarget turns a bare host or partial URL into the full URL ZAP
-// expects as its context target: "example.com" -> "https://example.com".
-func normalizeTarget(raw string) string {
-	s := strings.TrimSpace(raw)
-	if s == "" {
-		return ""
-	}
-	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
-		s = "https://" + s
-	}
-	return s
-}
-
 // isFull reports whether the configured scan mode opts into the active scanner.
 func isFull(cfg *zapConfig) bool {
 	return strings.EqualFold(strings.TrimSpace(cfg.ScanMode), "full")

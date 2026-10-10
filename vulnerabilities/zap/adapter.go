@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/oasm-platform/oasm-connectors/sdk/connector"
@@ -36,7 +35,7 @@ func (a *ZapAdapter) Validate(_ context.Context, _ map[string]any) error {
 // report, an unparseable report, or the hard timeout is fatal.
 func (a *ZapAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
 	raw, _ := inputs["target"].(string)
-	target := normalizeTarget(raw)
+	target := connector.WebURL(raw)
 	if target == "" {
 		return fmt.Errorf("target required")
 	}
@@ -79,8 +78,7 @@ func (a *ZapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 	runCtx, cancel := context.WithTimeout(ctx, hard)
 	defer cancel()
 
-	var stderr limitedWriter
-	stderr.limit = 4096
+	stderr := connector.NewTailWriter(4096)
 
 	// ZAP needs a writable, isolated home dir; create it up front so -dir never
 	// points at a path ZAP has to guess how to create.
@@ -91,7 +89,7 @@ func (a *ZapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 
 	cmd := exec.CommandContext(runCtx, bin, "-cmd", "-silent", "-nostdout",
 		"-autorun", planPath, "-dir", homeDir)
-	cmd.Stderr = &stderr
+	cmd.Stderr = stderr
 	// ZAP is a shell script that spawns a JVM; kill the whole process group on
 	// cancel/timeout or the JVM survives the container's warm-pool reuse.
 	setProcessGroup(cmd)
@@ -99,7 +97,7 @@ func (a *ZapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 	cmd.WaitDelay = 15 * time.Second
 
 	runErr := cmd.Run()
-	tail := strings.TrimSpace(string(stderr.buf))
+	tail := stderr.String()
 
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -133,18 +131,4 @@ func (a *ZapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 	}
 
 	return nil
-}
-
-// limitedWriter buffers stderr, keeping at most `limit` bytes.
-type limitedWriter struct {
-	buf   []byte
-	limit int
-}
-
-func (w *limitedWriter) Write(p []byte) (int, error) {
-	w.buf = append(w.buf, p...)
-	if len(w.buf) > w.limit {
-		w.buf = w.buf[len(w.buf)-w.limit:]
-	}
-	return len(p), nil
 }

@@ -55,21 +55,6 @@ LW_SSL_ENGINE=auto
 FAILURES=20
 `
 
-// normalizeTarget turns a bare host or partial URL into the URL nikto expects
-// for -h. Unlike the crawler connectors the port must survive: `example.com:8443`
-// is a different scan target from `example.com`.
-func normalizeTarget(raw string) string {
-	s := strings.TrimSpace(raw)
-	if s == "" {
-		return ""
-	}
-	// A bare host:port with no scheme would otherwise be read as scheme "example.com".
-	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
-		s = "https://" + s
-	}
-	return s
-}
-
 // hostArg resolves the value for -h. nikto refuses `-port` together with a full
 // URI (set_targets: "-port option cannot be used with a full URI", exit 1), so
 // when the caller selects ports the target is reduced back to a bare host and
