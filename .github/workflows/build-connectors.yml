@@ -118,10 +118,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.x'
+      # Pin the SDK/worker wire contract: sdk/proto/sync_test.go diffs
+      # connector.proto against the worker copy and only skips when absent.
+      - name: Fetch worker connector.proto
+        run: curl -fsSL -o "$RUNNER_TEMP/worker-connector.proto" https://raw.githubusercontent.com/oasm-platform/open-asm/main/worker/internal/proto/connector.proto
       - name: Run go tests (changed modules only)
         shell: bash
         env:
           TEST_DIRS: ${{ needs.discover.outputs.test_dirs }}
+          OASM_WORKER_PROTO: ${{ runner.temp }}/worker-connector.proto
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
