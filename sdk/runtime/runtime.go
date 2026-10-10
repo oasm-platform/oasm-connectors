@@ -18,6 +18,7 @@ import (
 	pb "github.com/oasm-platform/oasm-connectors/sdk/proto/gen"
 	"github.com/oasm-platform/oasm-connectors/sdk/transport"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -61,6 +62,15 @@ func Main(name string, a connector.Adapter) {
 // stop after cancellation.
 // ponytail: fixed 30s; make configurable when workers report tail latencies.
 const sendTimeout = 30 * time.Second
+
+// Result batching: a batch is flushed at maxBatchFindings, before it would
+// exceed maxBatchBytes (well under the worker's 4 MiB gRPC default receive
+// limit), or batchFlushInterval after its first finding.
+const (
+	maxBatchFindings   = 100
+	maxBatchBytes      = 1 << 20
+	batchFlushInterval = 250 * time.Millisecond
+)
 
 // findingPreviewLimit caps how many finding summaries a failed job leaves in
 // the container log. Enough to identify what the tool was producing, small
@@ -401,16 +411,19 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 		errCh <- execErr
 	}()
 
-	// Stream results — sends are serialized inside this goroutine; each send
-	// is bounded so a stalled worker cannot wedge the stream (a wedged send
-	// would also make the worker's Cancel unprocessable).
+	// Stream results in batches — one Result message carries up to
+	// maxBatchFindings / maxBatchBytes, and a partial batch is flushed
+	// batchFlushInterval after its first finding so a slow scan still streams.
+	// Sends are serialized inside this goroutine; each send is bounded so a
+	// stalled worker cannot wedge the stream (a wedged send would also make the
+	// worker's Cancel unprocessable).
 	//
 	// Every finding is validated before it is transported. An invalid finding
-	// is a protocol violation, not noise: the stream stops (fail fast), the
-	// execution is cancelled so the adapter unblocks, and a fatal error
-	// naming the index is carried to the worker by the Done message. No
-	// silent drops — findings either ship or fail loudly.
-	n := 0
+	// is a protocol violation, not noise: the valid prefix ships, the stream
+	// stops (fail fast), the execution is cancelled so the adapter unblocks,
+	// and a fatal error naming the index is carried to the worker by the Done
+	// message. No silent drops — findings either ship or fail loudly.
+	n, seen := 0, 0 // findings sent / findings received and validated
 	var invalidErr error
 	var sendErr error
 	var preview []string
@@ -418,44 +431,89 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	// item was emitted is what separates "scanner found nothing" from "scanner
 	// output failed to parse" when a job returns fewer results than expected.
 	var firstFinding string
-	for f := range out {
-		if err := f.Validate(); err != nil {
-			invalidErr = fmt.Errorf("fatal: finding %d invalid: %w", n, err)
-			execLog.Errorf("invalid finding dropped: index=%d name=%q severity=%q err=%v", n, f.Name, f.Severity, err)
-			cancel()
-			break
+
+	var batch []*pb.Finding
+	batchBytes := 0
+	var flushTimer *time.Timer
+	var flushC <-chan time.Time
+	// flush sends the pending batch. On failure it records the error (unless
+	// the execution was cancelled — that is reported in Done) and cancels the
+	// execution so the adapter unblocks; the caller then stops streaming.
+	flush := func() bool {
+		if flushTimer != nil {
+			flushTimer.Stop()
+			flushTimer, flushC = nil, nil
 		}
-		if firstFinding == "" {
-			firstFinding = renderFinding(f)
-			execLog.Infof("first finding: %s", firstFinding)
+		if len(batch) == 0 {
+			return true
 		}
-		if len(preview) < findingPreviewLimit {
-			preview = append(preview, renderFinding(f))
-		}
-		if err := r.sendStreamMsg(execCtx, stream, &pb.ConnectorMessage{
+		err := r.sendStreamMsg(execCtx, stream, &pb.ConnectorMessage{
 			Message: &pb.ConnectorMessage_Result{
-				Result: &pb.Result{
-					ExecutionId: exec.ExecutionId,
-					Findings:    []*pb.Finding{toProtoFinding(f)},
-				},
+				Result: &pb.Result{ExecutionId: exec.ExecutionId, Findings: batch},
 			},
-		}); err != nil {
+		})
+		sent := len(batch)
+		batch, batchBytes = nil, 0
+		if err != nil {
 			if execCtx.Err() != nil {
-				// Cancelled: stop streaming; cancellation is reported in Done.
 				execLog.Infof("result send aborted after %d result(s): err=%v", n, err)
-				break
+				return false
 			}
 			// A failed send must still reach the worker as a Done error, not
-			// as a silently torn-down stream: unblock the adapter, then fall
-			// through to the Done path.
+			// as a silently torn-down stream.
 			execLog.Errorf("send failed after %d result(s): err=%v", n, err)
 			sendErr = fmt.Errorf("retryable: %w", err)
 			cancel()
-			break
+			return false
 		}
-		n++
-		// Per-result tracing at debug level; the aggregate is logged on Done.
-		execLog.Debugf("streamed result %d name=%q severity=%q", n, f.Name, f.Severity)
+		n += sent
+		execLog.Debugf("streamed batch of %d result(s), total=%d", sent, n)
+		return true
+	}
+
+stream:
+	for {
+		select {
+		case f, ok := <-out:
+			if !ok {
+				flush()
+				break stream
+			}
+			if err := f.Validate(); err != nil {
+				invalidErr = fmt.Errorf("fatal: finding %d invalid: %w", seen, err)
+				execLog.Errorf("invalid finding dropped: index=%d name=%q severity=%q err=%v", seen, f.Name, f.Severity, err)
+				flush()
+				cancel()
+				break stream
+			}
+			seen++
+			if firstFinding == "" {
+				firstFinding = renderFinding(f)
+				execLog.Infof("first finding: %s", firstFinding)
+			}
+			if len(preview) < findingPreviewLimit {
+				preview = append(preview, renderFinding(f))
+			}
+			pf := toProtoFinding(f)
+			size := proto.Size(pf)
+			if len(batch) > 0 && batchBytes+size > maxBatchBytes && !flush() {
+				break stream
+			}
+			batch = append(batch, pf)
+			batchBytes += size
+			if len(batch) >= maxBatchFindings {
+				if !flush() {
+					break stream
+				}
+			} else if flushTimer == nil {
+				flushTimer = time.NewTimer(batchFlushInterval)
+				flushC = flushTimer.C
+			}
+		case <-flushC:
+			if !flush() {
+				break stream
+			}
+		}
 	}
 	if len(preview) > 0 {
 		execLog.Debugf("emitted preview: %s", previewLines(preview, n))
