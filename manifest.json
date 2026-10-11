@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-11T05:40:43.721005574Z",
+  "generatedAt": "2026-10-11T05:53:55.743286306Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -1719,7 +1719,7 @@
             "ui:placeholder": "200,204,301,302,307,401,403"
           },
           "maxTime": {
-            "description": "Maximum running time in seconds (ffuf -maxtime). The adapter also enforces a hard 30 minute timeout.",
+            "description": "Maximum running time in seconds (ffuf -maxtime). The adapter also enforces a hard 20 minute timeout.",
             "maximum": 1100,
             "minimum": 0,
             "title": "Max time (seconds)",

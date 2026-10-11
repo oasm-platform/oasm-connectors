@@ -121,7 +121,7 @@ configSchema:
       minimum: 0
       maximum: 1100
       title: Max time (seconds)
-      description: 'Maximum running time in seconds (ffuf -maxtime). The adapter also enforces a hard 30 minute timeout.'
+      description: 'Maximum running time in seconds (ffuf -maxtime). The adapter also enforces a hard 20 minute timeout.'
     maxUrls:
       type: integer
       minimum: 1
