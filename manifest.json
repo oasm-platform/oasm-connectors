@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-23T03:31:42.5969298Z",
+  "generatedAt": "2026-10-11T05:40:43.721005574Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -107,6 +107,145 @@
         "timeoutSeconds": 900
       },
       "logo": "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"
+    },
+    {
+      "name": "Arjun - Parameter Discovery",
+      "slug": "arjun",
+      "version": "2.2.7",
+      "image": "ghcr.io/oasm-platform/connector-arjun:2.2.7",
+      "author": "oasm",
+      "pricingTier": [
+        "free"
+      ],
+      "homepage": "https://github.com/s0md3v/Arjun",
+      "repositoryUrl": "https://github.com/oasm-platform/oasm-connectors",
+      "supportUrl": "https://github.com/oasm-platform/oasm-connectors/issues",
+      "shortDescription": "HTTP parameter discovery",
+      "description": "Discovers hidden HTTP parameters for a URL using Arjun, probing a wordlist of parameter names against the target and reporting every parameter the endpoint responds to.",
+      "capabilities": [
+        "url_discovery"
+      ],
+      "inputsSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "description": "URL to discover parameters for. Each discovered parameter is emitted as \u003curl\u003e?\u003cparam\u003e=.",
+            "examples": [
+              "https://example.com/search"
+            ],
+            "format": "uri",
+            "title": "Target URL",
+            "type": "string",
+            "ui:placeholder": "https://example.com/search"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "type": "object"
+      },
+      "configSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "chunkSize": {
+            "default": 250,
+            "description": "Parameters per request (Arjun -c). IGNORED whenever method != GET — upstream forces -c 500.",
+            "minimum": 1,
+            "title": "Chunk size",
+            "type": "integer"
+          },
+          "delay": {
+            "description": "Delay between requests in seconds (Arjun -d). Only passed when greater than 0.",
+            "minimum": 0,
+            "title": "Delay",
+            "type": "number"
+          },
+          "disableRedirects": {
+            "description": "Do not follow redirects (Arjun --disable-redirects).",
+            "title": "Disable redirects",
+            "type": "boolean"
+          },
+          "headers": {
+            "description": "Extra request headers, one per entry (Arjun --headers). Omitted entirely when empty.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "array",
+            "ui:placeholder": "Authorization: Bearer …"
+          },
+          "include": {
+            "description": "Comma-separated list of known parameters to include in every request (Arjun --include).",
+            "title": "Include params",
+            "type": "string",
+            "ui:placeholder": "status,debug"
+          },
+          "maxUrls": {
+            "default": 10000,
+            "description": "Adapter-level cap on the number of discovered parameters emitted. Default 10000.",
+            "minimum": 1,
+            "title": "Max URLs",
+            "type": "integer"
+          },
+          "method": {
+            "default": "GET",
+            "description": "HTTP method used to probe parameters (Arjun -m).",
+            "enum": [
+              "GET",
+              "POST",
+              "XML",
+              "JSON"
+            ],
+            "title": "HTTP method",
+            "type": "string",
+            "ui:placeholder": "GET"
+          },
+          "rateLimit": {
+            "default": 9999,
+            "description": "Maximum requests per second (Arjun --rate-limit).",
+            "minimum": 1,
+            "title": "Rate limit",
+            "type": "integer"
+          },
+          "stable": {
+            "description": "Prefer stability over speed (Arjun --stable). Forces threads to 1 upstream.",
+            "title": "Stable mode",
+            "type": "boolean"
+          },
+          "threads": {
+            "default": 5,
+            "description": "Number of concurrent workers (Arjun -t).",
+            "minimum": 1,
+            "title": "Threads",
+            "type": "integer"
+          },
+          "timeout": {
+            "default": 15,
+            "description": "Per-request timeout in seconds (Arjun -T).",
+            "minimum": 1,
+            "title": "Request timeout",
+            "type": "integer"
+          },
+          "wordlist": {
+            "default": "medium",
+            "description": "Bundled parameter wordlist passed verbatim to Arjun -w (small|medium|large).",
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Wordlist",
+            "type": "string",
+            "ui:placeholder": "medium"
+          }
+        },
+        "type": "object"
+      },
+      "resourceDefaults": {
+        "cpu": "500m",
+        "memory": "512Mi",
+        "timeoutSeconds": 1800
+      }
     },
     {
       "name": "Gau - GetAllUrls",
@@ -1320,6 +1459,346 @@
         "timeoutSeconds": 600
       },
       "logo": "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"
+    },
+    {
+      "name": "dirsearch - Web Path Scanner",
+      "slug": "dirsearch",
+      "version": "0.5.0",
+      "image": "ghcr.io/oasm-platform/connector-dirsearch:0.5.0",
+      "author": "oasm",
+      "pricingTier": [
+        "free"
+      ],
+      "homepage": "https://github.com/maurosoria/dirsearch",
+      "repositoryUrl": "https://github.com/oasm-platform/oasm-connectors",
+      "supportUrl": "https://github.com/oasm-platform/oasm-connectors/issues",
+      "shortDescription": "Brute-force web path and file discovery",
+      "description": "Discovers hidden files, directories and endpoints on a web target by brute-forcing paths from a wordlist with dirsearch, filtering by status code and file extension.",
+      "capabilities": [
+        "url_discovery"
+      ],
+      "inputsSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "description": "Base URL to scan. Scheme/path preserved; dirsearch is run with -u \u003ctarget\u003e.",
+            "examples": [
+              "https://example.com"
+            ],
+            "format": "uri",
+            "title": "Target URL",
+            "type": "string",
+            "ui:placeholder": "https://example.com"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "type": "object"
+      },
+      "configSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "excludeExtensions": {
+            "description": "Extensions to exclude (dirsearch --exclude-extensions, comma-joined).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Exclude extensions",
+            "type": "array",
+            "ui:placeholder": "js, css"
+          },
+          "excludeStatus": {
+            "description": "Exclude responses with these status codes, comma-separated (dirsearch -x).",
+            "title": "Exclude status codes",
+            "type": "string",
+            "ui:placeholder": "404, 403"
+          },
+          "extensions": {
+            "description": "File extensions to append to each path (dirsearch -e, comma-joined).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Extensions",
+            "type": "array",
+            "ui:placeholder": "php, html, js"
+          },
+          "headers": {
+            "description": "Extra request headers, one -H per entry, e.g. \"X-Api-Key: abc\".",
+            "items": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "array",
+            "ui:placeholder": "Authorization: Bearer ..."
+          },
+          "includeStatus": {
+            "description": "Only show responses with these status codes, comma-separated (dirsearch -i).",
+            "title": "Include status codes",
+            "type": "string",
+            "ui:placeholder": "200, 301"
+          },
+          "maxRecursionDepth": {
+            "description": "Maximum recursion depth; only used when recursive is true (dirsearch -R).",
+            "minimum": 1,
+            "title": "Max recursion depth",
+            "type": "integer"
+          },
+          "maxTime": {
+            "description": "Maximum scan duration in seconds (dirsearch --max-time).",
+            "maximum": 1100,
+            "minimum": 1,
+            "title": "Max scan time",
+            "type": "integer"
+          },
+          "maxUrls": {
+            "default": 10000,
+            "description": "Adapter-level cap on emitted findings; defaults to 10000.",
+            "minimum": 1,
+            "title": "Max URLs",
+            "type": "integer"
+          },
+          "method": {
+            "description": "HTTP method to use (dirsearch -m).",
+            "title": "HTTP method",
+            "type": "string",
+            "ui:placeholder": "GET"
+          },
+          "proxy": {
+            "description": "Proxy URL, e.g. http://127.0.0.1:8080 or socks5://127.0.0.1:9050 (dirsearch -p).",
+            "title": "Proxy",
+            "type": "string",
+            "ui:placeholder": "http://127.0.0.1:8080"
+          },
+          "randomUserAgent": {
+            "description": "Use a random User-Agent per request (dirsearch --random-agent).",
+            "title": "Random user agent",
+            "type": "boolean"
+          },
+          "recursive": {
+            "description": "Enable recursive brute-force on discovered directories (dirsearch -r).",
+            "title": "Recursive",
+            "type": "boolean"
+          },
+          "threads": {
+            "default": 25,
+            "description": "Number of concurrent threads (dirsearch -t).",
+            "minimum": 1,
+            "title": "Threads",
+            "type": "integer"
+          },
+          "timeout": {
+            "description": "Per-request timeout in seconds (dirsearch --timeout).",
+            "minimum": 1,
+            "title": "Request timeout",
+            "type": "integer"
+          },
+          "wordlist": {
+            "default": "default",
+            "description": "Bundled wordlist preset under the dirsearch wordlist directory. default selects dicc.txt.",
+            "enum": [
+              "default",
+              "common",
+              "web",
+              "conf",
+              "extensions",
+              "backups",
+              "vcs",
+              "db",
+              "logs",
+              "keys"
+            ],
+            "title": "Wordlist",
+            "type": "string",
+            "ui:placeholder": "default"
+          }
+        },
+        "type": "object"
+      },
+      "resourceDefaults": {
+        "cpu": "500m",
+        "memory": "512Mi",
+        "timeoutSeconds": 1800
+      }
+    },
+    {
+      "name": "ffuf - Web Fuzzer",
+      "slug": "ffuf",
+      "version": "2.3.0",
+      "image": "ghcr.io/oasm-platform/connector-ffuf:2.3.0",
+      "author": "oasm",
+      "pricingTier": [
+        "free"
+      ],
+      "homepage": "https://github.com/ffuf/ffuf",
+      "repositoryUrl": "https://github.com/oasm-platform/oasm-connectors",
+      "supportUrl": "https://github.com/oasm-platform/oasm-connectors/issues",
+      "shortDescription": "Directory and file discovery via web fuzzing",
+      "description": "Fuzzes a target path base with ffuf wordlists to discover directories, files and endpoints, streaming every match as a finding for URL discovery.",
+      "capabilities": [
+        "url_discovery"
+      ],
+      "inputsSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "description": "Base URL to fuzz under. A missing scheme defaults to https://. The path (if any) is the fuzz base, i.e. FUZZ is appended to it.",
+            "examples": [
+              "example.com"
+            ],
+            "format": "uri",
+            "title": "Target URL",
+            "type": "string",
+            "ui:placeholder": "example.com"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "type": "object"
+      },
+      "configSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "autoCalibration": {
+            "description": "Automatically calibrate filtering options to reduce false positives (ffuf -ac).",
+            "title": "Auto calibration",
+            "type": "boolean"
+          },
+          "data": {
+            "description": "POST data / request body (ffuf -d).",
+            "title": "Request body",
+            "type": "string",
+            "ui:placeholder": "a=b"
+          },
+          "delay": {
+            "description": "Delay between requests, either a number of seconds or a range, e.g. 0.1-2.0 (ffuf -p).",
+            "title": "Delay",
+            "type": "string",
+            "ui:placeholder": "0.1"
+          },
+          "extensions": {
+            "description": "Append these extensions to each wordlist entry (ffuf -e), e.g. php, html, bak.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Extensions",
+            "type": "array",
+            "ui:placeholder": "php, html"
+          },
+          "filterCodes": {
+            "description": "Colon/comma-separated HTTP status codes to filter out (ffuf -fc).",
+            "title": "Filter status codes",
+            "type": "string",
+            "ui:placeholder": "400,404"
+          },
+          "filterSize": {
+            "description": "Filter responses of this size in bytes (ffuf -fs).",
+            "title": "Filter response size",
+            "type": "string",
+            "ui:placeholder": "0"
+          },
+          "followRedirects": {
+            "description": "Follow HTTP redirects (ffuf -r).",
+            "title": "Follow redirects",
+            "type": "boolean"
+          },
+          "headers": {
+            "description": "Header lines in \"Name: Value\" form, sent on every request (ffuf -H).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "array",
+            "ui:placeholder": "X-Api-Key: …"
+          },
+          "matchCodes": {
+            "description": "Colon/comma-separated HTTP status codes to match (ffuf -mc).",
+            "title": "Match status codes",
+            "type": "string",
+            "ui:placeholder": "200,204,301,302,307,401,403"
+          },
+          "maxTime": {
+            "description": "Maximum running time in seconds (ffuf -maxtime). The adapter also enforces a hard 30 minute timeout.",
+            "maximum": 1100,
+            "minimum": 0,
+            "title": "Max time (seconds)",
+            "type": "integer"
+          },
+          "maxUrls": {
+            "default": 10000,
+            "description": "Hard cap on emitted findings. When reached, the scan is stopped and partial results are kept.",
+            "maximum": 100000,
+            "minimum": 1,
+            "title": "Max URLs (adapter cap)",
+            "type": "integer"
+          },
+          "method": {
+            "description": "HTTP method to use (ffuf -X). Default: GET.",
+            "title": "HTTP method",
+            "type": "string",
+            "ui:placeholder": "POST"
+          },
+          "proxy": {
+            "description": "Proxy URL, e.g. http://127.0.0.1:8080 or socks5://127.0.0.1:9050 (ffuf -x).",
+            "title": "Proxy",
+            "type": "string",
+            "ui:placeholder": "http://127.0.0.1:8080"
+          },
+          "rate": {
+            "description": "Maximum requests per second (ffuf -rate). 0 = unlimited.",
+            "minimum": 0,
+            "title": "Rate limit",
+            "type": "integer"
+          },
+          "recursion": {
+            "description": "Recurse into matched directories (ffuf -recursion).",
+            "title": "Recursion",
+            "type": "boolean"
+          },
+          "recursionDepth": {
+            "description": "Maximum recursion depth (ffuf -recursion-depth). Only applied when recursion is on.",
+            "minimum": 1,
+            "title": "Recursion depth",
+            "type": "integer"
+          },
+          "threads": {
+            "default": 40,
+            "description": "Number of concurrent threads (ffuf -t).",
+            "minimum": 1,
+            "title": "Threads",
+            "type": "integer"
+          },
+          "timeout": {
+            "default": 10,
+            "description": "Per-request timeout in seconds (ffuf -timeout).",
+            "minimum": 1,
+            "title": "Request timeout",
+            "type": "integer"
+          },
+          "wordlist": {
+            "default": "common",
+            "description": "Bundled wordlist to fuzz with (ffuf -w). Resolved under FFUF_WORDLIST_DIR (default /opt/wordlists/ffuf).",
+            "enum": [
+              "common",
+              "raft-small-directories",
+              "raft-medium-directories",
+              "big",
+              "dirbuster-small",
+              "dirbuster-medium"
+            ],
+            "title": "Wordlist",
+            "type": "string",
+            "ui:placeholder": "common"
+          }
+        },
+        "type": "object"
+      },
+      "resourceDefaults": {
+        "cpu": "500m",
+        "memory": "512Mi",
+        "timeoutSeconds": 1800
+      }
     }
   ]
 }
