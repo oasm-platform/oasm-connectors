@@ -1,0 +1,135 @@
+name: ffuf - Web Fuzzer
+slug: ffuf
+version: 2.3.0
+image: ghcr.io/oasm-platform/connector-ffuf:2.3.0
+author: 'oasm'
+pricingTier: [free]
+homepage: 'https://github.com/ffuf/ffuf'
+repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
+supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
+shortDescription: 'Directory and file discovery via web fuzzing'
+description: 'Fuzzes a target path base with ffuf wordlists to discover directories, files and endpoints, streaming every match as a finding for URL discovery.'
+capabilities: [url_discovery]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+      title: Target URL
+      description: 'Base URL to fuzz under. A missing scheme defaults to https://. The path (if any) is the fuzz base, i.e. FUZZ is appended to it.'
+      examples: [example.com]
+      ui:placeholder: 'example.com'
+  additionalProperties: false
+configSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    wordlist:
+      type: string
+      enum: [common, raft-small-directories, raft-medium-directories, big, dirbuster-small, dirbuster-medium]
+      default: common
+      title: Wordlist
+      description: 'Bundled wordlist to fuzz with (ffuf -w). Resolved under FFUF_WORDLIST_DIR (default /opt/wordlists/ffuf).'
+      ui:placeholder: 'common'
+    extensions:
+      type: array
+      items:
+        type: string
+      title: Extensions
+      description: 'Append these extensions to each wordlist entry (ffuf -e), e.g. php, html, bak.'
+      ui:placeholder: 'php, html'
+    matchCodes:
+      type: string
+      title: Match status codes
+      description: 'Colon/comma-separated HTTP status codes to match (ffuf -mc).'
+      ui:placeholder: '200,204,301,302,307,401,403'
+    filterCodes:
+      type: string
+      title: Filter status codes
+      description: 'Colon/comma-separated HTTP status codes to filter out (ffuf -fc).'
+      ui:placeholder: '400,404'
+    filterSize:
+      type: string
+      title: Filter response size
+      description: 'Filter responses of this size in bytes (ffuf -fs).'
+      ui:placeholder: '0'
+    recursion:
+      type: boolean
+      title: Recursion
+      description: 'Recurse into matched directories (ffuf -recursion).'
+    recursionDepth:
+      type: integer
+      minimum: 1
+      title: Recursion depth
+      description: 'Maximum recursion depth (ffuf -recursion-depth). Only applied when recursion is on.'
+    threads:
+      type: integer
+      minimum: 1
+      default: 40
+      title: Threads
+      description: 'Number of concurrent threads (ffuf -t).'
+    rate:
+      type: integer
+      minimum: 0
+      title: Rate limit
+      description: 'Maximum requests per second (ffuf -rate). 0 = unlimited.'
+    delay:
+      type: string
+      title: Delay
+      description: 'Delay between requests, either a number of seconds or a range, e.g. 0.1-2.0 (ffuf -p).'
+      ui:placeholder: '0.1'
+    timeout:
+      type: integer
+      minimum: 1
+      default: 10
+      title: Request timeout
+      description: 'Per-request timeout in seconds (ffuf -timeout).'
+    followRedirects:
+      type: boolean
+      title: Follow redirects
+      description: 'Follow HTTP redirects (ffuf -r).'
+    autoCalibration:
+      type: boolean
+      title: Auto calibration
+      description: 'Automatically calibrate filtering options to reduce false positives (ffuf -ac).'
+    headers:
+      type: array
+      items:
+        type: string
+      title: Headers
+      description: 'Header lines in "Name: Value" form, sent on every request (ffuf -H).'
+      ui:placeholder: 'X-Api-Key: …'
+    proxy:
+      type: string
+      title: Proxy
+      description: 'Proxy URL, e.g. http://127.0.0.1:8080 or socks5://127.0.0.1:9050 (ffuf -x).'
+      ui:placeholder: 'http://127.0.0.1:8080'
+    method:
+      type: string
+      title: HTTP method
+      description: 'HTTP method to use (ffuf -X). Default: GET.'
+      ui:placeholder: 'POST'
+    data:
+      type: string
+      title: Request body
+      description: 'POST data / request body (ffuf -d).'
+      ui:placeholder: 'a=b'
+    maxTime:
+      type: integer
+      minimum: 0
+      maximum: 1100
+      title: Max time (seconds)
+      description: 'Maximum running time in seconds (ffuf -maxtime). The adapter also enforces a hard 30 minute timeout.'
+    maxUrls:
+      type: integer
+      minimum: 1
+      maximum: 100000
+      default: 10000
+      title: Max URLs (adapter cap)
+      description: 'Hard cap on emitted findings. When reached, the scan is stopped and partial results are kept.'
+resourceDefaults:
+  cpu: 500m
+  memory: 512Mi
+  timeoutSeconds: 1800

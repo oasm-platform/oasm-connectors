@@ -1,0 +1,116 @@
+name: dirsearch - Web Path Scanner
+slug: dirsearch
+version: 0.5.0
+image: ghcr.io/oasm-platform/connector-dirsearch:0.5.0
+author: 'oasm'
+pricingTier: [free]
+homepage: 'https://github.com/maurosoria/dirsearch'
+repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
+supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
+shortDescription: 'Brute-force web path and file discovery'
+description: 'Discovers hidden files, directories and endpoints on a web target by brute-forcing paths from a wordlist with dirsearch, filtering by status code and file extension.'
+capabilities: [url_discovery]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+      title: Target URL
+      description: 'Base URL to scan. Scheme/path preserved; dirsearch is run with -u <target>.'
+      examples: [https://example.com]
+      ui:placeholder: 'https://example.com'
+  additionalProperties: false
+configSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    wordlist:
+      type: string
+      enum: [default, common, web, conf, extensions, backups, vcs, db, logs, keys]
+      default: default
+      title: Wordlist
+      description: 'Bundled wordlist preset under the dirsearch wordlist directory. default selects dicc.txt.'
+      ui:placeholder: 'default'
+    extensions:
+      type: array
+      items:
+        type: string
+      title: Extensions
+      description: 'File extensions to append to each path (dirsearch -e, comma-joined).'
+      ui:placeholder: 'php, html, js'
+    threads:
+      type: integer
+      minimum: 1
+      default: 25
+      title: Threads
+      description: 'Number of concurrent threads (dirsearch -t).'
+    recursive:
+      type: boolean
+      title: Recursive
+      description: 'Enable recursive brute-force on discovered directories (dirsearch -r).'
+    maxRecursionDepth:
+      type: integer
+      minimum: 1
+      title: Max recursion depth
+      description: 'Maximum recursion depth; only used when recursive is true (dirsearch -R).'
+    includeStatus:
+      type: string
+      title: Include status codes
+      description: 'Only show responses with these status codes, comma-separated (dirsearch -i).'
+      ui:placeholder: '200, 301'
+    excludeStatus:
+      type: string
+      title: Exclude status codes
+      description: 'Exclude responses with these status codes, comma-separated (dirsearch -x).'
+      ui:placeholder: '404, 403'
+    excludeExtensions:
+      type: array
+      items:
+        type: string
+      title: Exclude extensions
+      description: 'Extensions to exclude (dirsearch --exclude-extensions, comma-joined).'
+      ui:placeholder: 'js, css'
+    method:
+      type: string
+      title: HTTP method
+      description: 'HTTP method to use (dirsearch -m).'
+      ui:placeholder: 'GET'
+    headers:
+      type: array
+      items:
+        type: string
+      title: Headers
+      description: 'Extra request headers, one -H per entry, e.g. "X-Api-Key: abc".'
+      ui:placeholder: 'Authorization: Bearer ...'
+    proxy:
+      type: string
+      title: Proxy
+      description: 'Proxy URL, e.g. http://127.0.0.1:8080 or socks5://127.0.0.1:9050 (dirsearch -p).'
+      ui:placeholder: 'http://127.0.0.1:8080'
+    timeout:
+      type: integer
+      minimum: 1
+      title: Request timeout
+      description: 'Per-request timeout in seconds (dirsearch --timeout).'
+    randomUserAgent:
+      type: boolean
+      title: Random user agent
+      description: 'Use a random User-Agent per request (dirsearch --random-agent).'
+    maxTime:
+      type: integer
+      minimum: 1
+      maximum: 1100
+      title: Max scan time
+      description: 'Maximum scan duration in seconds (dirsearch --max-time).'
+    maxUrls:
+      type: integer
+      minimum: 1
+      default: 10000
+      title: Max URLs
+      description: 'Adapter-level cap on emitted findings; defaults to 10000.'
+resourceDefaults:
+  cpu: 500m
+  memory: 512Mi
+  timeoutSeconds: 1800
