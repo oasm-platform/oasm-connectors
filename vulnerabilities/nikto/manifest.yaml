@@ -10,6 +10,7 @@ supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'Signature-based web server and CGI scanner'
 description: 'Scans a web server for 7,000+ known issues: dangerous files and CGIs, outdated server software, missing security headers, and version-specific flaws. Each finding is classified from Nikto''s own test database and correlated with CVE references.'
 capabilities: [vulnerabilities]
+targetTypes: [domain, ip, cidr]
 inputsSchema:
   type: object
   required: [target]

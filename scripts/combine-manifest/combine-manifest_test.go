@@ -34,6 +34,7 @@ pricingTier: [free]
 shortDescription: "Fast template-based vulnerability scanner"
 description: "Runs ProjectDiscovery Nuclei template-based scans against a target URL."
 capabilities: [vulnerabilities]
+targetTypes: [domain, ip, cidr]
 `
 
 func TestDiscoverCategoryLayout(t *testing.T) {
@@ -75,7 +76,7 @@ func TestValidateRejectsEmptyName(t *testing.T) {
 
 func TestValidateRejectsMissingSlug(t *testing.T) {
 	m := &Manifest{Name: "Nuclei Scanner", Version: "3.3.0", Image: "x",
-		ShortDescription: "short", Description: "long", Capabilities: []string{"vulnerabilities"}}
+		ShortDescription: "short", Description: "long", Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for missing slug")
@@ -88,7 +89,7 @@ func TestValidateRejectsMissingSlug(t *testing.T) {
 func TestValidateRejectsBadSlug(t *testing.T) {
 	for _, bad := range []string{"Nuclei", "bad_slug", "nuclei scanner"} {
 		m := &Manifest{Name: "Nuclei Scanner", Slug: bad, Version: "3.3.0", Image: "x",
-			ShortDescription: "short", Description: "long", Capabilities: []string{"vulnerabilities"}}
+			ShortDescription: "short", Description: "long", Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
 		err := validate(m, "test")
 		if err == nil {
 			t.Fatalf("expected error for bad slug %q", bad)
@@ -101,7 +102,7 @@ func TestValidateRejectsBadSlug(t *testing.T) {
 
 func TestValidateAllowsSpacedUppercaseName(t *testing.T) {
 	m := &Manifest{Name: "Nuclei Scanner v2", Slug: "nuclei", Version: "3.3.0", Image: "x",
-		ShortDescription: "short", Description: "long", Capabilities: []string{"vulnerabilities"},
+		ShortDescription: "short", Description: "long", Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"},
 		Author: "oasm", PricingTier: []string{"free"}}
 	if err := validate(m, "test"); err != nil {
 		t.Fatalf("spaced uppercase display name should be valid, got %v", err)
@@ -110,7 +111,7 @@ func TestValidateAllowsSpacedUppercaseName(t *testing.T) {
 
 func TestValidateRejectsMissingDescription(t *testing.T) {
 	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x",
-		ShortDescription: "short", Capabilities: []string{"vulnerabilities"}}
+		ShortDescription: "short", Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for missing description")
@@ -122,7 +123,7 @@ func TestValidateRejectsMissingDescription(t *testing.T) {
 
 func TestValidateRejectsMissingShortDescription(t *testing.T) {
 	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x",
-		Description: "long description", Capabilities: []string{"vulnerabilities"}}
+		Description: "long description", Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for missing shortDescription")
@@ -135,7 +136,7 @@ func TestValidateRejectsMissingShortDescription(t *testing.T) {
 func TestValidateRejectsMissingAuthor(t *testing.T) {
 	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", PricingTier: []string{"free"},
 		ShortDescription: "short", Description: "long description",
-		Capabilities: []string{"vulnerabilities"}}
+		Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for missing author")
@@ -150,7 +151,7 @@ func TestValidateRejectsMissingPricingTier(t *testing.T) {
 		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 			PricingTier:      tiers,
 			ShortDescription: "short", Description: "long description",
-			Capabilities: []string{"vulnerabilities"}}
+			Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
 		err := validate(m, "test")
 		if err == nil {
 			t.Fatalf("expected error for missing/empty pricingTier (%v)", tiers)
@@ -166,7 +167,7 @@ func TestValidateRejectsInvalidPricingTier(t *testing.T) {
 		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 			PricingTier:      []string{bad},
 			ShortDescription: "short", Description: "long description",
-			Capabilities: []string{"vulnerabilities"}}
+			Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
 		err := validate(m, "test")
 		if err == nil {
 			t.Fatalf("expected error for invalid pricingTier %q", bad)
@@ -182,7 +183,7 @@ func TestValidateAcceptsPricingTierCaseInsensitiveTrim(t *testing.T) {
 		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 			PricingTier:      []string{ok},
 			ShortDescription: "short", Description: "long description",
-			Capabilities: []string{"vulnerabilities"}}
+			Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
 		if err := validate(m, "test"); err != nil {
 			t.Fatalf("pricingTier %q should be valid, got %v", ok, err)
 		}
@@ -193,7 +194,7 @@ func TestValidateAcceptsBothTiers(t *testing.T) {
 	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 		PricingTier:      []string{"free", "paid"},
 		ShortDescription: "short", Description: "long description",
-		Capabilities: []string{"vulnerabilities"}}
+		Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
 	if err := validate(m, "test"); err != nil {
 		t.Fatalf("pricingTier [free paid] should be valid, got %v", err)
 	}
@@ -202,12 +203,67 @@ func TestValidateAcceptsBothTiers(t *testing.T) {
 	}
 }
 
+// validManifest returns a manifest that passes validate(); tests mutate one
+// field to probe a single rule.
+func validManifest() *Manifest {
+	return &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
+		PricingTier:      []string{"free"},
+		ShortDescription: "short", Description: "long description",
+		Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain", "ip", "cidr"}}
+}
+
+func TestValidateAcceptsEveryTargetType(t *testing.T) {
+	m := validManifest()
+	m.TargetTypes = []string{"domain", "ip", "cidr", "git_org"}
+	if err := validate(m, "test"); err != nil {
+		t.Fatalf("all known target types should be valid, got %v", err)
+	}
+}
+
+func TestValidateRejectsMissingTargetTypes(t *testing.T) {
+	m := validManifest()
+	m.TargetTypes = nil
+	err := validate(m, "test")
+	if err == nil || !strings.Contains(err.Error(), "at least one targetType required") {
+		t.Fatalf("expected missing targetTypes error, got %v", err)
+	}
+}
+
+func TestValidateRejectsUnknownTargetType(t *testing.T) {
+	for _, bad := range []string{"DOMAIN", "url", "repository", ""} {
+		m := validManifest()
+		m.TargetTypes = []string{bad}
+		err := validate(m, "test")
+		if err == nil || !strings.Contains(err.Error(), "invalid targetType") {
+			t.Fatalf("targetType %q: expected invalid targetType error, got %v", bad, err)
+		}
+	}
+}
+
+func TestValidateRejectsDuplicateTargetType(t *testing.T) {
+	m := validManifest()
+	m.TargetTypes = []string{"domain", "domain"}
+	err := validate(m, "test")
+	if err == nil || !strings.Contains(err.Error(), "duplicate targetType") {
+		t.Fatalf("expected duplicate targetType error, got %v", err)
+	}
+}
+
+func TestValidateRejectsUnknownCapability(t *testing.T) {
+	m := validManifest()
+	m.Capabilities = []string{"magic"}
+	err := validate(m, "test")
+	if err == nil || !strings.Contains(err.Error(), "invalid capability") {
+		t.Fatalf("expected invalid capability error, got %v", err)
+	}
+}
+
 func TestValidateRejectsBlankOptionalURLs(t *testing.T) {
 	for _, field := range []string{"homepage", "repositoryUrl", "supportUrl"} {
 		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 			PricingTier:      []string{"free"},
 			ShortDescription: "short", Description: "long description",
-			Capabilities: []string{"vulnerabilities"}}
+			Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
 		switch field {
 		case "homepage":
 			m.Homepage = "   "
