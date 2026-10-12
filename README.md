@@ -123,7 +123,7 @@ Written by hand, validated at aggregation time. Unknown fields are rejected, so 
 | `pricingTier` | yes | Non-empty list of `free` / `paid` (case-normalized). |
 | `shortDescription` | yes | One line, shown in list views. |
 | `description` | yes | Full paragraph for the detail view. |
-| `capabilities` | yes | At least one of `subdomains`, `http_probe`, `ports_scanner`, `vulnerabilities`, `screenshot`, `url_discovery`; also drives directory grouping by category. |
+| `capabilities` | yes | At least one of `subdomains`, `http_probe`, `ports_scanner`, `vulnerabilities`, `screenshot`, `url_discovery`, or — for repository scanners — `secrets`, `sca`, `sast`; also drives directory grouping by category. |
 | `targetTypes` | yes | Platform target types whose assets this connector can scan: one or more of `domain`, `ip`, `cidr`, `git_org`, no duplicates. The platform never dispatches an asset of another target type to it, whichever workflow runs it. |
 | `homepage` | no | Non-empty string when set. |
 | `repositoryUrl` | no | Non-empty string when set. |
@@ -229,6 +229,20 @@ Design notes for the adapter:
 - **Remote-API tools ship no bundled binary at all** — the adapter is the client, and credentials belong in `configSchema`, never in code or the image.
 - **Map severities explicitly.** Collapse the tool's own scale onto the five-value enum with a table, not with string guessing.
 - **Never leak secrets into findings or logs.** Findings are persisted and displayed; config values are not.
+
+### Repository scanners
+
+A connector that scans source code declares `targetTypes: [git_org]` and a `secrets`, `sca` or `sast` capability. The platform runs it once per repository of a Git organization target and sends flat inputs:
+
+| Input | Meaning |
+| --- | --- |
+| `repository` | https clone URL, e.g. `https://github.com/acme/web` |
+| `ref` | branch, tag or commit to scan; empty = default branch |
+| `username`, `token` | credentials for private repositories (optional) |
+
+Use `sdk/gitrepo`: `ParseInputs` validates them (https only, no embedded credentials, no option-like refs) and `Clone` makes a shallow checkout. The token is handed to git as an in-memory `http.extraHeader` — never in a URL, an argument or the checkout's config — and `token` inputs are redacted in SDK logs. Always `Close` the checkout.
+
+Report code findings with the optional `Finding` fields `FilePath`, `LineStart`/`LineEnd`, `Commit`, and for dependencies `PackageName`/`InstalledVersion`/`FixedVersion`. Set `Fingerprint` to the finding's stable identity within the repository (e.g. rule + file + line): the platform deduplicates on it, so two leaked keys of the same rule stay two findings. **Never put the secret value itself in a finding** — name the rule and the location.
 
 ## Building and testing
 
