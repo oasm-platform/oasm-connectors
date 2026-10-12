@@ -598,6 +598,15 @@ func toProtoFinding(f connector.Finding) *pb.Finding {
 		CeaId:      f.CEAID,
 		Iava:       f.IAVAID,
 		Confidence: f.Confidence,
+
+		FilePath:         f.FilePath,
+		LineStart:        f.LineStart,
+		LineEnd:          f.LineEnd,
+		Commit:           f.Commit,
+		PackageName:      f.PackageName,
+		InstalledVersion: f.InstalledVersion,
+		FixedVersion:     f.FixedVersion,
+		Fingerprint:      f.Fingerprint,
 	}
 	if !f.Timestamp.IsZero() {
 		out.Timestamp = timestamppb.New(f.Timestamp)

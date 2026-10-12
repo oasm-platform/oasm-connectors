@@ -59,6 +59,8 @@ var (
 	allowedCapabilities = map[string]bool{
 		"subdomains": true, "http_probe": true, "ports_scanner": true,
 		"vulnerabilities": true, "screenshot": true, "url_discovery": true,
+		// Repository scanners (GIT_ORG targets).
+		"secrets": true, "sca": true, "sast": true,
 	}
 	// allowedTargetTypes mirrors the platform's TargetType enum, lowercased
 	// to match workflow trigger names (e.g. `domain.create`).

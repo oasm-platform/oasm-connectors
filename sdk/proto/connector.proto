@@ -58,6 +58,24 @@ message Finding {
   google.protobuf.Timestamp modification_date = 23;
   double confidence = 24;
   repeated string cea_id = 25;
+
+  // --- Code findings (repository scanners: secrets, dependencies, SAST) ---
+  // All optional: host scanners leave them empty and old peers ignore them.
+  // Path of the affected file, relative to the repository root.
+  string file_path = 26;
+  // 1-based line range of the finding within file_path (0 = unknown).
+  int32 line_start = 27;
+  int32 line_end = 28;
+  // Commit the finding was observed in.
+  string commit = 29;
+  // Vulnerable dependency (SCA): package, the version in use, the fix.
+  string package_name = 30;
+  string installed_version = 31;
+  string fixed_version = 32;
+  // Stable identity of the finding within its asset, chosen by the
+  // connector (e.g. rule + file + line). The platform dedupes on it, so many
+  // findings of one rule in one repository stay distinct.
+  string fingerprint = 33;
 }
 
 message Result {

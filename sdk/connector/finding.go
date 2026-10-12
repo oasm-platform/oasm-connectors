@@ -38,6 +38,27 @@ type Finding struct {
 	ModificationDate time.Time
 	// Confidence is the scanner's confidence rating (e.g. Acunetix 80/95/100).
 	Confidence float64
+
+	// Code findings (repository scanners). All optional; host scanners leave
+	// them empty.
+
+	// FilePath is the affected file, relative to the repository root.
+	FilePath string
+	// LineStart/LineEnd is the 1-based line range in FilePath (0 = unknown).
+	LineStart int32
+	LineEnd   int32
+	// Commit is the commit the finding was observed in.
+	Commit string
+	// PackageName, InstalledVersion and FixedVersion describe a vulnerable
+	// dependency (SCA).
+	PackageName      string
+	InstalledVersion string
+	FixedVersion     string
+	// Fingerprint is the finding's stable identity within its asset (e.g.
+	// rule + file + line). The platform deduplicates on it, so several
+	// findings of the same rule in one repository stay distinct. Leave empty
+	// for host findings: the platform then keys on the finding name.
+	Fingerprint string
 }
 
 // Validate returns an error when the finding cannot be transported: a name is
