@@ -2,9 +2,10 @@ go 1.26.0
 
 use (
 	.
-	./sdk
 	./ports_scanner/nmap
 	./ports_scanner/rustscan
+	./sdk
+	./secrets/gitleaks
 	./url_discovery/arjun
 	./url_discovery/dirsearch
 	./url_discovery/ffuf

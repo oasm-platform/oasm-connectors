@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-12T10:06:18.5334435Z",
+  "generatedAt": "2026-10-12T10:08:10.7257308Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -366,6 +366,86 @@
         "cpu": "250m",
         "memory": "256Mi",
         "timeoutSeconds": 900
+      }
+    },
+    {
+      "name": "Gitleaks - Secret Scanner",
+      "slug": "gitleaks",
+      "version": "8.30.1",
+      "image": "ghcr.io/oasm-platform/connector-gitleaks:8.30.1",
+      "author": "oasm",
+      "pricingTier": [
+        "free"
+      ],
+      "homepage": "https://gitleaks.io",
+      "repositoryUrl": "https://github.com/oasm-platform/oasm-connectors",
+      "supportUrl": "https://github.com/oasm-platform/oasm-connectors/issues",
+      "shortDescription": "Finds secrets committed to Git repositories",
+      "description": "Scans the repositories of a Git organization for committed credentials — API keys, tokens, private keys, passwords — with Gitleaks rules. Secret values are redacted at the source: findings name the rule, file, line and commit, never the secret itself. Optionally scans recent history, where deleted secrets remain exposed.",
+      "capabilities": [
+        "secrets"
+      ],
+      "targetTypes": [
+        "git_org"
+      ],
+      "inputsSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "ref": {
+            "description": "Branch, tag or commit to scan. Empty scans the default branch.",
+            "title": "Ref",
+            "type": "string"
+          },
+          "repository": {
+            "description": "https clone URL of the repository to scan.",
+            "examples": [
+              "https://github.com/acme/web"
+            ],
+            "format": "uri",
+            "title": "Repository",
+            "type": "string"
+          },
+          "token": {
+            "description": "Access token for private repositories.",
+            "title": "Token",
+            "type": "string",
+            "ui:widget": "password"
+          },
+          "username": {
+            "description": "HTTP user for private repositories.",
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository"
+        ],
+        "type": "object"
+      },
+      "configSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "historyDepth": {
+            "default": 100,
+            "description": "Number of most recent commits scanned when \"Scan history\" is on.",
+            "maximum": 5000,
+            "minimum": 1,
+            "title": "History depth",
+            "type": "integer"
+          },
+          "scanHistory": {
+            "default": false,
+            "description": "Also scan recent commits. A secret deleted from the code is still exposed in history.",
+            "title": "Scan history",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "resourceDefaults": {
+        "cpu": "500m",
+        "memory": "1024Mi",
+        "timeoutSeconds": 1800
       }
     },
     {
