@@ -10,6 +10,7 @@ supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'OWASP ZAP dynamic web application scanner'
 description: 'Runs OWASP ZAP (Zed Attack Proxy) against a target web application using the Automation Framework, then streams the discovered alerts back to the Worker as normalized findings.'
 capabilities: [vulnerabilities]
+targetTypes: [domain, ip, cidr]
 inputsSchema:
   type: object
   required: [target]

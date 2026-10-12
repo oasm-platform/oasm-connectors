@@ -123,7 +123,8 @@ Written by hand, validated at aggregation time. Unknown fields are rejected, so 
 | `pricingTier` | yes | Non-empty list of `free` / `paid` (case-normalized). |
 | `shortDescription` | yes | One line, shown in list views. |
 | `description` | yes | Full paragraph for the detail view. |
-| `capabilities` | yes | At least one non-empty entry; also drives directory grouping by category. |
+| `capabilities` | yes | At least one of `subdomains`, `http_probe`, `ports_scanner`, `vulnerabilities`, `screenshot`, `url_discovery`; also drives directory grouping by category. |
+| `targetTypes` | yes | Platform target types whose assets this connector can scan: one or more of `domain`, `ip`, `cidr`, `git_org`, no duplicates. The platform never dispatches an asset of another target type to it, whichever workflow runs it. |
 | `homepage` | no | Non-empty string when set. |
 | `repositoryUrl` | no | Non-empty string when set. |
 | `supportUrl` | no | Non-empty string when set. |
@@ -214,7 +215,7 @@ Every line carries `trace_id` plus `execution_id`, `job_id`, `tool` and `image` 
 
 1. **Create the module directory** as `<category>/<slug>`. The category is free-form and should match the connector's `capabilities` entry; it becomes the grouping in the catalog.
 2. **Create the Go module.** Its own `go.mod`, module path `<repo module path>/<category>/<slug>`, requiring the SDK at `v0.0.0` with `replace <sdk module path> => ../../sdk`. Run `go mod tidy` with `GOWORK=off`.
-3. **Write `manifest.yaml`** against the contract above, plus an optional `logo.png`.
+3. **Write `manifest.yaml`** against the contract above, plus an optional `logo.png`. Declare `targetTypes` deliberately: it is what keeps a host scanner away from repositories (and a code scanner away from hosts).
 4. **Write a multi-stage `Dockerfile`.** Build context is the repo root, so copy `sdk/` and the connector directory explicitly. Drop both `go.mod`/`go.sum` files first and run `go mod download` before copying sources so dependency layers cache. Build statically (`CGO_ENABLED=0`), land a single binary on a minimal base image, create an unprivileged user, and `USER` it. The image must not expose ports or require a shell.
 5. **Implement the adapter.** `Validate` should reject malformed inputs early and cheaply. `Execute` should stream findings as they are produced rather than buffering the whole run, return on `ctx.Done()`, and never close `out`. Keep tool-specific code in this package and nowhere else.
 6. **Wire `main.go`** — construct the adapter, wrap it, run it, and treat a cancelled context as a clean exit rather than a failure.
@@ -280,7 +281,7 @@ task ci-scope  # what the last commit would rebuild
 
 - **The SDK is the only shared code.** Anything tool-specific that leaks upward makes every connector heavier and the contract fuzzier.
 - **`manifest.json` is derived.** Regenerate it; never edit or patch it by hand.
-- **The contract is validated, not trusted.** Unknown manifest fields, duplicate slugs, empty capabilities, and invalid pricing tiers all fail the build.
+- **The contract is validated, not trusted.** Unknown manifest fields, duplicate slugs, unknown or empty capabilities, missing or unknown target types, and invalid pricing tiers all fail the build.
 - **The container is the boundary.** Connectors must run unprivileged with no inbound network surface, and must tolerate warm-pool reuse.
 
 ## License

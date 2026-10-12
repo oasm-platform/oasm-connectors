@@ -10,6 +10,7 @@ supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'Historical URL discovery via public archives'
 description: 'Discovers historical/archived URLs for a domain using Gau (GetAllUrls) across Wayback Machine, Common Crawl, AlienVault OTX and urlscan.io.'
 capabilities: [url_discovery]
+targetTypes: [domain]
 inputsSchema:
   type: object
   required: [target]

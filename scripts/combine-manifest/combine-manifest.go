@@ -28,17 +28,21 @@ type Manifest struct {
 	Name string `yaml:"name"          json:"name"`
 	// Slug is the system-wide unique identifier (lowercase, [a-z0-9-]).
 	// Name is the human display name and may contain spaces/uppercase.
-	Slug             string         `yaml:"slug"          json:"slug"`
-	Version          string         `yaml:"version"       json:"version"`
-	Image            string         `yaml:"image"         json:"image"`
-	Author           string         `yaml:"author"        json:"author"`
-	PricingTier      []string       `yaml:"pricingTier"   json:"pricingTier"`
-	Homepage         string         `yaml:"homepage,omitempty"     json:"homepage,omitempty"`
-	RepositoryURL    string         `yaml:"repositoryUrl,omitempty" json:"repositoryUrl,omitempty"`
-	SupportURL       string         `yaml:"supportUrl,omitempty"    json:"supportUrl,omitempty"`
-	ShortDescription string         `yaml:"shortDescription" json:"shortDescription"`
-	Description      string         `yaml:"description"      json:"description"`
-	Capabilities     []string       `yaml:"capabilities"  json:"capabilities"`
+	Slug             string   `yaml:"slug"          json:"slug"`
+	Version          string   `yaml:"version"       json:"version"`
+	Image            string   `yaml:"image"         json:"image"`
+	Author           string   `yaml:"author"        json:"author"`
+	PricingTier      []string `yaml:"pricingTier"   json:"pricingTier"`
+	Homepage         string   `yaml:"homepage,omitempty"     json:"homepage,omitempty"`
+	RepositoryURL    string   `yaml:"repositoryUrl,omitempty" json:"repositoryUrl,omitempty"`
+	SupportURL       string   `yaml:"supportUrl,omitempty"    json:"supportUrl,omitempty"`
+	ShortDescription string   `yaml:"shortDescription" json:"shortDescription"`
+	Description      string   `yaml:"description"      json:"description"`
+	Capabilities     []string `yaml:"capabilities"  json:"capabilities"`
+	// TargetTypes lists the platform target types whose assets this connector
+	// can scan (see allowedTargetTypes). The platform never dispatches an
+	// asset of any other target type to it.
+	TargetTypes      []string       `yaml:"targetTypes"   json:"targetTypes"`
 	InputsSchema     map[string]any `yaml:"inputsSchema,omitempty"     json:"inputsSchema,omitempty"`
 	ConfigSchema     map[string]any `yaml:"configSchema,omitempty"    json:"configSchema,omitempty"`
 	ResourceDefaults map[string]any `yaml:"resourceDefaults,omitempty" json:"resourceDefaults,omitempty"`
@@ -49,6 +53,18 @@ type Manifest struct {
 }
 
 var (
+	// allowedCapabilities mirrors the platform's tool categories. An unknown
+	// capability used to fall back silently to "vulnerabilities" on the
+	// platform side, so it is rejected here instead.
+	allowedCapabilities = map[string]bool{
+		"subdomains": true, "http_probe": true, "ports_scanner": true,
+		"vulnerabilities": true, "screenshot": true, "url_discovery": true,
+	}
+	// allowedTargetTypes mirrors the platform's TargetType enum, lowercased
+	// to match workflow trigger names (e.g. `domain.create`).
+	allowedTargetTypes = map[string]bool{
+		"domain": true, "ip": true, "cidr": true, "git_org": true,
+	}
 	nameRe   = regexp.MustCompile(`^[a-z0-9-]+$`)
 	skipDirs = map[string]bool{
 		"sdk": true, "scripts": true, "templates": true,
@@ -85,6 +101,22 @@ func validate(m *Manifest, path string) error {
 		if c == "" {
 			return fmt.Errorf("empty capability")
 		}
+		if !allowedCapabilities[c] {
+			return fmt.Errorf("invalid capability %q (must be one of %s)", c, sortedKeys(allowedCapabilities))
+		}
+	}
+	if len(m.TargetTypes) == 0 {
+		return fmt.Errorf("at least one targetType required")
+	}
+	seenTargetTypes := make(map[string]bool, len(m.TargetTypes))
+	for _, tt := range m.TargetTypes {
+		if !allowedTargetTypes[tt] {
+			return fmt.Errorf("invalid targetType %q (must be one of %s)", tt, sortedKeys(allowedTargetTypes))
+		}
+		if seenTargetTypes[tt] {
+			return fmt.Errorf("duplicate targetType %q", tt)
+		}
+		seenTargetTypes[tt] = true
 	}
 	if m.Author == "" {
 		return fmt.Errorf("author required")
@@ -114,6 +146,16 @@ func validate(m *Manifest, path string) error {
 		}
 	}
 	return nil
+}
+
+// sortedKeys renders an allow-list deterministically for error messages.
+func sortedKeys(set map[string]bool) string {
+	keys := make([]string, 0, len(set))
+	for k := range set {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, "|")
 }
 
 func discoverManifests(root string) ([]string, error) {

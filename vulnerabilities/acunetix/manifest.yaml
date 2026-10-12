@@ -10,6 +10,7 @@ supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'Acunetix web vulnerability scanner'
 description: 'Connects to an Acunetix instance, runs a scan against a target, and streams the discovered vulnerabilities back to the Worker.'
 capabilities: [vulnerabilities]
+targetTypes: [domain, ip, cidr]
 inputsSchema:
   type: object
   required: [target]
