@@ -1,0 +1,101 @@
+name: Arjun - Parameter Discovery
+slug: arjun
+version: 2.2.7
+image: ghcr.io/oasm-platform/connector-arjun:2.2.7
+author: 'oasm'
+pricingTier: [free]
+homepage: 'https://github.com/s0md3v/Arjun'
+repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
+supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
+shortDescription: 'HTTP parameter discovery'
+description: 'Discovers hidden HTTP parameters for a URL using Arjun, probing a wordlist of parameter names against the target and reporting every parameter the endpoint responds to.'
+capabilities: [url_discovery]
+inputsSchema:
+  type: object
+  required: [target]
+  properties:
+    target:
+      type: string
+      format: uri
+      title: Target URL
+      description: 'URL to discover parameters for. Each discovered parameter is emitted as <url>?<param>=.'
+      examples: [https://example.com/search]
+      ui:placeholder: 'https://example.com/search'
+  additionalProperties: false
+configSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    wordlist:
+      type: string
+      enum: [small, medium, large]
+      default: medium
+      title: Wordlist
+      description: 'Bundled parameter wordlist passed verbatim to Arjun -w (small|medium|large).'
+      ui:placeholder: 'medium'
+    method:
+      type: string
+      enum: [GET, POST, XML, JSON]
+      default: GET
+      title: HTTP method
+      description: 'HTTP method used to probe parameters (Arjun -m).'
+      ui:placeholder: 'GET'
+    threads:
+      type: integer
+      minimum: 1
+      default: 5
+      title: Threads
+      description: 'Number of concurrent workers (Arjun -t).'
+    chunkSize:
+      type: integer
+      minimum: 1
+      default: 250
+      title: Chunk size
+      description: 'Parameters per request (Arjun -c). IGNORED whenever method != GET — upstream forces -c 500.'
+    timeout:
+      type: integer
+      minimum: 1
+      default: 15
+      title: Request timeout
+      description: 'Per-request timeout in seconds (Arjun -T).'
+    delay:
+      type: number
+      minimum: 0
+      title: Delay
+      description: 'Delay between requests in seconds (Arjun -d). Only passed when greater than 0.'
+    stable:
+      type: boolean
+      title: Stable mode
+      description: 'Prefer stability over speed (Arjun --stable). Forces threads to 1 upstream.'
+    rateLimit:
+      type: integer
+      minimum: 1
+      default: 9999
+      title: Rate limit
+      description: 'Maximum requests per second (Arjun --rate-limit).'
+    disableRedirects:
+      type: boolean
+      title: Disable redirects
+      description: 'Do not follow redirects (Arjun --disable-redirects).'
+    headers:
+      type: array
+      items:
+        type: string
+      title: Headers
+      description: 'Extra request headers, one per entry (Arjun --headers). Omitted entirely when empty.'
+      ui:placeholder: 'Authorization: Bearer …'
+    include:
+      type: string
+      title: Include params
+      description: 'Comma-separated list of known parameters to include in every request (Arjun --include).'
+      ui:placeholder: 'status,debug'
+    maxUrls:
+      type: integer
+      minimum: 1
+      default: 10000
+      title: Max URLs
+      description: 'Adapter-level cap on the number of discovered parameters emitted. Default 10000.'
+resourceDefaults:
+  cpu: 500m
+  memory: 512Mi
+  timeoutSeconds: 1800

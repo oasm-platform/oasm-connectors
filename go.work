@@ -5,6 +5,9 @@ use (
 	./sdk
 	./ports_scanner/nmap
 	./ports_scanner/rustscan
+	./url_discovery/arjun
+	./url_discovery/dirsearch
+	./url_discovery/ffuf
 	./url_discovery/gau
 	./url_discovery/katana
 	./vulnerabilities/acunetix
