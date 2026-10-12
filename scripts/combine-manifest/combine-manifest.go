@@ -28,17 +28,19 @@ type Manifest struct {
 	Name string `yaml:"name"          json:"name"`
 	// Slug is the system-wide unique identifier (lowercase, [a-z0-9-]).
 	// Name is the human display name and may contain spaces/uppercase.
-	Slug             string         `yaml:"slug"          json:"slug"`
-	Version          string         `yaml:"version"       json:"version"`
-	Image            string         `yaml:"image"         json:"image"`
-	Author           string         `yaml:"author"        json:"author"`
-	PricingTier      []string       `yaml:"pricingTier"   json:"pricingTier"`
-	Homepage         string         `yaml:"homepage,omitempty"     json:"homepage,omitempty"`
-	RepositoryURL    string         `yaml:"repositoryUrl,omitempty" json:"repositoryUrl,omitempty"`
-	SupportURL       string         `yaml:"supportUrl,omitempty"    json:"supportUrl,omitempty"`
-	ShortDescription string         `yaml:"shortDescription" json:"shortDescription"`
-	Description      string         `yaml:"description"      json:"description"`
-	Capabilities     []string       `yaml:"capabilities"  json:"capabilities"`
+	Slug             string   `yaml:"slug"          json:"slug"`
+	Version          string   `yaml:"version"       json:"version"`
+	Image            string   `yaml:"image"         json:"image"`
+	Author           string   `yaml:"author"        json:"author"`
+	PricingTier      []string `yaml:"pricingTier"   json:"pricingTier"`
+	Homepage         string   `yaml:"homepage,omitempty"     json:"homepage,omitempty"`
+	RepositoryURL    string   `yaml:"repositoryUrl,omitempty" json:"repositoryUrl,omitempty"`
+	SupportURL       string   `yaml:"supportUrl,omitempty"    json:"supportUrl,omitempty"`
+	ShortDescription string   `yaml:"shortDescription" json:"shortDescription"`
+	Description      string   `yaml:"description"      json:"description"`
+	Capabilities     []string `yaml:"capabilities"  json:"capabilities"`
+	// AgentTool exposes this connector as a callable tool to the OASM AI agent.
+	AgentTool        bool           `yaml:"agentTool,omitempty" json:"agentTool,omitempty"`
 	InputsSchema     map[string]any `yaml:"inputsSchema,omitempty"     json:"inputsSchema,omitempty"`
 	ConfigSchema     map[string]any `yaml:"configSchema,omitempty"    json:"configSchema,omitempty"`
 	ResourceDefaults map[string]any `yaml:"resourceDefaults,omitempty" json:"resourceDefaults,omitempty"`

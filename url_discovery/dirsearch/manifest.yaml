@@ -10,6 +10,7 @@ supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'Brute-force web path and file discovery'
 description: 'Discovers hidden files, directories and endpoints on a web target by brute-forcing paths from a wordlist with dirsearch, filtering by status code and file extension.'
 capabilities: [url_discovery]
+agentTool: true
 inputsSchema:
   type: object
   required: [target]

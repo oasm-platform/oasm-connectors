@@ -124,6 +124,7 @@ Written by hand, validated at aggregation time. Unknown fields are rejected, so 
 | `shortDescription` | yes | One line, shown in list views. |
 | `description` | yes | Full paragraph for the detail view. |
 | `capabilities` | yes | At least one non-empty entry; also drives directory grouping by category. |
+| `agentTool` | no | Set `true` to expose the connector as a callable tool to the OASM AI agent. |
 | `homepage` | no | Non-empty string when set. |
 | `repositoryUrl` | no | Non-empty string when set. |
 | `supportUrl` | no | Non-empty string when set. |
