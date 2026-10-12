@@ -12,6 +12,7 @@ shortDescription: 'Fast template-based vulnerability scanner'
 description: 'Runs ProjectDiscovery Nuclei template-based scans against a target URL to detect known vulnerabilities, misconfigurations, and exposed secrets.'
 capabilities: [vulnerabilities]
 targetTypes: [domain, ip, cidr]
+agentTool: true
 inputsSchema:
   type: object
   required: [target]

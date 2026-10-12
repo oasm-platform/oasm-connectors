@@ -582,3 +582,60 @@ func TestRunOmitsLogoWhenMissing(t *testing.T) {
 		t.Fatalf("expected no \"logo\" key when logo.png absent, got %q", v)
 	}
 }
+
+// TestAgentToolRoundTripsYamlToJson proves agentTool:true survives yaml->json
+// while false is omitted from both.
+func TestAgentToolRoundTripsYamlToJson(t *testing.T) {
+	root := t.TempDir()
+	flagged := strings.Replace(validYAML, "capabilities: [vulnerabilities]", "capabilities: [vulnerabilities]\nagentTool: true", 1)
+	p := writeManifest(t, filepath.Join(root, "vulnerabilities", "nuclei"), flagged)
+	m, err := loadManifest(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.AgentTool {
+		t.Fatalf("AgentTool not parsed: %+v", m)
+	}
+
+	out := filepath.Join(root, "manifest.json")
+	if err := run(root, out); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Connectors []map[string]any `json:"connectors"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Connectors) != 1 {
+		t.Fatalf("expected 1 connector, got %d", len(doc.Connectors))
+	}
+	if v, ok := doc.Connectors[0]["agentTool"].(bool); !ok || !v {
+		t.Fatalf("expected agentTool:true in json, got %v", doc.Connectors[0])
+	}
+
+	// False must be omitted (omitempty).
+	root2 := t.TempDir()
+	writeManifest(t, filepath.Join(root2, "vulnerabilities", "nuclei"), validYAML)
+	out2 := filepath.Join(root2, "manifest.json")
+	if err := run(root2, out2); err != nil {
+		t.Fatal(err)
+	}
+	raw2, err := os.ReadFile(out2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc2 struct {
+		Connectors []map[string]any `json:"connectors"`
+	}
+	if err := json.Unmarshal(raw2, &doc2); err != nil {
+		t.Fatal(err)
+	}
+	if _, present := doc2.Connectors[0]["agentTool"]; present {
+		t.Fatalf("expected no agentTool key when false, got %v", doc2.Connectors[0])
+	}
+}

@@ -11,6 +11,7 @@ shortDescription: 'WordPress vulnerability scanner'
 description: 'Scans WordPress sites using WPScan to enumerate vulnerable plugins and themes, detect known CVEs, misconfigurations, and weak credentials.'
 capabilities: [vulnerabilities]
 targetTypes: [domain, ip, cidr]
+agentTool: true
 inputsSchema:
   type: object
   required: [target]

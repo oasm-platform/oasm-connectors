@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-12T10:08:10.7257308Z",
+  "generatedAt": "2026-10-12T15:05:52.197307615Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -135,6 +135,7 @@
         "ip",
         "cidr"
       ],
+      "agentTool": true,
       "inputsSchema": {
         "additionalProperties": false,
         "properties": {
@@ -278,6 +279,7 @@
       "targetTypes": [
         "domain"
       ],
+      "agentTool": true,
       "inputsSchema": {
         "additionalProperties": false,
         "properties": {
@@ -388,6 +390,7 @@
       "targetTypes": [
         "git_org"
       ],
+      "agentTool": true,
       "inputsSchema": {
         "additionalProperties": false,
         "properties": {
@@ -468,6 +471,7 @@
       "targetTypes": [
         "domain"
       ],
+      "agentTool": true,
       "inputsSchema": {
         "additionalProperties": false,
         "properties": {
@@ -746,6 +750,7 @@
         "ip",
         "cidr"
       ],
+      "agentTool": true,
       "inputsSchema": {
         "additionalProperties": false,
         "properties": {
@@ -913,6 +918,7 @@
         "ip",
         "cidr"
       ],
+      "agentTool": true,
       "inputsSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1003,6 +1009,7 @@
         "ip",
         "cidr"
       ],
+      "agentTool": true,
       "inputsSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1147,6 +1154,7 @@
         "ip",
         "cidr"
       ],
+      "agentTool": true,
       "inputsSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1259,6 +1267,7 @@
         "ip",
         "cidr"
       ],
+      "agentTool": true,
       "inputsSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1356,6 +1365,7 @@
         "ip",
         "cidr"
       ],
+      "agentTool": true,
       "inputsSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1623,6 +1633,7 @@
         "ip",
         "cidr"
       ],
+      "agentTool": true,
       "inputsSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1790,6 +1801,7 @@
         "ip",
         "cidr"
       ],
+      "agentTool": true,
       "inputsSchema": {
         "additionalProperties": false,
         "properties": {

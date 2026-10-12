@@ -125,6 +125,7 @@ Written by hand, validated at aggregation time. Unknown fields are rejected, so 
 | `description` | yes | Full paragraph for the detail view. |
 | `capabilities` | yes | At least one of `subdomains`, `http_probe`, `ports_scanner`, `vulnerabilities`, `screenshot`, `url_discovery`, or — for repository scanners — `secrets`, `sca`, `sast`; also drives directory grouping by category. |
 | `targetTypes` | yes | Platform target types whose assets this connector can scan: one or more of `domain`, `ip`, `cidr`, `git_org`, no duplicates. The platform never dispatches an asset of another target type to it, whichever workflow runs it. |
+| `agentTool` | no | Set `true` to expose the connector as a callable tool to the OASM AI agent. |
 | `homepage` | no | Non-empty string when set. |
 | `repositoryUrl` | no | Non-empty string when set. |
 | `supportUrl` | no | Non-empty string when set. |

@@ -42,7 +42,9 @@ type Manifest struct {
 	// TargetTypes lists the platform target types whose assets this connector
 	// can scan (see allowedTargetTypes). The platform never dispatches an
 	// asset of any other target type to it.
-	TargetTypes      []string       `yaml:"targetTypes"   json:"targetTypes"`
+	TargetTypes []string `yaml:"targetTypes"   json:"targetTypes"`
+	// AgentTool exposes this connector as a callable tool to the OASM AI agent.
+	AgentTool        bool           `yaml:"agentTool,omitempty" json:"agentTool,omitempty"`
 	InputsSchema     map[string]any `yaml:"inputsSchema,omitempty"     json:"inputsSchema,omitempty"`
 	ConfigSchema     map[string]any `yaml:"configSchema,omitempty"    json:"configSchema,omitempty"`
 	ResourceDefaults map[string]any `yaml:"resourceDefaults,omitempty" json:"resourceDefaults,omitempty"`

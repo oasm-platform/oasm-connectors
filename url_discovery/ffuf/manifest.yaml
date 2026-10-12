@@ -11,6 +11,7 @@ shortDescription: 'Directory and file discovery via web fuzzing'
 description: 'Fuzzes a target path base with ffuf wordlists to discover directories, files and endpoints, streaming every match as a finding for URL discovery.'
 capabilities: [url_discovery]
 targetTypes: [domain, ip, cidr]
+agentTool: true
 inputsSchema:
   type: object
   required: [target]
