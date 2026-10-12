@@ -1,18 +1,5 @@
 package main
 
-import (
-	"context"
-	"log"
+import "github.com/oasm-platform/oasm-connectors/sdk/runtime"
 
-	sdkconn "github.com/oasm-platform/oasm-connectors/sdk/connector"
-	"github.com/oasm-platform/oasm-connectors/sdk/runtime"
-)
-
-func main() {
-	adapter := GauAdapter{}
-	conn := sdkconn.New(adapter)
-	rt := runtime.New(conn)
-	if err := rt.Run(context.Background()); err != nil {
-		log.Fatalf("gau connector: %v", err)
-	}
-}
+func main() { runtime.Main("gau", GauAdapter{}) }

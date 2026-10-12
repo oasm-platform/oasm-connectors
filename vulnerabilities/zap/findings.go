@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -105,14 +104,6 @@ func parseReferences(raw string) []string {
 	return out
 }
 
-// hostFromTarget is the fallback Host when the report omits @host.
-func hostFromTarget(target string) string {
-	if u, err := url.Parse(target); err == nil && u.Host != "" {
-		return u.Host
-	}
-	return target
-}
-
 // alertTags carries the ZAP alert fields that have no dedicated Finding
 // column, so they survive in the vulnerability's tag array. The concrete
 // affected URI is NOT a tag: it rides on MatchedAt (see instanceURIs).
@@ -170,7 +161,7 @@ func parseReport(data []byte, target string) ([]connector.Finding, error) {
 		return nil, fmt.Errorf("parse zap report: %w", err)
 	}
 
-	fallbackHost := hostFromTarget(target)
+	fallbackHost := connector.HostOf(target)
 	var findings []connector.Finding
 
 	for _, site := range rep.Site {

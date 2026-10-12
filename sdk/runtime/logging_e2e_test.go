@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,7 +26,7 @@ func TestExecuteLogsAreTraceable(t *testing.T) {
 	t.Setenv("TRACE_ID", "trace-log")
 	t.Setenv("OASM_CONFIG", `{"token":"super-secret","ports":"80"}`)
 
-	var buf bytes.Buffer
+	var buf syncBuffer
 	prev := log.Writer()
 	log.SetOutput(&buf)
 	t.Cleanup(func() { log.SetOutput(prev) })
@@ -68,7 +69,7 @@ func TestExecuteLogsAreTraceable(t *testing.T) {
 		"config override applied:",
 		"first finding:",
 		`"open tcp/443 (https)"`,
-		"streamed result 1",
+		"streamed batch of 1 result(s), total=1",
 		"emitted preview:",
 		"execution done: results=1",
 		"SUCCESS",
@@ -95,7 +96,7 @@ func TestExecuteLogsFailureContext(t *testing.T) {
 	t.Setenv("JOB_ID", "job-fail")
 	t.Setenv("TOOL", "nmap")
 
-	var buf bytes.Buffer
+	var buf syncBuffer
 	prev := log.Writer()
 	log.SetOutput(&buf)
 	t.Cleanup(func() { log.SetOutput(prev) })
@@ -115,4 +116,23 @@ func TestExecuteLogsFailureContext(t *testing.T) {
 			t.Errorf("failure log missing %q\n--- log ---\n%s", want, logs)
 		}
 	}
+}
+
+// syncBuffer is a bytes.Buffer safe for the log writer and the test reader
+// to use concurrently: the runtime keeps logging while the test polls.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }

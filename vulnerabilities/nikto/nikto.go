@@ -1,9 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -32,20 +29,6 @@ type niktoConfig struct {
 	No404          bool     `json:"no404"`
 }
 
-// loadNiktoConfig reads the per-job config profile from OASM_CONFIG. An unset
-// or empty value yields a zero config (all nikto defaults), not an error.
-func loadNiktoConfig() (*niktoConfig, error) {
-	raw := strings.TrimSpace(os.Getenv("OASM_CONFIG"))
-	if raw == "" {
-		return &niktoConfig{}, nil
-	}
-	var cfg niktoConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
-	}
-	return &cfg, nil
-}
-
 // niktoConfigFile overrides every setting the adapter drives on the command
 // line. It exists for one reason: nikto's own defaults ask two interactive
 // questions — UPDATES=yes prompts to submit unidentified server banners, and
@@ -71,21 +54,6 @@ CHECKMETHODS=GET
 LW_SSL_ENGINE=auto
 FAILURES=20
 `
-
-// normalizeTarget turns a bare host or partial URL into the URL nikto expects
-// for -h. Unlike the crawler connectors the port must survive: `example.com:8443`
-// is a different scan target from `example.com`.
-func normalizeTarget(raw string) string {
-	s := strings.TrimSpace(raw)
-	if s == "" {
-		return ""
-	}
-	// A bare host:port with no scheme would otherwise be read as scheme "example.com".
-	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
-		s = "https://" + s
-	}
-	return s
-}
 
 // hostArg resolves the value for -h. nikto refuses `-port` together with a full
 // URI (set_targets: "-port option cannot be used with a full URI", exit 1), so

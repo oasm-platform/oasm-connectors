@@ -42,7 +42,7 @@ func TestMapVulnerabilityEmptyVTNameSkipped(t *testing.T) {
 	}
 }
 
-func TestMapVulnerabilityStatusTagAndFields(t *testing.T) {
+func TestMapVulnerabilityTagsAndFields(t *testing.T) {
 	v := vulnerability{
 		VulnID:     "v1",
 		VTName:     "SQL Injection",
@@ -68,8 +68,10 @@ func TestMapVulnerabilityStatusTagAndFields(t *testing.T) {
 	if f.MatchedAt != v.AffectsURL {
 		t.Errorf("MatchedAt = %q", f.MatchedAt)
 	}
-	if got := strings.Join(f.Tags, ","); !strings.Contains(got, "status:fixed") {
-		t.Errorf("Tags = %v, want status:fixed appended", f.Tags)
+	// Acunetix's own tags are published verbatim; the vulnerability's status is
+	// scanner bookkeeping and must not reach the category slot.
+	if len(f.Tags) != 3 || f.Tags[0] != "CVE-2021-1234" || f.Tags[1] != "cwe-89" || f.Tags[2] != "sqli" {
+		t.Errorf("Tags = %v, want exactly the three vendor tags and no status: entry", f.Tags)
 	}
 	// CVE/CWE from tags only, uppercased, de-duplicated.
 	if len(f.CVEID) != 1 || f.CVEID[0] != "CVE-2021-1234" {

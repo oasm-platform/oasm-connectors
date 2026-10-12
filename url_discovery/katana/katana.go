@@ -3,9 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/csv"
-	"encoding/json"
-	"fmt"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -40,21 +37,6 @@ type katanaConfig struct {
 // fails to initialize. It is the ONLY signal for that failure: katana exits 0
 // in that case (measured), so the exit code cannot be trusted.
 const katanaRunnerInitMarker = "could not create runner"
-
-// loadKatanaConfig reads the per-job config profile from OASM_CONFIG. An unset
-// or empty value yields a zero config (defaults applied in buildKatanaArgs),
-// not an error; malformed JSON is an error.
-func loadKatanaConfig() (*katanaConfig, error) {
-	raw := strings.TrimSpace(os.Getenv("OASM_CONFIG"))
-	if raw == "" {
-		return &katanaConfig{}, nil
-	}
-	var cfg katanaConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
-	}
-	return &cfg, nil
-}
 
 // jsCrawlEnabled reports whether -jc should be emitted: nil (key absent)
 // defaults to true; an explicit false disables it.

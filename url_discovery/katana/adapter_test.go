@@ -215,26 +215,6 @@ func TestKatanaExecute_ContextTimeoutKillsProcess(t *testing.T) {
 	}
 }
 
-// S9 boundary: target normalization strips scheme/path/query/port.
-func TestNormalizeTarget(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"https://example.com/a/b?x=1", "example.com"},
-		{"example.com:443/x", "example.com"},
-		{"   ", ""},
-		{"http://EXAMPLE.com:8080", "EXAMPLE.com"},
-		{"example.com", "example.com"},
-		// userinfo and IPv6 literals must not be truncated at the first colon
-		{"http://user:pw@example.com/x", "example.com"},
-		{"https://[2001:db8::1]:8443/x", "2001:db8::1"},
-		{"[::1]:8080", "::1"},
-	}
-	for _, tc := range cases {
-		if got := normalizeTarget(tc.in); got != tc.want {
-			t.Errorf("normalizeTarget(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-}
-
 // S9 boundary: Execute rejects a missing/blank target.
 func TestKatanaExecute_MissingTargetErrors(t *testing.T) {
 	for _, inputs := range []map[string]any{{}, {"target": "   "}} {

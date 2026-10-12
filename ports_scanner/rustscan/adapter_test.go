@@ -65,7 +65,7 @@ func collect(t *testing.T, mode, target string) ([]connector.Finding, error) {
 
 func TestLoadRustscanConfig_UnsetIsZeroConfig(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "")
-	cfg, err := loadRustscanConfig()
+	cfg, err := connector.LoadConfig[rustscanConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestLoadRustscanConfig_UnsetIsZeroConfig(t *testing.T) {
 
 func TestLoadRustscanConfig_ParsesAndRejects(t *testing.T) {
 	t.Setenv("OASM_CONFIG", `{"ports":"22,80","range":"1-1024","timeoutMs":2000,"tries":2,"batchSize":1000,"udp":true}`)
-	cfg, err := loadRustscanConfig()
+	cfg, err := connector.LoadConfig[rustscanConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestLoadRustscanConfig_ParsesAndRejects(t *testing.T) {
 	}
 
 	t.Setenv("OASM_CONFIG", "{not json")
-	if _, err := loadRustscanConfig(); err == nil {
+	if _, err := connector.LoadConfig[rustscanConfig](t.Context()); err == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
 }
@@ -193,32 +193,6 @@ func TestExecute_PassesBuiltArgsToBinary(t *testing.T) {
 	want := []string{"-g", "-n", "-r", "1-1024", "-t", "2000", "--tries", "2", "-a", "127.0.0.1"}
 	if !slices.Equal(got, want) {
 		t.Errorf("captured argv:\n got %v\nwant %v", got, want)
-	}
-}
-
-func TestTargetFrom(t *testing.T) {
-	cases := []struct{ in, want, wantErr string }{
-		{in: "example.com", want: "example.com"},
-		{in: " 203.0.113.10 ", want: "203.0.113.10"},
-		{in: "[2001:db8::1]", want: "[2001:db8::1]"},
-		{in: "https://example.com/a/b?x=1", want: "example.com"},
-		{in: "http://user:pw@example.com:8080/x", want: "example.com"},
-		{in: "example.com:80", want: "example.com"},
-		{in: "10.0.0.0/24", wantErr: "invalid target"},
-		{in: "https://10.0.0.0/24", wantErr: "invalid target"},
-		{in: "", wantErr: "target required"},
-	}
-	for _, c := range cases {
-		got, err := targetFrom(map[string]any{"target": c.in})
-		if c.wantErr != "" {
-			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
-				t.Errorf("targetFrom(%q) error = %v, want %q", c.in, err, c.wantErr)
-			}
-			continue
-		}
-		if err != nil || got != c.want {
-			t.Errorf("targetFrom(%q) = %q, %v; want %q", c.in, got, err, c.want)
-		}
 	}
 }
 

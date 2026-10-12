@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -16,7 +17,8 @@ import (
 	"github.com/oasm-platform/oasm-connectors/sdk/logging"
 	pb "github.com/oasm-platform/oasm-connectors/sdk/proto/gen"
 	"github.com/oasm-platform/oasm-connectors/sdk/transport"
-	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -47,11 +49,28 @@ func New(c *connector.Connector) *Runtime {
 	}
 }
 
+// Main is a connector binary's whole main(): run the adapter against the
+// Worker until the stream closes, exiting non-zero on failure.
+func Main(name string, a connector.Adapter) {
+	if err := New(connector.New(a)).Run(context.Background()); err != nil {
+		log.Fatalf("%s connector: %v", name, err)
+	}
+}
+
 // sendTimeout bounds a single stream send so a worker that stops reading
 // cannot wedge the connector forever. Also bounds the wait for an adapter to
 // stop after cancellation.
 // ponytail: fixed 30s; make configurable when workers report tail latencies.
 const sendTimeout = 30 * time.Second
+
+// Result batching: a batch is flushed at maxBatchFindings, before it would
+// exceed maxBatchBytes (well under the worker's 4 MiB gRPC default receive
+// limit), or batchFlushInterval after its first finding.
+const (
+	maxBatchFindings   = 100
+	maxBatchBytes      = 1 << 20
+	batchFlushInterval = 250 * time.Millisecond
+)
 
 // findingPreviewLimit caps how many finding summaries a failed job leaves in
 // the container log. Enough to identify what the tool was producing, small
@@ -127,24 +146,18 @@ func (r *Runtime) Run(ctx context.Context) error {
 	// Empty serverName lets gRPC derive it from the dial address, so the
 	// Worker cert must cover the address it is dialed at.
 	caFile, certFile, keyFile, tlsEnabled := env.TLSFiles()
-	var conn *grpc.ClientConn
+	var creds credentials.TransportCredentials
 	r.logger.Debugf("dialing worker addr=%s tls=%t", cfg.WorkerAddr, tlsEnabled)
 	if tlsEnabled {
 		r.logger.Info("worker mTLS enabled: WORKER_TLS_CA/CERT/KEY all set")
-		creds, err := transport.LoadMTLS(caFile, certFile, keyFile, "")
-		if err != nil {
+		if creds, err = transport.LoadMTLS(caFile, certFile, keyFile, ""); err != nil {
 			// Bad CA/cert/key material is operator config, not transient.
 			return fmt.Errorf("fatal: load mTLS credentials: %w", err)
 		}
-		conn, err = transport.DialWithTLSCreds(cfg.WorkerAddr, creds)
-		if err != nil {
-			return fmt.Errorf("retryable: dial worker (mTLS): %w", err)
-		}
-	} else {
-		conn, err = transport.Connect(ctx, cfg.WorkerAddr)
-		if err != nil {
-			return fmt.Errorf("retryable: dial worker: %w", err)
-		}
+	}
+	conn, err := transport.Dial(cfg.WorkerAddr, creds)
+	if err != nil {
+		return fmt.Errorf("retryable: dial worker (tls=%t): %w", tlsEnabled, err)
 	}
 	defer conn.Close()
 
@@ -365,14 +378,11 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 
 	// Per-job config override (Phase 2 warm pool): a REUSED container keeps its
 	// first-run OASM_CONFIG env; the worker ships the job's config profile as
-	// JSON in ExecuteJob.config["oasm_config"]. Adapters read OASM_CONFIG via
-	// os.Getenv at Execute time, so restore the env var around the adapter
-	// run. The execGate guarantees a single in-flight execution, making this
-	// process-global mutation race-free.
+	// JSON in ExecuteJob.config["oasm_config"]. It rides on the execution ctx
+	// (connector.LoadConfig reads it first, env second) — no process-global
+	// state, so nothing leaks into the next execution.
 	if raw := exec.Config["oasm_config"]; raw != "" {
-		prev := os.Getenv("OASM_CONFIG")
-		os.Setenv("OASM_CONFIG", raw)
-		defer os.Setenv("OASM_CONFIG", prev)
+		execCtx = connector.WithConfig(execCtx, raw)
 		execLog.Infof("config override applied: profile_bytes=%d config_keys=%s", len(raw), logging.Keys(exec.Config))
 	}
 
@@ -401,16 +411,19 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 		errCh <- execErr
 	}()
 
-	// Stream results — sends are serialized inside this goroutine; each send
-	// is bounded so a stalled worker cannot wedge the stream (a wedged send
-	// would also make the worker's Cancel unprocessable).
+	// Stream results in batches — one Result message carries up to
+	// maxBatchFindings / maxBatchBytes, and a partial batch is flushed
+	// batchFlushInterval after its first finding so a slow scan still streams.
+	// Sends are serialized inside this goroutine; each send is bounded so a
+	// stalled worker cannot wedge the stream (a wedged send would also make the
+	// worker's Cancel unprocessable).
 	//
 	// Every finding is validated before it is transported. An invalid finding
-	// is a protocol violation, not noise: the stream stops (fail fast), the
-	// execution is cancelled so the adapter unblocks, and a fatal error
-	// naming the index is carried to the worker by the Done message. No
-	// silent drops — findings either ship or fail loudly.
-	n := 0
+	// is a protocol violation, not noise: the valid prefix ships, the stream
+	// stops (fail fast), the execution is cancelled so the adapter unblocks,
+	// and a fatal error naming the index is carried to the worker by the Done
+	// message. No silent drops — findings either ship or fail loudly.
+	n, seen := 0, 0 // findings sent / findings received and validated
 	var invalidErr error
 	var sendErr error
 	var preview []string
@@ -418,44 +431,89 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	// item was emitted is what separates "scanner found nothing" from "scanner
 	// output failed to parse" when a job returns fewer results than expected.
 	var firstFinding string
-	for f := range out {
-		if err := f.Validate(); err != nil {
-			invalidErr = fmt.Errorf("fatal: finding %d invalid: %w", n, err)
-			execLog.Errorf("invalid finding dropped: index=%d name=%q severity=%q err=%v", n, f.Name, f.Severity, err)
-			cancel()
-			break
+
+	var batch []*pb.Finding
+	batchBytes := 0
+	var flushTimer *time.Timer
+	var flushC <-chan time.Time
+	// flush sends the pending batch. On failure it records the error (unless
+	// the execution was cancelled — that is reported in Done) and cancels the
+	// execution so the adapter unblocks; the caller then stops streaming.
+	flush := func() bool {
+		if flushTimer != nil {
+			flushTimer.Stop()
+			flushTimer, flushC = nil, nil
 		}
-		if firstFinding == "" {
-			firstFinding = renderFinding(f)
-			execLog.Infof("first finding: %s", firstFinding)
+		if len(batch) == 0 {
+			return true
 		}
-		if len(preview) < findingPreviewLimit {
-			preview = append(preview, renderFinding(f))
-		}
-		if err := r.sendStreamMsg(execCtx, stream, &pb.ConnectorMessage{
+		err := r.sendStreamMsg(execCtx, stream, &pb.ConnectorMessage{
 			Message: &pb.ConnectorMessage_Result{
-				Result: &pb.Result{
-					ExecutionId: exec.ExecutionId,
-					Findings:    []*pb.Finding{toProtoFinding(f)},
-				},
+				Result: &pb.Result{ExecutionId: exec.ExecutionId, Findings: batch},
 			},
-		}); err != nil {
+		})
+		sent := len(batch)
+		batch, batchBytes = nil, 0
+		if err != nil {
 			if execCtx.Err() != nil {
-				// Cancelled: stop streaming; cancellation is reported in Done.
 				execLog.Infof("result send aborted after %d result(s): err=%v", n, err)
-				break
+				return false
 			}
 			// A failed send must still reach the worker as a Done error, not
-			// as a silently torn-down stream: unblock the adapter, then fall
-			// through to the Done path.
+			// as a silently torn-down stream.
 			execLog.Errorf("send failed after %d result(s): err=%v", n, err)
 			sendErr = fmt.Errorf("retryable: %w", err)
 			cancel()
-			break
+			return false
 		}
-		n++
-		// Per-result tracing at debug level; the aggregate is logged on Done.
-		execLog.Debugf("streamed result %d name=%q severity=%q", n, f.Name, f.Severity)
+		n += sent
+		execLog.Debugf("streamed batch of %d result(s), total=%d", sent, n)
+		return true
+	}
+
+stream:
+	for {
+		select {
+		case f, ok := <-out:
+			if !ok {
+				flush()
+				break stream
+			}
+			if err := f.Validate(); err != nil {
+				invalidErr = fmt.Errorf("fatal: finding %d invalid: %w", seen, err)
+				execLog.Errorf("invalid finding dropped: index=%d name=%q severity=%q err=%v", seen, f.Name, f.Severity, err)
+				flush()
+				cancel()
+				break stream
+			}
+			seen++
+			if firstFinding == "" {
+				firstFinding = renderFinding(f)
+				execLog.Infof("first finding: %s", firstFinding)
+			}
+			if len(preview) < findingPreviewLimit {
+				preview = append(preview, renderFinding(f))
+			}
+			pf := toProtoFinding(f)
+			size := proto.Size(pf)
+			if len(batch) > 0 && batchBytes+size > maxBatchBytes && !flush() {
+				break stream
+			}
+			batch = append(batch, pf)
+			batchBytes += size
+			if len(batch) >= maxBatchFindings {
+				if !flush() {
+					break stream
+				}
+			} else if flushTimer == nil {
+				flushTimer = time.NewTimer(batchFlushInterval)
+				flushC = flushTimer.C
+			}
+		case <-flushC:
+			if !flush() {
+				break stream
+			}
+		}
 	}
 	if len(preview) > 0 {
 		execLog.Debugf("emitted preview: %s", previewLines(preview, n))

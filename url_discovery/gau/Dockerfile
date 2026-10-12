@@ -12,7 +12,7 @@ RUN cd url_discovery/gau && CGO_ENABLED=0 GOWORK=off go build -trimpath -o /out/
 # version tags, so it cannot be pinned or built for arm64. Building here keeps
 # multi-arch builds and a deterministic v2.2.4 pin.
 RUN GOWORK=off GOBIN=/out go install github.com/lc/gau/v2/cmd/gau@v2.2.4
-FROM alpine:3.20
+FROM alpine:3.22
 RUN apk add --no-cache ca-certificates && adduser -D -u 10001 connector
 USER 10001
 COPY --from=builder /out/connector /usr/local/bin/connector

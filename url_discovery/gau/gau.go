@@ -1,9 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -19,21 +16,6 @@ type gauConfig struct {
 	Proxy     string   `json:"proxy"`
 	From      string   `json:"from"` // YYYYMM
 	To        string   `json:"to"`   // YYYYMM
-}
-
-// loadGauConfig reads the per-job config profile from OASM_CONFIG. An unset or
-// empty value yields a zero config (defaults applied in buildGauArgs), not an
-// error; malformed JSON is an error.
-func loadGauConfig() (*gauConfig, error) {
-	raw := strings.TrimSpace(os.Getenv("OASM_CONFIG"))
-	if raw == "" {
-		return &gauConfig{}, nil
-	}
-	var cfg gauConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
-	}
-	return &cfg, nil
 }
 
 // buildGauArgs assembles the gau CLI arg vector. Threads/timeout/retries are

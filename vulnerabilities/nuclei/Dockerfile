@@ -8,7 +8,7 @@ COPY sdk/ sdk/
 COPY vulnerabilities/nuclei/ vulnerabilities/nuclei/
 RUN cd vulnerabilities/nuclei && CGO_ENABLED=0 GOWORK=off go build -trimpath -o /out/connector .
 RUN cd vulnerabilities/nuclei && CGO_ENABLED=0 GOWORK=off go run ./cmd/templates /opt/nuclei-templates
-FROM alpine:3.20
+FROM alpine:3.22
 COPY --from=builder /opt/nuclei-templates /opt/nuclei-templates
 COPY --from=builder /out/connector /usr/local/bin/connector
 # Offline runtime: templates are baked into /opt/nuclei-templates at build

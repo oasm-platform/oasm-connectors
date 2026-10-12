@@ -13,7 +13,7 @@ import (
 
 func TestLoadKatanaConfig_UnsetIsZeroConfig(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "")
-	cfg, err := loadKatanaConfig()
+	cfg, err := connector.LoadConfig[katanaConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestLoadKatanaConfig_ParsesCamelCaseKeys(t *testing.T) {
 		`"parallelism":4,"rateLimit":75,"retries":2,"proxy":"http://p","headers":["X-Api-Key: k1"],`+
 		`"filterSimilar":true,"filterSimilarThreshold":20,"maxDomainPages":50,`+
 		`"extensionMatch":["php","html"],"extensionFilter":["png","css"],"crawlScope":".*\\.example\\.com","maxUrls":100}`)
-	cfg, err := loadKatanaConfig()
+	cfg, err := connector.LoadConfig[katanaConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestLoadKatanaConfig_ParsesCamelCaseKeys(t *testing.T) {
 
 	// An omitted jsCrawl must stay nil so the adapter defaults it to true.
 	t.Setenv("OASM_CONFIG", `{"depth":3}`)
-	omitted, err := loadKatanaConfig()
+	omitted, err := connector.LoadConfig[katanaConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestLoadKatanaConfig_ParsesCamelCaseKeys(t *testing.T) {
 
 func TestLoadKatanaConfig_InvalidJSONErrors(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "{not json")
-	if _, err := loadKatanaConfig(); err == nil {
+	if _, err := connector.LoadConfig[katanaConfig](t.Context()); err == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
 }

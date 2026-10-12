@@ -64,7 +64,7 @@ func collect(t *testing.T, mode, target string) ([]connector.Finding, error) {
 
 func TestLoadNmapConfig_UnsetIsZeroConfig(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "")
-	cfg, err := loadNmapConfig()
+	cfg, err := connector.LoadConfig[nmapConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestLoadNmapConfig_UnsetIsZeroConfig(t *testing.T) {
 
 func TestLoadNmapConfig_ParsesAndRejects(t *testing.T) {
 	t.Setenv("OASM_CONFIG", `{"ports":"22,80","topPorts":100,"hostTimeout":300,"retries":2,"noPing":false}`)
-	cfg, err := loadNmapConfig()
+	cfg, err := connector.LoadConfig[nmapConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestLoadNmapConfig_ParsesAndRejects(t *testing.T) {
 	}
 	// An omitted noPing must stay nil so the adapter keeps the -Pn default.
 	t.Setenv("OASM_CONFIG", `{"topPorts":10}`)
-	omitted, err := loadNmapConfig()
+	omitted, err := connector.LoadConfig[nmapConfig](t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestLoadNmapConfig_ParsesAndRejects(t *testing.T) {
 	}
 
 	t.Setenv("OASM_CONFIG", "{not json")
-	if _, err := loadNmapConfig(); err == nil {
+	if _, err := connector.LoadConfig[nmapConfig](t.Context()); err == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
 }
@@ -195,32 +195,6 @@ func TestExecute_PassesBuiltArgsToBinary(t *testing.T) {
 	want := []string{"-Pn", "-n", "-oX", "-", "-p", "22,443", "--host-timeout", "120s", "--max-retries", "3", "127.0.0.1"}
 	if !slices.Equal(got, want) {
 		t.Errorf("captured argv:\n got %v\nwant %v", got, want)
-	}
-}
-
-func TestTargetFrom(t *testing.T) {
-	cases := []struct{ in, want, wantErr string }{
-		{in: "example.com", want: "example.com"},
-		{in: " 203.0.113.10 ", want: "203.0.113.10"},
-		{in: "[2001:db8::1]", want: "[2001:db8::1]"},
-		{in: "https://example.com/a/b?x=1", want: "example.com"},
-		{in: "http://user:pw@example.com:8080/x", want: "example.com"},
-		{in: "example.com:80", want: "example.com"},
-		{in: "10.0.0.0/24", wantErr: "invalid target"},
-		{in: "https://10.0.0.0/24", wantErr: "invalid target"},
-		{in: "", wantErr: "target required"},
-	}
-	for _, c := range cases {
-		got, err := targetFrom(map[string]any{"target": c.in})
-		if c.wantErr != "" {
-			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
-				t.Errorf("targetFrom(%q) error = %v, want %q", c.in, err, c.wantErr)
-			}
-			continue
-		}
-		if err != nil || got != c.want {
-			t.Errorf("targetFrom(%q) = %q, %v; want %q", c.in, got, err, c.want)
-		}
 	}
 }
 

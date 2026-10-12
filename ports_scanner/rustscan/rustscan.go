@@ -1,10 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"net"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -23,21 +19,6 @@ type rustscanConfig struct {
 	Tries     int    `json:"tries"`     // rustscan --tries: 0 = rustscan default (1)
 	BatchSize int    `json:"batchSize"` // rustscan -b: concurrent sockets, 0 = rustscan default (4500)
 	UDP       bool   `json:"udp"`       // rustscan --udp
-}
-
-// loadRustscanConfig reads the per-job config profile from OASM_CONFIG. An unset
-// or empty value yields a zero config (defaults applied in buildRustscanArgs),
-// not an error; malformed JSON is an error.
-func loadRustscanConfig() (*rustscanConfig, error) {
-	raw := strings.TrimSpace(os.Getenv("OASM_CONFIG"))
-	if raw == "" {
-		return &rustscanConfig{}, nil
-	}
-	var cfg rustscanConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
-	}
-	return &cfg, nil
 }
 
 // portInRange keeps every validated port inside the TCP/UDP port space; a value
@@ -71,60 +52,6 @@ func validPortRange(s string) bool {
 	lo, err1 := strconv.Atoi(start)
 	hi, err2 := strconv.Atoi(end)
 	return err1 == nil && err2 == nil && portInRange(lo) && portInRange(hi) && lo <= hi
-}
-
-// validTargetHost accepts a hostname, IPv4 literal or bracketed IPv6 literal —
-// a single host, never a range or a list. rustscan -a takes CIDRs, lists and
-// files of targets, so its scope-expanding operators (, / *) are rejected here:
-// the connector's contract is one target per job.
-func validTargetHost(h string) bool {
-	if h == "" || len(h) > 255 {
-		return false
-	}
-	if strings.ContainsAny(h, "/*?,; \t\n\r") || strings.Contains(h, "..") {
-		return false
-	}
-	if strings.Contains(h, ":") {
-		// IPv6 literal (or its zoned form) — only inside brackets.
-		return strings.HasPrefix(h, "[") && strings.HasSuffix(h, "]")
-	}
-	return true
-}
-
-// normalizeTarget strips scheme/userinfo/port from a target so an operator can
-// paste a URL or "host:port". A path or query is discarded, and a target whose
-// "path" is actually numeric scope syntax ("10.0.0.0/24") is REJECTED rather
-// than silently narrowed to one host — the CIDR check runs before any strip.
-// Returns "" for input that is not a single host.
-func normalizeTarget(raw string) string {
-	s := strings.TrimSpace(raw)
-	if i := strings.Index(s, "://"); i >= 0 {
-		s = s[i+3:]
-	}
-	if i := strings.LastIndex(s, "@"); i >= 0 {
-		s = s[i+1:]
-	}
-	if i := strings.IndexAny(s, "/?#"); i >= 0 {
-		if _, err := strconv.Atoi(s[i+1:]); err == nil {
-			return ""
-		}
-		s = s[:i]
-	}
-	if !validTargetHost(s) && !strings.Contains(s, ":") {
-		return ""
-	}
-	// A non-numeric "port" ("example.com:80-90") is a port-range, not an
-	// address — reject it rather than hand rustscan an ambiguous target.
-	if h, p, err := net.SplitHostPort(s); err == nil {
-		if _, err := strconv.Atoi(p); err != nil {
-			return ""
-		}
-		s = h
-	}
-	if !validTargetHost(s) {
-		return ""
-	}
-	return s
 }
 
 // buildRustscanArgs assembles the rustscan CLI arg vector.

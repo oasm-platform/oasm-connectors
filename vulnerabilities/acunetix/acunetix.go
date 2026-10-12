@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 )
 
 // defaultProfileID is the built-in "Full Scan" profile. A profile id is
@@ -44,18 +46,17 @@ type configProfile struct {
 }
 
 // loadAcunetixConfig reads the Acunetix connection + scan settings. The primary
-// source is OASM_CONFIG (the per-job config profile) — the SDK runtime
-// overrides that env var per execution so a warm-pool reused container sees
-// its own job's config rather than its first-run env. ACUNETIX_* env vars
-// remain as a legacy fallback for direct-runtime use. URL and API key are
-// required; the rest fall back to sane defaults.
-func loadAcunetixConfig() (*acunetixConfig, error) {
+// source is the per-job config profile (connector.LoadConfig: ctx, then
+// OASM_CONFIG), so a warm-pool reused container sees its own job's config.
+// ACUNETIX_* env vars remain as a legacy fallback when no profile was shipped.
+// URL and API key are required; the rest fall back to sane defaults.
+func loadAcunetixConfig(ctx context.Context) (*acunetixConfig, error) {
 	cfg := &acunetixConfig{}
 
-	if raw := strings.TrimSpace(os.Getenv("OASM_CONFIG")); raw != "" {
-		var p configProfile
-		if err := json.Unmarshal([]byte(raw), &p); err != nil {
-			return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
+	if connector.HasConfig(ctx) {
+		p, err := connector.LoadConfig[configProfile](ctx)
+		if err != nil {
+			return nil, err
 		}
 		cfg.URL = p.URL
 		cfg.APIKey = p.APIKey

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -44,14 +43,30 @@ func ensureFakeNikto(t *testing.T) string {
 	return fakeNiktoPath
 }
 
-// assertOnlyCategoryTags enforces the Tags contract: the array carries the
-// check class and nothing else, because Core's summary report renders tags[0]
-// as the finding's category (see summary-report.service.ts).
+// knownCategoryNames is every category name nikto's tuning codes map to. It is
+// the exhaustive allow-list for the Tags contract below.
+var knownCategoryNames = func() map[string]struct{} {
+	names := make(map[string]struct{}, len(niktoTunings))
+	for _, tuning := range niktoTunings {
+		names[tuning.category] = struct{}{}
+	}
+	return names
+}()
+
+// assertOnlyCategoryTags enforces the Tags contract: every tag is a bare
+// category name from nikto's tuning table and nothing else.
+//
+// The check is membership rather than a prefix test on purpose. Core's summary
+// report renders tags[0] as the finding's category verbatim
+// (summary-report.service.ts), so a "category:"-prefixed tag reaches users as a
+// category literally called "category:SQL Injection" — and a membership test
+// catches that, plus any scanner-internal tag, without encoding the old prefix
+// in the assertion.
 func assertOnlyCategoryTags(t *testing.T, f connector.Finding) {
 	t.Helper()
 	for _, tag := range f.Tags {
-		if !strings.HasPrefix(tag, "category:") {
-			t.Errorf("finding %q: non-category tag %q in %v", f.Name, tag, f.Tags)
+		if _, ok := knownCategoryNames[tag]; !ok {
+			t.Errorf("finding %q: tag %q is not a bare category name; tags = %v", f.Name, tag, f.Tags)
 		}
 	}
 }

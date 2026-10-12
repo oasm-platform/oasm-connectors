@@ -95,7 +95,7 @@ cd url_discovery/katana && go run .
 - `main.go` — wires `KatanaAdapter` + SDK (`sdk/connector`, `sdk/runtime`)
 - `katana.go` — `OASM_CONFIG` parsing + `buildKatanaArgs` argv assembly (`-duc` always first)
 - `manifest.yaml` — source of truth for `manifest.json` (capability `url_discovery`; image `ghcr.io/oasm-platform/connector-katana:1.7.0` is SDK+tool bundle, not upstream)
-- `Dockerfile` — `golang:1.26-alpine` builder (connector + `katana@v1.7.0` from source, `CGO_ENABLED=0`) → `alpine:3.20` non-root final stage with `HOME=/home/connector`
+- `Dockerfile` — `golang:1.26-alpine` builder (connector + `katana@v1.7.0` from source, `CGO_ENABLED=0`) → `alpine:3.20` non-root final stage with `HOME=/home/connector`. katana is built through a throwaway module rather than `go install katana@v1.7.0`, so a `replace` can pin `jackc/pgx/v5` to 5.11.0 and clear CVE-2026-33815/33816 — `go install pkg@version` ignores the main module, and v1.7.0 is the newest katana release, so no upstream tag carries the fix.
 - `testdata/fake-katana/` — test stub driven by `FAKE_MODE` (`default`, `empty`, `fail`, `partial-fail`, `runner-fail`, `hang`, `many`)
 
 ### Exit-code policy

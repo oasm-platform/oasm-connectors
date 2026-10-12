@@ -244,17 +244,37 @@ task proto       # protobuf generation — currently a stub; stubs are committed
 
 Every task is a thin wrapper over `go`; run the equivalent command directly when working inside a single module.
 
-Tests need no Docker, no network, and no credentials, and are the primary gate: CI runs the same `go test` on every module with `GOWORK=off`. A connector is not mergeable until its adapter's parsing, error mapping, and cancellation paths are covered.
+Tests need no Docker, no network, and no credentials, and are the primary gate: CI runs the same `go test` per module with `GOWORK=off`, scoped to the modules a change touched. A connector is not mergeable until its adapter's parsing, error mapping, and cancellation paths are covered.
 
 ## CI and publishing
 
-The connector workflow is path-filtered to `sdk/**`, `ports_scanner/**`, `vulnerabilities/**`, `url_discovery/**`, `scripts/**` and the workflow file itself.
+CI is scoped to what a change actually touches. Both entry points derive their matrix from one script, `.github/scripts/detect-changed-connectors.sh`, which diffs two revisions and answers two questions: which connector images must be rebuilt, and which Go modules must be tested. Editing `vulnerabilities/nuclei/adapter.go` costs one build and one test run; the other nine connectors are not touched, and their tags in GHCR keep pointing at the last good image.
 
-- **On push / pull request** — discover every `<category>/<slug>/manifest.yaml`, derive a build matrix from `slug` and `version`, run the full test suite, then build each image with `push: false`. Nothing is published.
-- **On manual dispatch** — the same pipeline, plus a push job that publishes `connector-<slug>:<version>` and `:latest` to the registry. A `dry_run` input builds and tests without publishing, and an `image_tag` input overrides the tag.
+A changed path is classified like this:
+
+| Path | Effect |
+| --- | --- |
+| `<category>/<slug>/**` | rebuild and test that connector |
+| a build-context input of some connector (`sdk/**` today) | rebuild and test those connectors |
+| `.dockerignore` | rebuild everything — it filters every build context |
+| root module files (`go.mod`, `go.work`, `scripts/**`, `manifest.json`, `Taskfile.yml`) | no image; the root module's tests are the gate |
+| docs, `.trivyignore`, CI config | nothing at all |
+
+The build-context inputs are read from each `Dockerfile`'s `COPY` sources rather than hardcoded, so adding a shared input to the images is picked up without touching the script. If the baseline is unusable — first push, force-push, an unreachable or unresolvable base — the script selects the whole catalogue rather than guessing.
+
+- **On push to main** (`build-changed-connectors.yml`) — the changed connectors are built, scanned, gated, and published as `connector-<slug>:<version>` plus `:latest`.
+- **On pull request** (`build-connectors.yml`) — the same matrix, with `push: false` and the vulnerability gate reporting only. Nothing is published.
+- **On manual dispatch** (`build-connectors.yml`) — the whole catalogue, regardless of the diff. A `dry_run` input builds and tests without publishing, and an `image_tag` input overrides the tag.
 - Registry credentials come from the CI token; local builds never require them.
 
-Because publication is manual and tag-driven, the `version` field in `manifest.yaml` is meaningful: bumping it is what produces a new immutable image tag.
+Because publication is tag-driven, the `version` field in `manifest.yaml` is meaningful: bumping it is what produces a new immutable image tag. The detector reads the tag from the checked-in manifest, so the bump and the publish cannot drift apart.
+
+The detector is load-bearing — a wrong answer either skips a publish or rebuilds everything — so it ships with a test suite that runs on every CI invocation:
+
+```bash
+task ci-test   # unit-test the detector
+task ci-scope  # what the last commit would rebuild
+```
 
 ## Design constraints
 

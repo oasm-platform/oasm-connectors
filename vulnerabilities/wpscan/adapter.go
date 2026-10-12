@@ -38,12 +38,10 @@ func (a WpscanAdapter) Validate(_ context.Context, _ map[string]any) error { ret
 // job does not fail or trigger the caller's retry loop. The only fatal parse
 // path is unparseable stdout with a nonzero exit.
 func (a WpscanAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
-	target, _ := inputs["target"].(string)
-	if strings.TrimSpace(target) == "" {
+	raw, _ := inputs["target"].(string)
+	target := connector.WebURL(raw)
+	if target == "" {
 		return fmt.Errorf("target required")
-	}
-	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
-		target = "https://" + target
 	}
 
 	bin := os.Getenv("WPSCAN_BIN")
@@ -51,22 +49,20 @@ func (a WpscanAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 		bin = "wpscan"
 	}
 
-	cfg, err := loadWpscanConfig()
+	cfg, err := connector.LoadConfig[wpscanConfig](ctx)
 	if err != nil {
 		return err
 	}
 
-	var stderr limitedWriter
-	stderr.buf = new([]byte)
-	stderr.limit = 2048
+	stderr := connector.NewTailWriter(2048)
 
 	var stdout bytes.Buffer
 	cmd := exec.CommandContext(ctx, bin, buildWpscanArgs(target, cfg)...)
 	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stderr = stderr
 
 	runErr := cmd.Run()
-	tail := strings.TrimSpace(string(*stderr.buf))
+	tail := stderr.String()
 
 	var scanResult wpscanOutput
 	if err := json.Unmarshal(stdout.Bytes(), &scanResult); err != nil {
@@ -285,15 +281,18 @@ func toFinding(v wpscanVuln, target string) (connector.Finding, bool) {
 		return connector.Finding{}, false
 	}
 
-	severity, source := resolveSeverity(v)
+	// Severity provenance stays off the wire. Core's summary report renders
+	// tags[0] as the finding's category verbatim (summary-report.service.ts),
+	// so publishing "severity:heuristic" would label every finding WPScan left
+	// unscored with that bookkeeping string as its category — and Finding has no
+	// field to carry it in. The band it qualifies is already on Severity, and
+	// resolveSeverity still reports the source for callers that want it.
+	severity, _ := resolveSeverity(v)
 	f := connector.Finding{
 		Name:      v.Title,
 		Severity:  severity,
 		MatchedAt: target,
 		Timestamp: time.Now(),
-	}
-	if source != "" {
-		f.Tags = append(f.Tags, "severity:heuristic", "severity-source:"+source)
 	}
 	if v.CVSS != nil {
 		if score, ok := parseCVSSScore(v.CVSS.Score); ok {
@@ -324,18 +323,4 @@ func toFinding(v wpscanVuln, target string) (connector.Finding, bool) {
 	f.CVEID = append(f.CVEID, v.References["cve"]...)
 
 	return f, true
-}
-
-// limitedWriter buffers stderr, keeping at most `limit` bytes.
-type limitedWriter struct {
-	buf   *[]byte
-	limit int
-}
-
-func (w *limitedWriter) Write(p []byte) (int, error) {
-	*w.buf = append(*w.buf, p...)
-	if len(*w.buf) > w.limit {
-		*w.buf = (*w.buf)[len(*w.buf)-w.limit:]
-	}
-	return len(p), nil
 }

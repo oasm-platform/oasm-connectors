@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -60,11 +59,11 @@ type NmapAdapter struct{}
 
 // Validate rejects malformed inputs/cfg before any process or network resource
 // is spent. It is pure: no DNS, no socket.
-func (a NmapAdapter) Validate(_ context.Context, inputs map[string]any) error {
-	if _, err := targetFrom(inputs); err != nil {
+func (a NmapAdapter) Validate(ctx context.Context, inputs map[string]any) error {
+	if _, err := connector.SingleHost(inputs); err != nil {
 		return err
 	}
-	cfg, err := loadNmapConfig()
+	cfg, err := connector.LoadConfig[nmapConfig](ctx)
 	if err != nil {
 		return err
 	}
@@ -77,21 +76,6 @@ func (a NmapAdapter) Validate(_ context.Context, inputs map[string]any) error {
 	return nil
 }
 
-// targetFrom extracts a single host from the inputs. The scheme/path strip is
-// deliberately NOT applied to a slash-bearing non-URL ("10.0.0.0/24"): unrolling
-// a CIDR would silently turn a network request into a single-host scan.
-func targetFrom(inputs map[string]any) (string, error) {
-	raw, _ := inputs["target"].(string)
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return "", fmt.Errorf("target required")
-	}
-	if host := normalizeTarget(trimmed); host != "" {
-		return host, nil
-	}
-	return "", fmt.Errorf("invalid target %q (single host only, no CIDR/range/list)", raw)
-}
-
 // Execute runs nmap in XML mode and streams one Finding per open port.
 //
 // Exit-code semantics: nmap exits 0 whenever the scan completed, even when
@@ -99,12 +83,12 @@ func targetFrom(inputs map[string]any) (string, error) {
 // A nonzero exit means nmap itself failed (bad flag, unresolvable target) and
 // is a retryable error; the stderr tail goes with it.
 func (a NmapAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
-	target, err := targetFrom(inputs)
+	target, err := connector.SingleHost(inputs)
 	if err != nil {
 		return err
 	}
 
-	cfg, err := loadNmapConfig()
+	cfg, err := connector.LoadConfig[nmapConfig](ctx)
 	if err != nil {
 		return err
 	}
@@ -121,7 +105,7 @@ func (a NmapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 	// ports_scanner data source is the asset, and an unparseable address would
 	// cost the finding its attribution. An unresolvable target is fatal — nmap
 	// would only fail a few seconds later with a less specific error.
-	ip := resolveIPv4(target)
+	ip := connector.ResolveIPv4(target)
 	if ip == "" {
 		return fmt.Errorf("fatal: nmap: cannot resolve %q", target)
 	}
@@ -129,9 +113,7 @@ func (a NmapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 	runCtx, cancel := context.WithTimeout(ctx, nmapHardTimeout)
 	defer cancel()
 
-	var stderr limitedWriter
-	stderr.buf = new([]byte)
-	stderr.limit = 2048
+	stderr := connector.NewTailWriter(2048)
 
 	// -n is paired with the resolution above: nmap is handed an address, so it
 	// never re-resolves and never emits PTR noise to stderr.
@@ -140,7 +122,7 @@ func (a NmapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 	if err != nil {
 		return fmt.Errorf("nmap: stdout pipe: %w", err)
 	}
-	cmd.Stderr = &stderr
+	cmd.Stderr = stderr
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("nmap: start: %w", err)
@@ -173,7 +155,7 @@ func (a NmapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 	}
 
 	waitErr := cmd.Wait()
-	tail := strings.TrimSpace(string(*stderr.buf))
+	tail := stderr.String()
 
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -238,36 +220,3 @@ func openPortFinding(target, ip, proto, portID, service, product, version, extra
 
 // portString renders "tcp/443" from nmap's separate protocol/portid attributes.
 func portString(proto, portID string) string { return proto + "/" + portID }
-
-// resolveIPv4 returns the first IPv4 address of host, or host verbatim when it
-// already is an IP literal, or "" when it cannot be resolved.
-func resolveIPv4(host string) string {
-	h := strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
-	if net.ParseIP(h) != nil {
-		return h
-	}
-	addrs, err := net.LookupHost(h)
-	if err != nil {
-		return ""
-	}
-	for _, a := range addrs {
-		if net.ParseIP(a) != nil && strings.Contains(a, ".") {
-			return a
-		}
-	}
-	return ""
-}
-
-// limitedWriter buffers stderr, keeping at most `limit` bytes.
-type limitedWriter struct {
-	buf   *[]byte
-	limit int
-}
-
-func (w *limitedWriter) Write(p []byte) (int, error) {
-	*w.buf = append(*w.buf, p...)
-	if len(*w.buf) > w.limit {
-		*w.buf = (*w.buf)[len(*w.buf)-w.limit:]
-	}
-	return len(p), nil
-}

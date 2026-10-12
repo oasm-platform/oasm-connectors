@@ -33,7 +33,9 @@ func setupLoopbackEnv(t *testing.T, tmplDir string) {
 	t.Setenv("NUCLEI_TEMPLATES_DIR", "")
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("OASM_CONFIG", "")
+	// Interactsh defaults on (prod parity with the CLI); tests must stay
+	// hermetic, so opt out explicitly here.
+	t.Setenv("OASM_CONFIG", `{"interactsh":false}`)
 }
 
 // TestExecute_LoopbackScan proves the in-process nuclei engine scans a local
@@ -173,7 +175,7 @@ http:
 `)
 		setupLoopbackEnv(t, tmplDir)
 		// Filter to a template ID that does not exist.
-		t.Setenv("OASM_CONFIG", `{"templateIds":["definitely-not-a-real-template-id"]}`)
+		t.Setenv("OASM_CONFIG", `{"templateIds":["definitely-not-a-real-template-id"],"interactsh":false}`)
 
 		ctx := context.Background()
 		ch := make(chan connector.Finding, 64)
