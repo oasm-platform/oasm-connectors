@@ -1,0 +1,279 @@
+{
+  "SchemaVersion": 2,
+  "Trivy": {
+    "Version": "0.75.0"
+  },
+  "ReportID": "00000000-0000-0000-0000-000000000000",
+  "CreatedAt": "2026-10-13T09:13:26.404113542Z",
+  "ArtifactName": "/src",
+  "ArtifactType": "filesystem",
+  "Results": [
+    {
+      "Target": "web/package-lock.json",
+      "Class": "lang-pkgs",
+      "Type": "npm",
+      "Packages": [
+        {
+          "ID": "lodash@4.17.15",
+          "Name": "lodash",
+          "Identifier": {
+            "PURL": "pkg:npm/lodash@4.17.15",
+            "UID": "31fb22725ab8ce15"
+          },
+          "Version": "4.17.15",
+          "Relationship": "direct",
+          "Locations": [
+            {
+              "StartLine": 1,
+              "EndLine": 1
+            }
+          ],
+          "AnalyzedBy": "npm"
+        }
+      ],
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2020-8203",
+          "VendorIDs": [
+            "GHSA-p6mc-m468-83gw"
+          ],
+          "PkgID": "lodash@4.17.15",
+          "PkgName": "lodash",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/lodash@4.17.15",
+            "UID": "31fb22725ab8ce15"
+          },
+          "InstalledVersion": "4.17.15",
+          "FixedVersion": "4.17.19",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2020-8203",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Fingerprint": "sha256:8f6e9005236b0857e3ce23111b6ac34788e0bc0cc9e245d672efd5d0417937be",
+          "Title": "nodejs-lodash: prototype pollution in zipObjectDeep function",
+          "Description": "Prototype pollution attack when using _.zipObjectDeep in lodash before 4.17.20.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-770",
+            "CWE-1321"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "nvd": 3,
+            "redhat": 2,
+            "ruby-advisory-db": 3,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:H",
+              "V3Score": 7.4
+            },
+            "nvd": {
+              "V2Vector": "AV:N/AC:M/Au:N/C:N/I:P/A:P",
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:H",
+              "V2Score": 5.8,
+              "V3Score": 7.4
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:H",
+              "V3Score": 7.4
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2020-8203",
+            "https://github.com/advisories/GHSA-p6mc-m468-83gw"
+          ],
+          "PublishedDate": "2020-07-15T17:15:11.797Z",
+          "LastModifiedDate": "2026-06-17T03:26:02.917Z"
+        },
+        {
+          "VulnerabilityID": "NSWG-ECO-516",
+          "PkgID": "lodash@4.17.15",
+          "PkgName": "lodash",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/lodash@4.17.15",
+            "UID": "31fb22725ab8ce15"
+          },
+          "InstalledVersion": "4.17.15",
+          "FixedVersion": ">=4.17.19",
+          "Status": "fixed",
+          "SeveritySource": "nodejs-security-wg",
+          "PrimaryURL": "https://www.npmjs.com/advisories/1523",
+          "DataSource": {
+            "ID": "nodejs-security-wg",
+            "Name": "Node.js Ecosystem Security Working Group",
+            "URL": "https://github.com/nodejs/security-wg"
+          },
+          "Fingerprint": "sha256:a30d6962cf3e8f6721bca632ee90e477b636ab4ef390a492c810c7afb20963de",
+          "Title": "Allocation of Resources Without Limits or Throttling",
+          "Description": "Prototype pollution attack (lodash)",
+          "Severity": "HIGH",
+          "VendorSeverity": {
+            "nodejs-security-wg": 3
+          },
+          "References": [
+            "https://github.com/lodash/lodash/pull/4759",
+            "https://hackerone.com/reports/712065"
+          ]
+        }
+      ]
+    },
+    {
+      "Target": "Dockerfile",
+      "Class": "config",
+      "Type": "dockerfile",
+      "MisconfSummary": {
+        "Successes": 24,
+        "Failures": 3
+      },
+      "Misconfigurations": [
+        {
+          "Type": "Dockerfile Security Check",
+          "ID": "DS-0002",
+          "Title": "Image user should not be 'root'",
+          "Description": "Running containers with 'root' user can lead to a container escape situation. It is a best practice to run containers as non-root users, which can be done by adding a 'USER' statement to the Dockerfile.",
+          "Message": "Specify at least 1 USER command in Dockerfile with non-root user as argument",
+          "Namespace": "builtin.dockerfile.DS002",
+          "Query": "data.builtin.dockerfile.DS002.deny",
+          "Resolution": "Add 'USER <non root user name>' line to the Dockerfile",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ds-0002",
+          "References": [
+            "https://docs.docker.com/develop/develop-images/dockerfile_best-practices/",
+            "https://avd.aquasec.com/misconfig/ds-0002"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Dockerfile",
+            "Service": "general"
+          }
+        },
+        {
+          "Type": "Dockerfile Security Check",
+          "ID": "DS-0025",
+          "Title": "'apk add' is missing '--no-cache'",
+          "Description": "You should use 'apk add' with '--no-cache' to clean package cached data and reduce image size.",
+          "Message": "'--no-cache' is missed: apk add curl",
+          "Namespace": "builtin.dockerfile.DS025",
+          "Query": "data.builtin.dockerfile.DS025.deny",
+          "Resolution": "Add '--no-cache' to 'apk add' in Dockerfile",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ds-0025",
+          "References": [
+            "https://github.com/gliderlabs/docker-alpine/blob/master/docs/usage.md#disabling-cache",
+            "https://avd.aquasec.com/misconfig/ds-0025"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Dockerfile",
+            "Service": "general",
+            "StartLine": 2,
+            "EndLine": 2,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 2,
+                  "Content": "RUN apk add curl",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[38;5;64mRUN\u001b[0m apk add curl",
+                  "FirstCause": true,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Target": "creds.ini",
+      "Class": "secret",
+      "Secrets": [
+        {
+          "RuleID": "aws-access-key-id",
+          "Category": "AWS",
+          "Severity": "CRITICAL",
+          "Title": "AWS Access Key ID",
+          "StartLine": 1,
+          "EndLine": 1,
+          "Code": {
+            "Lines": [
+              {
+                "Number": 1,
+                "Content": "aws_access_key_id = ********************",
+                "IsCause": true,
+                "Annotation": "",
+                "Truncated": false,
+                "Highlighted": "aws_access_key_id = ********************",
+                "FirstCause": true,
+                "LastCause": true
+              },
+              {
+                "Number": 2,
+                "Content": "aws_secret_access_key = ****************************************",
+                "IsCause": false,
+                "Annotation": "",
+                "Truncated": false,
+                "Highlighted": "aws_secret_access_key = ****************************************",
+                "FirstCause": false,
+                "LastCause": false
+              }
+            ]
+          },
+          "Match": "aws_access_key_id = ********************",
+          "Offset": 20
+        },
+        {
+          "RuleID": "aws-secret-access-key",
+          "Category": "AWS",
+          "Severity": "CRITICAL",
+          "Title": "AWS Secret Access Key",
+          "StartLine": 2,
+          "EndLine": 2,
+          "Code": {
+            "Lines": [
+              {
+                "Number": 1,
+                "Content": "aws_access_key_id = ********************",
+                "IsCause": false,
+                "Annotation": "",
+                "Truncated": false,
+                "Highlighted": "aws_access_key_id = ********************",
+                "FirstCause": false,
+                "LastCause": false
+              },
+              {
+                "Number": 2,
+                "Content": "aws_secret_access_key = ****************************************",
+                "IsCause": true,
+                "Annotation": "",
+                "Truncated": false,
+                "Highlighted": "aws_secret_access_key = ****************************************",
+                "FirstCause": true,
+                "LastCause": true
+              },
+              {
+                "Number": 3,
+                "Content": "",
+                "IsCause": false,
+                "Annotation": "",
+                "Truncated": false,
+                "FirstCause": false,
+                "LastCause": false
+              }
+            ]
+          },
+          "Match": "aws_secret_access_key = ****************************************",
+          "Offset": 65
+        }
+      ]
+    }
+  ]
+}
