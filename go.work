@@ -4,6 +4,7 @@ use (
 	.
 	./ports_scanner/nmap
 	./ports_scanner/rustscan
+	./sca/trivy
 	./sdk
 	./secrets/gitleaks
 	./url_discovery/arjun

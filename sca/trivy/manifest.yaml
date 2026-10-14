@@ -1,0 +1,77 @@
+# connector image (SDK+tool) — built from ./Dockerfile, not upstream image
+name: Trivy - Dependency & IaC Scanner
+slug: trivy
+version: 0.75.0
+image: ghcr.io/oasm-platform/connector-trivy:0.75.0
+author: 'oasm'
+pricingTier: [free]
+homepage: 'https://trivy.dev'
+repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
+supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
+shortDescription: 'Finds vulnerable dependencies and IaC misconfigurations in Git repositories'
+description: 'Scans the repositories of a Git organization with Aqua Security Trivy. Reports known vulnerabilities (CVE, GHSA) in the dependencies declared by lockfiles and manifests — npm, pip, Go, Maven, Cargo, Composer, NuGet, RubyGems and more — with the installed and fixed versions, and misconfigurations in Dockerfiles, Kubernetes manifests, Helm charts and Terraform. Secret scanning can be turned on in the profile; secret values are never reported.'
+capabilities: [sca]
+targetTypes: [git_org]
+agentTool: true
+# Filled by the platform for each repository (sdk/gitrepo contract).
+inputsSchema:
+  type: object
+  required: [repository]
+  properties:
+    repository:
+      type: string
+      format: uri
+      title: Repository
+      description: 'https clone URL of the repository to scan.'
+      examples: [https://github.com/acme/web]
+    ref:
+      type: string
+      title: Ref
+      description: 'Branch, tag or commit to scan. Empty scans the default branch.'
+    username:
+      type: string
+      title: Username
+      description: 'HTTP user for private repositories.'
+    token:
+      type: string
+      title: Token
+      description: 'Access token for private repositories.'
+      ui:widget: password
+  additionalProperties: false
+configSchema:
+  type: object
+  additionalProperties: false
+  properties:
+    scanners:
+      type: array
+      title: Scanners
+      description: 'What to look for: vulnerable dependencies (vuln), IaC misconfigurations (misconfig) and secrets (secret). Secrets are off by default because the Gitleaks job of the repository scan covers them.'
+      items:
+        type: string
+        enum: [vuln, misconfig, secret]
+      default: [vuln, misconfig]
+    severity:
+      type: array
+      title: Severity
+      description: 'Severities to report. "info" is a vulnerability no vendor has rated yet.'
+      items:
+        type: string
+        enum: [info, low, medium, high, critical]
+      default: [info, low, medium, high, critical]
+    ignoreUnfixed:
+      type: boolean
+      default: false
+      title: Ignore unfixed
+      description: 'Skip vulnerabilities that have no fixed version yet.'
+    skipDirs:
+      type: array
+      title: Skip directories
+      description: 'Repository-relative directories or glob patterns not to scan, e.g. test fixtures.'
+      items:
+        type: string
+      default: []
+      ui:placeholder: 'testdata, **/fixtures'
+resourceDefaults:
+  cpu: 1000m
+  memory: 2048Mi
+  timeoutSeconds: 1800
