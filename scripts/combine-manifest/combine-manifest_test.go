@@ -721,3 +721,17 @@ func TestRejectsBareCapabilityString(t *testing.T) {
 		t.Fatal("bare capability string must be rejected")
 	}
 }
+
+// secrets and sca both run as the platform's "vulnerabilities" category: the
+// connector could not tell which one it was asked to run.
+func TestValidateRejectsCapabilitiesSharingAPlatformCategory(t *testing.T) {
+	_, err := loadYAML(t, strings.Replace(validYAML, validCapabilityYAML, `capabilities:
+  - name: secrets
+    targetTypes: [git_org]
+  - name: sca
+    targetTypes: [git_org]
+`, 1))
+	if err == nil || !strings.Contains(err.Error(), `capabilities "secrets" and "sca" both run as category "vulnerabilities"`) {
+		t.Fatalf("got %v", err)
+	}
+}

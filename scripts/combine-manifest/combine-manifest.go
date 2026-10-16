@@ -80,14 +80,15 @@ func (c *Capability) UnmarshalYAML(n *yaml.Node) error {
 }
 
 var (
-	// allowedCapabilities mirrors the platform's tool categories. An unknown
-	// capability used to fall back silently to "vulnerabilities" on the
-	// platform side, so it is rejected here instead.
-	allowedCapabilities = map[string]bool{
-		"subdomains": true, "http_probe": true, "ports_scanner": true,
-		"vulnerabilities": true, "screenshot": true, "url_discovery": true,
-		// Repository scanners (GIT_ORG targets).
-		"secrets": true, "sca": true, "sast": true,
+	// allowedCapabilities maps each capability to the platform category it runs
+	// as (mirrors core-api capabilityToCategory). An unknown capability used to
+	// fall back silently to "vulnerabilities" on the platform side, so it is
+	// rejected here instead.
+	allowedCapabilities = map[string]string{
+		"subdomains": "subdomains", "http_probe": "http_probe", "ports_scanner": "ports_scanner",
+		"vulnerabilities": "vulnerabilities", "screenshot": "screenshot", "url_discovery": "url_discovery",
+		// Repository scanners (GIT_ORG targets) report findings as vulnerabilities.
+		"secrets": "vulnerabilities", "sca": "vulnerabilities", "sast": "vulnerabilities",
 	}
 	// allowedTargetTypes mirrors the platform's TargetType enum, lowercased
 	// to match workflow trigger names (e.g. `domain.create`).
@@ -126,18 +127,24 @@ func validate(m *Manifest, path string) error {
 	if len(m.Capabilities) == 0 {
 		return fmt.Errorf("at least one capability required")
 	}
-	seenCaps := make(map[string]bool, len(m.Capabilities))
+	// The connector receives the platform category, so two capabilities that
+	// run as the same category would be indistinguishable to it.
+	capByCategory := make(map[string]string, len(m.Capabilities))
 	for _, c := range m.Capabilities {
 		if c.Name == "" {
 			return fmt.Errorf("empty capability")
 		}
-		if !allowedCapabilities[c.Name] {
+		category, ok := allowedCapabilities[c.Name]
+		if !ok {
 			return fmt.Errorf("invalid capability %q (must be one of %s)", c.Name, sortedKeys(allowedCapabilities))
 		}
-		if seenCaps[c.Name] {
-			return fmt.Errorf("duplicate capability %q", c.Name)
+		if prev, taken := capByCategory[category]; taken {
+			if prev == c.Name {
+				return fmt.Errorf("duplicate capability %q", c.Name)
+			}
+			return fmt.Errorf("capabilities %q and %q both run as category %q", prev, c.Name, category)
 		}
-		seenCaps[c.Name] = true
+		capByCategory[category] = c.Name
 		if err := validateTargetTypes(c.TargetTypes); err != nil {
 			return fmt.Errorf("capability %q: %w", c.Name, err)
 		}
@@ -190,7 +197,7 @@ func validateTargetTypes(types []string) error {
 	return nil
 }
 
-func sortedKeys(set map[string]bool) string {
+func sortedKeys[V any](set map[string]V) string {
 	keys := make([]string, 0, len(set))
 	for k := range set {
 		keys = append(keys, k)

@@ -247,7 +247,9 @@ capabilities:
     inputsSchema: *target
 ```
 
-A workflow step picks one with `category:`. The adapter reads the category it was asked to run with `connector.Category(ctx)`: the platform category (`secrets`, `sca` and `sast` all arrive as `vulnerabilities`), or empty for the connector's first capability.
+A workflow step picks one with `category:`. The adapter reads the category it was asked to run with `connector.Category(ctx)`: the platform category (`secrets`, `sca` and `sast` all arrive as `vulnerabilities`, so a connector may declare at most one capability per platform category), or empty for the connector's first capability.
+
+Workers older than the release that introduced `ExecuteJob.category` never send it, so the adapter falls back to its first capability while the platform still syncs the result as the requested category. Do not ship a connector with more than one capability until every worker runs a release that sends the category.
 
 ### Repository scanners
 
