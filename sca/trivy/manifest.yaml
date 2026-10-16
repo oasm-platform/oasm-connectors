@@ -13,6 +13,7 @@ description: 'Scans the repositories of a Git organization with Aqua Security Tr
 capabilities:
   - name: vulnerabilities
     targetTypes: [git_org]
+    # Filled by the platform for each repository (sdk/gitrepo contract).
     inputsSchema:
       type: object
       required: [repository]
@@ -38,7 +39,6 @@ capabilities:
           ui:widget: password
       additionalProperties: false
 agentTool: true
-# Filled by the platform for each repository (sdk/gitrepo contract).
 configSchema:
   type: object
   additionalProperties: false

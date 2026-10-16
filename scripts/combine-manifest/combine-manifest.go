@@ -179,7 +179,6 @@ func validate(m *Manifest, path string) error {
 	return nil
 }
 
-// sortedKeys renders an allow-list deterministically for error messages.
 func validateTargetTypes(types []string) error {
 	if len(types) == 0 {
 		return fmt.Errorf("at least one targetType required")
@@ -197,6 +196,7 @@ func validateTargetTypes(types []string) error {
 	return nil
 }
 
+// sortedKeys renders an allow-list deterministically for error messages.
 func sortedKeys[V any](set map[string]V) string {
 	keys := make([]string, 0, len(set))
 	for k := range set {
