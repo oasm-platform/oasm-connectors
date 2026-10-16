@@ -19,7 +19,7 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 | Execution ID | `EXECUTION_ID` | — | yes | Job identity; the Worker routes `ExecuteJob` by it |
 | Target | `inputs.target` | — | yes | Scan target: `http(s)://` URL or bare domain |
 
-`inputsSchema` (see `manifest.yaml`): `{target: string (uri)}`.
+The capability's `inputsSchema` (see `manifest.yaml`): `{target: string (uri)}`.
 
 ## Example config profile
 

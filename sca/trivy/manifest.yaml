@@ -10,34 +10,35 @@ repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
 supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'Finds vulnerable dependencies and IaC misconfigurations in Git repositories'
 description: 'Scans the repositories of a Git organization with Aqua Security Trivy. Reports known vulnerabilities (CVE, GHSA) in the dependencies declared by lockfiles and manifests — npm, pip, Go, Maven, Cargo, Composer, NuGet, RubyGems and more — with the installed and fixed versions, and misconfigurations in Dockerfiles, Kubernetes manifests, Helm charts and Terraform. Secret scanning can be turned on in the profile; secret values are never reported.'
-capabilities: [vulnerabilities]
-targetTypes: [git_org]
+capabilities:
+  - name: vulnerabilities
+    targetTypes: [git_org]
+    inputsSchema:
+      type: object
+      required: [repository]
+      properties:
+        repository:
+          type: string
+          format: uri
+          title: Repository
+          description: 'https clone URL of the repository to scan.'
+          examples: [https://github.com/acme/web]
+        ref:
+          type: string
+          title: Ref
+          description: 'Branch, tag or commit to scan. Empty scans the default branch.'
+        username:
+          type: string
+          title: Username
+          description: 'HTTP user for private repositories.'
+        token:
+          type: string
+          title: Token
+          description: 'Access token for private repositories.'
+          ui:widget: password
+      additionalProperties: false
 agentTool: true
 # Filled by the platform for each repository (sdk/gitrepo contract).
-inputsSchema:
-  type: object
-  required: [repository]
-  properties:
-    repository:
-      type: string
-      format: uri
-      title: Repository
-      description: 'https clone URL of the repository to scan.'
-      examples: [https://github.com/acme/web]
-    ref:
-      type: string
-      title: Ref
-      description: 'Branch, tag or commit to scan. Empty scans the default branch.'
-    username:
-      type: string
-      title: Username
-      description: 'HTTP user for private repositories.'
-    token:
-      type: string
-      title: Token
-      description: 'Access token for private repositories.'
-      ui:widget: password
-  additionalProperties: false
 configSchema:
   type: object
   additionalProperties: false

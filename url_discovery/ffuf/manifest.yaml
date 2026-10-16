@@ -9,21 +9,22 @@ repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
 supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'Directory and file discovery via web fuzzing'
 description: 'Fuzzes a target path base with ffuf wordlists to discover directories, files and endpoints, streaming every match as a finding for URL discovery.'
-capabilities: [url_discovery]
-targetTypes: [domain, ip, cidr]
+capabilities:
+  - name: url_discovery
+    targetTypes: [domain, ip, cidr]
+    inputsSchema:
+      type: object
+      required: [target]
+      properties:
+        target:
+          type: string
+          format: uri
+          title: Target URL
+          description: 'Base URL to fuzz under. A missing scheme defaults to https://. The path (if any) is the fuzz base, i.e. FUZZ is appended to it.'
+          examples: [example.com]
+          ui:placeholder: 'example.com'
+      additionalProperties: false
 agentTool: true
-inputsSchema:
-  type: object
-  required: [target]
-  properties:
-    target:
-      type: string
-      format: uri
-      title: Target URL
-      description: 'Base URL to fuzz under. A missing scheme defaults to https://. The path (if any) is the fuzz base, i.e. FUZZ is appended to it.'
-      examples: [example.com]
-      ui:placeholder: 'example.com'
-  additionalProperties: false
 configSchema:
   type: object
   additionalProperties: false

@@ -1,6 +1,6 @@
 # Gitleaks Connector
 
-Runs [gitleaks](https://github.com/gitleaks/gitleaks) 8.30.1 via the OASM Worker gRPC bridge. Scans one repository of a Git organization target (`targetTypes: [git_org]`) for committed credentials — API keys, tokens, private keys, passwords — and reports each as a finding with its file, line and commit. Secret values are redacted inside gitleaks (`--redact`) and never read by the adapter.
+Runs [gitleaks](https://github.com/gitleaks/gitleaks) 8.30.1 via the OASM Worker gRPC bridge. Scans one repository of a Git organization target (its capability declares `targetTypes: [git_org]`) for committed credentials — API keys, tokens, private keys, passwords — and reports each as a finding with its file, line and commit. Secret values are redacted inside gitleaks (`--redact`) and never read by the adapter.
 
 ## Requirements
 

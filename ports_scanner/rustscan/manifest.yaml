@@ -9,21 +9,22 @@ repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
 supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'Fast async TCP/UDP port scanner'
 description: 'Scans a single host with RustScan in greppable mode and streams every open port as a finding for port scanning: one finding per protocol/port. Async TCP connect scan; needs no raw sockets, no privileges and no nmap, so findings carry no service or version — run the Nmap connector alongside it for service detection.'
-capabilities: [ports_scanner]
-targetTypes: [domain, ip, cidr]
+capabilities:
+  - name: ports_scanner
+    targetTypes: [domain, ip, cidr]
+    inputsSchema:
+      type: object
+      required: [target]
+      properties:
+        target:
+          type: string
+          format: uri
+          title: Target host
+          description: 'Host to scan: a hostname, an IPv4 literal, or a bracketed IPv6 literal. Scheme and path are stripped; CIDR ranges, lists and wildcards are rejected.'
+          examples: [example.com, 203.0.113.10]
+          ui:placeholder: 'example.com'
+      additionalProperties: false
 agentTool: true
-inputsSchema:
-  type: object
-  required: [target]
-  properties:
-    target:
-      type: string
-      format: uri
-      title: Target host
-      description: 'Host to scan: a hostname, an IPv4 literal, or a bracketed IPv6 literal. Scheme and path are stripped; CIDR ranges, lists and wildcards are rejected.'
-      examples: [example.com, 203.0.113.10]
-      ui:placeholder: 'example.com'
-  additionalProperties: false
 configSchema:
   type: object
   additionalProperties: false

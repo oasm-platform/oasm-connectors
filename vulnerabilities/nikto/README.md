@@ -21,7 +21,7 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 | Test database dir | `NIKTO_DB_DIR` | derived | no | Directory holding `db_tests`, for enrichment (see below) |
 | Keep work dir | `NIKTO_KEEP_WORKDIR` | `` | no | Non-empty keeps the generated config on disk for debugging |
 
-`inputsSchema` (see `manifest.yaml`): `{target: string (uri)}`.
+The capability's `inputsSchema` (see `manifest.yaml`): `{target: string (uri)}`.
 
 Per-scan options come from the `OASM_CONFIG` JSON profile and map 1:1 onto the `configSchema` keys in `manifest.yaml` (`tuning`, `ports`, `ssl`, `root`, `vhost`, `userAgent`, `maxTime`, `timeout`, `pause`, `headers`, `noLookup`, `noCookies`, `followRedirects`, `no404`, `evasion`, `plugins`, `proxy`, `username`, `password`).
 

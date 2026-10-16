@@ -38,20 +38,45 @@ type Manifest struct {
 	SupportURL       string   `yaml:"supportUrl,omitempty"    json:"supportUrl,omitempty"`
 	ShortDescription string   `yaml:"shortDescription" json:"shortDescription"`
 	Description      string   `yaml:"description"      json:"description"`
-	Capabilities     []string `yaml:"capabilities"  json:"capabilities"`
-	// TargetTypes lists the platform target types whose assets this connector
-	// can scan (see allowedTargetTypes). The platform never dispatches an
-	// asset of any other target type to it.
-	TargetTypes []string `yaml:"targetTypes"   json:"targetTypes"`
+	// Capabilities are the modes this connector runs in, in order: the first is
+	// the default when a workflow step names no category. Each declares the
+	// target types it may scan and, optionally, its own inputs schema.
+	Capabilities []Capability `yaml:"capabilities"  json:"capabilities"`
 	// AgentTool exposes this connector as a callable tool to the OASM AI agent.
 	AgentTool        bool           `yaml:"agentTool,omitempty" json:"agentTool,omitempty"`
-	InputsSchema     map[string]any `yaml:"inputsSchema,omitempty"     json:"inputsSchema,omitempty"`
 	ConfigSchema     map[string]any `yaml:"configSchema,omitempty"    json:"configSchema,omitempty"`
 	ResourceDefaults map[string]any `yaml:"resourceDefaults,omitempty" json:"resourceDefaults,omitempty"`
 	// Logo is the base64-encoded logo.png sitting next to manifest.yaml.
 	// yaml:"-" keeps "logo:" in manifest.yaml an unknown-field error; the
 	// image itself never lives in YAML.
 	Logo string `yaml:"-" json:"logo,omitempty"`
+}
+
+// Capability is one mode a connector runs in. TargetTypes lists the platform
+// target types whose assets this mode can scan (see allowedTargetTypes); the
+// platform never dispatches an asset of any other target type to it.
+type Capability struct {
+	Name         string         `yaml:"name"                   json:"name"`
+	TargetTypes  []string       `yaml:"targetTypes"            json:"targetTypes"`
+	InputsSchema map[string]any `yaml:"inputsSchema,omitempty" json:"inputsSchema,omitempty"`
+}
+
+var capabilityKeys = map[string]bool{"name": true, "targetTypes": true, "inputsSchema": true}
+
+// UnmarshalYAML enforces the same strictness as the top level: node.Decode
+// does not inherit the decoder's KnownFields(true), so unknown keys and
+// non-mapping entries are rejected here.
+func (c *Capability) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d: capability must be a mapping with name and targetTypes", n.Line)
+	}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if k := n.Content[i].Value; !capabilityKeys[k] {
+			return fmt.Errorf("line %d: capability: unknown field %q", n.Content[i].Line, k)
+		}
+	}
+	type plain Capability
+	return n.Decode((*plain)(c))
 }
 
 var (
@@ -101,26 +126,21 @@ func validate(m *Manifest, path string) error {
 	if len(m.Capabilities) == 0 {
 		return fmt.Errorf("at least one capability required")
 	}
+	seenCaps := make(map[string]bool, len(m.Capabilities))
 	for _, c := range m.Capabilities {
-		if c == "" {
+		if c.Name == "" {
 			return fmt.Errorf("empty capability")
 		}
-		if !allowedCapabilities[c] {
-			return fmt.Errorf("invalid capability %q (must be one of %s)", c, sortedKeys(allowedCapabilities))
+		if !allowedCapabilities[c.Name] {
+			return fmt.Errorf("invalid capability %q (must be one of %s)", c.Name, sortedKeys(allowedCapabilities))
 		}
-	}
-	if len(m.TargetTypes) == 0 {
-		return fmt.Errorf("at least one targetType required")
-	}
-	seenTargetTypes := make(map[string]bool, len(m.TargetTypes))
-	for _, tt := range m.TargetTypes {
-		if !allowedTargetTypes[tt] {
-			return fmt.Errorf("invalid targetType %q (must be one of %s)", tt, sortedKeys(allowedTargetTypes))
+		if seenCaps[c.Name] {
+			return fmt.Errorf("duplicate capability %q", c.Name)
 		}
-		if seenTargetTypes[tt] {
-			return fmt.Errorf("duplicate targetType %q", tt)
+		seenCaps[c.Name] = true
+		if err := validateTargetTypes(c.TargetTypes); err != nil {
+			return fmt.Errorf("capability %q: %w", c.Name, err)
 		}
-		seenTargetTypes[tt] = true
 	}
 	if m.Author == "" {
 		return fmt.Errorf("author required")
@@ -153,6 +173,23 @@ func validate(m *Manifest, path string) error {
 }
 
 // sortedKeys renders an allow-list deterministically for error messages.
+func validateTargetTypes(types []string) error {
+	if len(types) == 0 {
+		return fmt.Errorf("at least one targetType required")
+	}
+	seen := make(map[string]bool, len(types))
+	for _, tt := range types {
+		if !allowedTargetTypes[tt] {
+			return fmt.Errorf("invalid targetType %q (must be one of %s)", tt, sortedKeys(allowedTargetTypes))
+		}
+		if seen[tt] {
+			return fmt.Errorf("duplicate targetType %q", tt)
+		}
+		seen[tt] = true
+	}
+	return nil
+}
+
 func sortedKeys(set map[string]bool) string {
 	keys := make([]string, 0, len(set))
 	for k := range set {

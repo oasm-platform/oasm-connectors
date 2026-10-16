@@ -9,21 +9,22 @@ repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
 supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'Brute-force web path and file discovery'
 description: 'Discovers hidden files, directories and endpoints on a web target by brute-forcing paths from a wordlist with dirsearch, filtering by status code and file extension.'
-capabilities: [url_discovery]
-targetTypes: [domain, ip, cidr]
+capabilities:
+  - name: url_discovery
+    targetTypes: [domain, ip, cidr]
+    inputsSchema:
+      type: object
+      required: [target]
+      properties:
+        target:
+          type: string
+          format: uri
+          title: Target URL
+          description: 'Base URL to scan. Scheme/path preserved; dirsearch is run with -u <target>.'
+          examples: [https://example.com]
+          ui:placeholder: 'https://example.com'
+      additionalProperties: false
 agentTool: true
-inputsSchema:
-  type: object
-  required: [target]
-  properties:
-    target:
-      type: string
-      format: uri
-      title: Target URL
-      description: 'Base URL to scan. Scheme/path preserved; dirsearch is run with -u <target>.'
-      examples: [https://example.com]
-      ui:placeholder: 'https://example.com'
-  additionalProperties: false
 configSchema:
   type: object
   additionalProperties: false

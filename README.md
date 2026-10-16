@@ -123,14 +123,12 @@ Written by hand, validated at aggregation time. Unknown fields are rejected, so 
 | `pricingTier` | yes | Non-empty list of `free` / `paid` (case-normalized). |
 | `shortDescription` | yes | One line, shown in list views. |
 | `description` | yes | Full paragraph for the detail view. |
-| `capabilities` | yes | At least one of `subdomains`, `http_probe`, `ports_scanner`, `vulnerabilities`, `screenshot`, `url_discovery`, or — for repository scanners — `secrets`, `sca`, `sast`; also drives directory grouping by category. |
-| `targetTypes` | yes | Platform target types whose assets this connector can scan: one or more of `domain`, `ip`, `cidr`, `git_org`, no duplicates. The platform never dispatches an asset of another target type to it, whichever workflow runs it. |
+| `capabilities` | yes | Ordered list of modes; the first is the default when a workflow step names no category. Each entry is a mapping: `name` (one of `subdomains`, `http_probe`, `ports_scanner`, `vulnerabilities`, `screenshot`, `url_discovery`, or — for repository scanners — `secrets`, `sca`, `sast`; no duplicates), `targetTypes` (required: one or more of `domain`, `ip`, `cidr`, `git_org`, no duplicates — the platform never dispatches an asset of another target type to this mode, whichever workflow runs it), `inputsSchema` (optional JSON Schema for this mode's per-run inputs, validated upstream by Core/Worker). Use YAML anchors to share a schema between modes. The first capability also drives directory grouping by category. |
 | `agentTool` | no | Set `true` to expose the connector as a callable tool to the OASM AI agent. |
 | `homepage` | no | Non-empty string when set. |
 | `repositoryUrl` | no | Non-empty string when set. |
 | `supportUrl` | no | Non-empty string when set. |
-| `inputsSchema` | no | JSON Schema for the per-run inputs the operator supplies. Validated upstream by Core/Worker. |
-| `configSchema` | no | JSON Schema for the tool profile. Adapters read it as `OASM_CONFIG`. |
+| `configSchema` | no | JSON Schema for the tool profile, shared by every capability. Adapters read it as `OASM_CONFIG`. |
 | `resourceDefaults` | no | Scheduler hints, e.g. `cpu`, `memory`, `timeoutSeconds`. |
 
 Schemas use plain JSON Schema plus two loosely-conventional annotation keys — `title` and `description` for labelling, and `ui:placeholder` for input hints. Only `type`, `required`, `properties`, `items`, `enum`, `default`, `examples` and `format` carry validation weight; annotations are for rendering.
@@ -216,7 +214,7 @@ Every line carries `trace_id` plus `execution_id`, `job_id`, `tool` and `image` 
 
 1. **Create the module directory** as `<category>/<slug>`. The category is free-form and should match the connector's `capabilities` entry; it becomes the grouping in the catalog.
 2. **Create the Go module.** Its own `go.mod`, module path `<repo module path>/<category>/<slug>`, requiring the SDK at `v0.0.0` with `replace <sdk module path> => ../../sdk`. Run `go mod tidy` with `GOWORK=off`.
-3. **Write `manifest.yaml`** against the contract above, plus an optional `logo.png`. Declare `targetTypes` deliberately: it is what keeps a host scanner away from repositories (and a code scanner away from hosts).
+3. **Write `manifest.yaml`** against the contract above, plus an optional `logo.png`. Declare each capability's `targetTypes` deliberately: it is what keeps a host scanner away from repositories (and a code scanner away from hosts).
 4. **Write a multi-stage `Dockerfile`.** Build context is the repo root, so copy `sdk/` and the connector directory explicitly. Drop both `go.mod`/`go.sum` files first and run `go mod download` before copying sources so dependency layers cache. Build statically (`CGO_ENABLED=0`), land a single binary on a minimal base image, create an unprivileged user, and `USER` it. The image must not expose ports or require a shell.
 5. **Implement the adapter.** `Validate` should reject malformed inputs early and cheaply. `Execute` should stream findings as they are produced rather than buffering the whole run, return on `ctx.Done()`, and never close `out`. Keep tool-specific code in this package and nowhere else.
 6. **Wire `main.go`** — construct the adapter, wrap it, run it, and treat a cancelled context as a clean exit rather than a failure.
@@ -231,9 +229,29 @@ Design notes for the adapter:
 - **Map severities explicitly.** Collapse the tool's own scale onto the five-value enum with a table, not with string guessing.
 - **Never leak secrets into findings or logs.** Findings are persisted and displayed; config values are not.
 
+### Multi-mode connectors
+
+A connector may declare several capabilities, each with its own `targetTypes` and `inputsSchema`:
+
+```yaml
+capabilities:
+  - name: ports_scanner
+    targetTypes: [domain, ip, cidr]
+    inputsSchema: &target
+      type: object
+      required: [target]
+      properties:
+        target: { type: string, title: Target host }
+  - name: vulnerabilities
+    targetTypes: [domain, ip]
+    inputsSchema: *target
+```
+
+A workflow step picks one with `category:`. The adapter reads the category it was asked to run with `connector.Category(ctx)`: the platform category (`secrets`, `sca` and `sast` all arrive as `vulnerabilities`), or empty for the connector's first capability.
+
 ### Repository scanners
 
-A connector that scans source code declares `targetTypes: [git_org]` and a `secrets`, `sca` or `sast` capability. The platform runs it once per repository of a Git organization target and sends flat inputs:
+A connector that scans source code declares a `secrets`, `sca` or `sast` capability with `targetTypes: [git_org]`. The platform runs it once per repository of a Git organization target and sends flat inputs:
 
 | Input | Meaning |
 | --- | --- |
@@ -296,7 +314,7 @@ task ci-scope  # what the last commit would rebuild
 
 - **The SDK is the only shared code.** Anything tool-specific that leaks upward makes every connector heavier and the contract fuzzier.
 - **`manifest.json` is derived.** Regenerate it; never edit or patch it by hand.
-- **The contract is validated, not trusted.** Unknown manifest fields, duplicate slugs, unknown or empty capabilities, missing or unknown target types, and invalid pricing tiers all fail the build.
+- **The contract is validated, not trusted.** Unknown manifest fields, duplicate slugs, unknown, empty or duplicate capabilities, unknown capability fields, capabilities without target types, unknown target types, and invalid pricing tiers all fail the build.
 - **The container is the boundary.** Connectors must run unprivileged with no inbound network surface, and must tolerate warm-pool reuse.
 
 ## License

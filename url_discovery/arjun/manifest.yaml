@@ -9,21 +9,22 @@ repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
 supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'HTTP parameter discovery'
 description: 'Discovers hidden HTTP parameters for a URL using Arjun, probing a wordlist of parameter names against the target and reporting every parameter the endpoint responds to.'
-capabilities: [url_discovery]
-targetTypes: [domain, ip, cidr]
+capabilities:
+  - name: url_discovery
+    targetTypes: [domain, ip, cidr]
+    inputsSchema:
+      type: object
+      required: [target]
+      properties:
+        target:
+          type: string
+          format: uri
+          title: Target URL
+          description: 'URL to discover parameters for. Each discovered parameter is emitted as <url>?<param>=.'
+          examples: [https://example.com/search]
+          ui:placeholder: 'https://example.com/search'
+      additionalProperties: false
 agentTool: true
-inputsSchema:
-  type: object
-  required: [target]
-  properties:
-    target:
-      type: string
-      format: uri
-      title: Target URL
-      description: 'URL to discover parameters for. Each discovered parameter is emitted as <url>?<param>=.'
-      examples: [https://example.com/search]
-      ui:placeholder: 'https://example.com/search'
-  additionalProperties: false
 configSchema:
   type: object
   additionalProperties: false

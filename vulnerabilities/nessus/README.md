@@ -41,7 +41,7 @@ This is the new-SDK path that makes warm-pool reuse work: the SDK overrides
 Worker connection (`WORKER_GRPC_ADDR`, `WORKER_TOKEN`) and `EXECUTION_ID` are
 injected by the Worker; the scan name is derived from the target per execution.
 
-`inputsSchema` (see `manifest.yaml`): `{target: string (uri)}`.
+The capability's `inputsSchema` (see `manifest.yaml`): `{target: string (uri)}`.
 
 ## Deployment
 
