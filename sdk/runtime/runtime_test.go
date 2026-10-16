@@ -758,3 +758,49 @@ func TestRunDoneReportsCanceledWhenAdapterSwallowsCancel(t *testing.T) {
 		t.Fatal("timed out waiting for Done")
 	}
 }
+
+// categoryAdapter reports the category its execution context carries.
+type categoryAdapter struct{ categoryCh chan string }
+
+func (a *categoryAdapter) Validate(ctx context.Context, inputs map[string]any) error { return nil }
+func (a *categoryAdapter) Execute(ctx context.Context, inputs map[string]any, out chan<- connector.Finding) error {
+	a.categoryCh <- connector.Category(ctx)
+	return nil
+}
+
+func runCategoryExecution(t *testing.T, category string) string {
+	t.Helper()
+	t.Setenv("WORKER_GRPC_ADDR", "")
+	t.Setenv("EXECUTION_ID", "exec-category")
+	srv := newFakeConnectorServer(&pb.ExecuteJob{
+		ExecutionId: "exec-category",
+		JobId:       "job-category",
+		Tool:        "nmap",
+		Category:    category,
+	})
+	t.Setenv("WORKER_GRPC_ADDR", startFakeServer(t, srv))
+
+	adapter := &categoryAdapter{categoryCh: make(chan string, 1)}
+	_, _ = runRuntime(t, New(connector.New(adapter)))
+	waitRegister(t, srv)
+	select {
+	case got := <-adapter.categoryCh:
+		return got
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for adapter")
+		return ""
+	}
+}
+
+func TestRunPassesCategoryToAdapter(t *testing.T) {
+	if got := runCategoryExecution(t, "vulnerabilities"); got != "vulnerabilities" {
+		t.Fatalf("adapter saw category %q, want vulnerabilities", got)
+	}
+}
+
+// An ExecuteJob without category (older worker) leaves the adapter on its default.
+func TestRunWithoutCategoryLeavesDefault(t *testing.T) {
+	if got := runCategoryExecution(t, ""); got != "" {
+		t.Fatalf("adapter saw category %q, want empty", got)
+	}
+}

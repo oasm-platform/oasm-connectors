@@ -26,6 +26,9 @@ message ExecuteJob {
   string trace_id = 5;
   map<string, string> inputs = 6;
   map<string, string> config = 7;
+  // Platform category this job runs (e.g. "vulnerabilities"): one of the
+  // connector's capabilities mapped to its category. Empty: the connector's default.
+  string category = 8;
 }
 
 message Cancel {

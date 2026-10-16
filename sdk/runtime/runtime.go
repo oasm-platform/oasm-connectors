@@ -343,7 +343,7 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	// identity, not the process-startup env. A warm-pool container logs several
 	// jobs into one stream, and the ExecuteJob is the authoritative source for
 	// which one a line belongs to.
-	execLog := r.logger.WithFields("execution_id", exec.ExecutionId, "job_id", exec.JobId, "tool", exec.Tool, "image", exec.Image)
+	execLog := r.logger.WithFields("execution_id", exec.ExecutionId, "job_id", exec.JobId, "tool", exec.Tool, "category", exec.Category, "image", exec.Image)
 	start := time.Now()
 	execLog.Infof("execute start: inputs=%s config=%s",
 		logging.Summarize(exec.Inputs, 200), logging.Summarize(exec.Config, 200))
@@ -384,6 +384,9 @@ func (r *Runtime) handleExecute(ctx context.Context, stream pb.ConnectorService_
 	if raw := exec.Config["oasm_config"]; raw != "" {
 		execCtx = connector.WithConfig(execCtx, raw)
 		execLog.Infof("config override applied: profile_bytes=%d config_keys=%s", len(raw), logging.Keys(exec.Config))
+	}
+	if exec.Category != "" {
+		execCtx = connector.WithCategory(execCtx, exec.Category)
 	}
 
 	// 128-buffer so a burst of findings does not stall the adapter while a

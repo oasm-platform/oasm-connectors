@@ -143,14 +143,17 @@ func (x *RegisterAck) GetReason() string {
 }
 
 type ExecuteJob struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ExecutionId   string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
-	JobId         string                 `protobuf:"bytes,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
-	Tool          string                 `protobuf:"bytes,3,opt,name=tool,proto3" json:"tool,omitempty"`
-	Image         string                 `protobuf:"bytes,4,opt,name=image,proto3" json:"image,omitempty"`
-	TraceId       string                 `protobuf:"bytes,5,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
-	Inputs        map[string]string      `protobuf:"bytes,6,rep,name=inputs,proto3" json:"inputs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Config        map[string]string      `protobuf:"bytes,7,rep,name=config,proto3" json:"config,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	ExecutionId string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	JobId       string                 `protobuf:"bytes,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	Tool        string                 `protobuf:"bytes,3,opt,name=tool,proto3" json:"tool,omitempty"`
+	Image       string                 `protobuf:"bytes,4,opt,name=image,proto3" json:"image,omitempty"`
+	TraceId     string                 `protobuf:"bytes,5,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	Inputs      map[string]string      `protobuf:"bytes,6,rep,name=inputs,proto3" json:"inputs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Config      map[string]string      `protobuf:"bytes,7,rep,name=config,proto3" json:"config,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Platform category this job runs (e.g. "vulnerabilities"): one of the
+	// connector's capabilities mapped to its category. Empty: the connector's default.
+	Category      string `protobuf:"bytes,8,opt,name=category,proto3" json:"category,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -232,6 +235,13 @@ func (x *ExecuteJob) GetConfig() map[string]string {
 		return x.Config
 	}
 	return nil
+}
+
+func (x *ExecuteJob) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
 }
 
 type Cancel struct {
@@ -917,7 +927,7 @@ const file_connector_proto_rawDesc = "" +
 	"\x04tool\x18\x04 \x01(\tR\x04tool\"A\n" +
 	"\vRegisterAck\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xf7\x02\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\x93\x03\n" +
 	"\n" +
 	"ExecuteJob\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x15\n" +
@@ -926,7 +936,8 @@ const file_connector_proto_rawDesc = "" +
 	"\x05image\x18\x04 \x01(\tR\x05image\x12\x19\n" +
 	"\btrace_id\x18\x05 \x01(\tR\atraceId\x129\n" +
 	"\x06inputs\x18\x06 \x03(\v2!.connector.ExecuteJob.InputsEntryR\x06inputs\x129\n" +
-	"\x06config\x18\a \x03(\v2!.connector.ExecuteJob.ConfigEntryR\x06config\x1a9\n" +
+	"\x06config\x18\a \x03(\v2!.connector.ExecuteJob.ConfigEntryR\x06config\x12\x1a\n" +
+	"\bcategory\x18\b \x01(\tR\bcategory\x1a9\n" +
 	"\vInputsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
