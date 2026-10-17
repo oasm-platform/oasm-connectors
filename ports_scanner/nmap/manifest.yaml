@@ -1,4 +1,4 @@
-name: Nmap - Port Scanner
+name: Nmap
 slug: nmap
 version: 7.97
 image: ghcr.io/oasm-platform/connector-nmap:7.97
@@ -7,10 +7,24 @@ pricingTier: [free]
 homepage: 'https://nmap.org'
 repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
 supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
-shortDescription: 'TCP/UDP port scanner'
-description: 'Scans a single host with Nmap (Nmap Security Scanner) and streams every open port as a finding for port scanning: one finding per protocol/port with its Nmap service name, product and version. Unprivileged TCP connect scan; requires no raw sockets.'
+shortDescription: 'TCP/UDP port scanner and CVE detection'
+description: 'Scans a single host with Nmap (Nmap Security Scanner) and streams every open port as a finding for port scanning: one finding per protocol/port with its Nmap service name, product and version. For vulnerabilities it adds service version detection and the vulners NSE script and streams one finding per CVE matched to a detected service version. Unprivileged TCP connect scan; requires no raw sockets.'
 capabilities:
   - name: ports_scanner
+    targetTypes: [domain, ip, cidr]
+    inputsSchema:
+      type: object
+      required: [target]
+      properties:
+        target:
+          type: string
+          format: uri
+          title: Target host
+          description: 'Host to scan: a hostname, an IPv4 literal, or a bracketed IPv6 literal. Scheme and path are stripped; CIDR ranges, lists and wildcards are rejected.'
+          examples: [example.com, 203.0.113.10]
+          ui:placeholder: 'example.com'
+      additionalProperties: false
+  - name: vulnerabilities
     targetTypes: [domain, ip, cidr]
     inputsSchema:
       type: object

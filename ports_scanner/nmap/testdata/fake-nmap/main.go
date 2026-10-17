@@ -39,6 +39,17 @@ func main() {
 		// silently return the ports it happened to see.
 		fmt.Print(`<?xml version="1.0"?><nmaprun><host><ports><port protocol="tcp" portid="80"`)
 		os.Exit(0)
+	case "vulners":
+		// -sV --script vulners: one CPE with a CVE, a duplicate CVE and a
+		// non-CVE exploit entry; only the distinct CVE becomes a finding.
+		fmt.Print(hostXML(`<port protocol="tcp" portid="22"><state state="open" reason="syn-ack" reason_ttl="64"/>` +
+			`<service name="ssh" product="OpenSSH" version="7.4" method="probed" conf="10"/>` +
+			`<script id="vulners" output="..."><table key="cpe:/a:openbsd:openssh:7.4">` +
+			`<table><elem key="id">CVE-2023-38408</elem><elem key="type">cve</elem><elem key="cvss">9.8</elem><elem key="is_exploit">false</elem></table>` +
+			`<table><elem key="id">CVE-2023-38408</elem><elem key="type">cve</elem><elem key="cvss">9.8</elem><elem key="is_exploit">false</elem></table>` +
+			`<table><elem key="id">PACKETSTORM:173661</elem><elem key="type">packetstorm</elem><elem key="cvss">9.8</elem><elem key="is_exploit">true</elem></table>` +
+			`</table></script></port>`))
+		os.Exit(0)
 	case "hang":
 		// Simulates nmap wedging; the adapter's hard timeout must kill it.
 		time.Sleep(60 * time.Second)
