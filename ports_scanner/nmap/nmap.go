@@ -5,6 +5,10 @@ import (
 	"strconv"
 )
 
+// categoryVulnerabilities is the manifest capability that switches the scan to
+// CVE detection; any other category (or none) is a plain port scan.
+const categoryVulnerabilities = "vulnerabilities"
+
 // nmapConfig mirrors manifest.yaml configSchema. Keys are camelCase to match
 // the OASM_CONFIG JSON shape the Worker ships per job.
 //
@@ -47,9 +51,12 @@ func validPortSpec(s string) bool {
 // be a lie about the raw-socket scans (-sS/-sU/-O, NSE) this connector does not
 // support without CAP_NET_RAW.
 //
-// Deliberately NOT exposed: -sS/-sU/-O/-A/--script and -iL/-iR (raw sockets,
-// root-only, or scan fan-out outside the one-target contract).
-func buildNmapArgs(target string, cfg *nmapConfig) []string {
+// vulns (the vulnerabilities category) adds -sV and the vulners NSE script,
+// which maps detected service versions to CVEs; both work over TCP connect.
+//
+// Deliberately NOT exposed: -sS/-sU/-O/-A, arbitrary --script and -iL/-iR (raw
+// sockets, root-only, or scan fan-out outside the one-target contract).
+func buildNmapArgs(target string, cfg *nmapConfig, vulns bool) []string {
 	args := []string{"-Pn", "-n", "-oX", "-"}
 	if cfg.Ports != "" {
 		// A bare port list means "just these ports": without -p nmap would
@@ -63,6 +70,9 @@ func buildNmapArgs(target string, cfg *nmapConfig) []string {
 	}
 	if cfg.Retries > 0 {
 		args = append(args, "--max-retries", strconv.Itoa(cfg.Retries))
+	}
+	if vulns {
+		args = append(args, "-sV", "--script", "vulners")
 	}
 	return append(args, target)
 }

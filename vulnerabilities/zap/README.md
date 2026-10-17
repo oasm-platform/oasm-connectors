@@ -44,7 +44,7 @@ so a reused container sees its own job's config.
 | `policy` | `Default Policy` | active scan policy (`full` only) |
 | `enableAjaxSpider` | `false` | also run the AJAX spider (needs a browser) |
 
-`inputsSchema`: `{target: string (uri)}`. A bare host is prefixed with `https://`.
+The capability's `inputsSchema`: `{target: string (uri)}`. A bare host is prefixed with `https://`.
 
 `ZAP_BIN` (default `zap.sh`) overrides the ZAP launcher path.
 

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,12 +46,30 @@ type nmapHost struct {
 			Version string `xml:"version,attr"`
 			Extra   string `xml:"extrainfo,attr"`
 		} `xml:"service"`
+		Scripts []nmapScript `xml:"script"`
 	} `xml:"ports>port"`
 }
 
-// NmapAdapter runs nmap (github.com/nmap/nmap) and streams one
-// connector.Finding per OPEN port (Severity=info, Name="open tcp/443 (https)",
-// MatchedAt=host:port, Host=target, IP=resolved address, Ports=[port]).
+// nmapScript is one NSE result on a port. For vulners it holds one table per
+// CPE, each with one inner table (id/type/cvss/is_exploit) per known entry.
+type nmapScript struct {
+	ID   string `xml:"id,attr"`
+	CPEs []struct {
+		Key     string `xml:"key,attr"`
+		Entries []struct {
+			Elems []struct {
+				Key   string `xml:"key,attr"`
+				Value string `xml:",chardata"`
+			} `xml:"elem"`
+		} `xml:"table"`
+	} `xml:"table"`
+}
+
+// NmapAdapter runs nmap (github.com/nmap/nmap). In the ports_scanner category
+// (the default) it streams one connector.Finding per OPEN port (Severity=info,
+// Name="open tcp/443 (https)", MatchedAt=host:port, Host=target, IP=resolved
+// address, Ports=[port]). In the vulnerabilities category it adds -sV and the
+// vulners NSE script and streams one Finding per CVE on an open port instead.
 //
 // Closed and filtered ports are deliberately dropped: the catalogue's port view
 // consumes the open set, and emitting "closed" noise would be thousands of
@@ -117,7 +136,8 @@ func (a NmapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 
 	// -n is paired with the resolution above: nmap is handed an address, so it
 	// never re-resolves and never emits PTR noise to stderr.
-	cmd := exec.CommandContext(runCtx, bin, buildNmapArgs(ip, cfg)...)
+	vulns := connector.Category(ctx) == categoryVulnerabilities
+	cmd := exec.CommandContext(runCtx, bin, buildNmapArgs(ip, cfg, vulns)...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("nmap: stdout pipe: %w", err)
@@ -138,17 +158,24 @@ func (a NmapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 				if !strings.EqualFold(p.State.State, "open") {
 					continue
 				}
-				f := openPortFinding(target, ip, p.Protocol, p.PortID, p.Service.Name, p.Service.Product, p.Service.Version, p.Service.Extra)
-				select {
-				case <-ctx.Done():
-					_ = cmd.Wait()
-					return ctx.Err()
-				case <-runCtx.Done():
-					_ = cmd.Process.Kill()
-					_ = cmd.Wait()
-					return fmt.Errorf("nmap: timed out after %s", nmapHardTimeout)
-				case out <- f:
-					emitted++
+				var fs []connector.Finding
+				if vulns {
+					fs = vulnersFindings(target, ip, p.Protocol, p.PortID, p.Scripts)
+				} else {
+					fs = []connector.Finding{openPortFinding(target, ip, p.Protocol, p.PortID, p.Service.Name, p.Service.Product, p.Service.Version, p.Service.Extra)}
+				}
+				for _, f := range fs {
+					select {
+					case <-ctx.Done():
+						_ = cmd.Wait()
+						return ctx.Err()
+					case <-runCtx.Done():
+						_ = cmd.Process.Kill()
+						_ = cmd.Wait()
+						return fmt.Errorf("nmap: timed out after %s", nmapHardTimeout)
+					case out <- f:
+						emitted++
+					}
 				}
 			}
 		}
@@ -216,6 +243,71 @@ func openPortFinding(target, ip, proto, portID, service, product, version, extra
 		Tags:      tags,
 		Timestamp: time.Now(),
 	}
+}
+
+// vulnersFindings maps the vulners NSE results of one open port to one Finding
+// per CVE. Non-CVE entries (exploit-db, packetstorm, ...) are dropped: they
+// mostly re-reference the same CVEs, and a CVE is what the catalogue keys on.
+func vulnersFindings(target, ip, proto, portID string, scripts []nmapScript) []connector.Finding {
+	if proto == "" {
+		proto = "tcp"
+	}
+	endpoint := portString(proto, portID)
+	seen := map[string]bool{}
+	var fs []connector.Finding
+	for _, s := range scripts {
+		if s.ID != "vulners" {
+			continue
+		}
+		for _, cpe := range s.CPEs {
+			for _, e := range cpe.Entries {
+				v := map[string]string{}
+				for _, el := range e.Elems {
+					v[el.Key] = strings.TrimSpace(el.Value)
+				}
+				id := v["id"]
+				if !strings.EqualFold(v["type"], "cve") || id == "" || seen[id] {
+					continue
+				}
+				seen[id] = true
+				score, _ := strconv.ParseFloat(v["cvss"], 64)
+				tags := []string{"vulners", proto, cpe.Key}
+				if v["is_exploit"] == "true" {
+					tags = append(tags, "exploit")
+				}
+				fs = append(fs, connector.Finding{
+					Name:        id + " on " + endpoint,
+					Severity:    cvssSeverity(score),
+					Description: "nmap vulners matched " + cpe.Key + " on " + endpoint + " to " + id + ".",
+					CVEID:       []string{id},
+					CVSSScore:   score,
+					References:  []string{"https://vulners.com/cve/" + id},
+					MatchedAt:   target + ":" + portID,
+					Host:        target,
+					IP:          ip,
+					Ports:       []string{endpoint},
+					Tags:        tags,
+					Timestamp:   time.Now(),
+				})
+			}
+		}
+	}
+	return fs
+}
+
+// cvssSeverity buckets a CVSS score into the CVSS v3 qualitative ratings.
+func cvssSeverity(score float64) string {
+	switch {
+	case score >= 9:
+		return "critical"
+	case score >= 7:
+		return "high"
+	case score >= 4:
+		return "medium"
+	case score > 0:
+		return "low"
+	}
+	return "info"
 }
 
 // portString renders "tcp/443" from nmap's separate protocol/portid attributes.

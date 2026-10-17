@@ -9,21 +9,22 @@ repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
 supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'OWASP ZAP dynamic web application scanner'
 description: 'Runs OWASP ZAP (Zed Attack Proxy) against a target web application using the Automation Framework, then streams the discovered alerts back to the Worker as normalized findings.'
-capabilities: [vulnerabilities]
-targetTypes: [domain, ip, cidr]
+capabilities:
+  - name: vulnerabilities
+    targetTypes: [domain, ip, cidr]
+    inputsSchema:
+      type: object
+      required: [target]
+      properties:
+        target:
+          type: string
+          format: uri
+          title: Scan target
+          description: 'Target URL to scan. A bare host is prefixed with https://.'
+          examples: [https://example.com]
+          ui:placeholder: 'https://example.com'
+      additionalProperties: false
 agentTool: true
-inputsSchema:
-  type: object
-  required: [target]
-  properties:
-    target:
-      type: string
-      format: uri
-      title: Scan target
-      description: 'Target URL to scan. A bare host is prefixed with https://.'
-      examples: [https://example.com]
-      ui:placeholder: 'https://example.com'
-  additionalProperties: false
 configSchema:
   type: object
   additionalProperties: false

@@ -19,7 +19,7 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 | Target | `inputs.target` | — | yes | Scan target: `http(s)://` URL or bare domain |
 | WPScan binary | `WPSCAN_BIN` | `wpscan` | no | Override path to wpscan binary |
 
-`inputsSchema` (see `manifest.yaml`): `{target: string (uri)}`.
+The capability's `inputsSchema` (see `manifest.yaml`): `{target: string (uri)}`.
 
 ## Example config profile
 

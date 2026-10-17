@@ -1,6 +1,6 @@
 # Trivy Connector
 
-Runs [Trivy](https://github.com/aquasecurity/trivy) 0.75.0 (`trivy fs`) via the OASM Worker gRPC bridge. Scans one repository of a Git organization target (`targetTypes: [git_org]`) for vulnerable dependencies and IaC misconfigurations, and optionally secrets, and reports each as a finding with its file, line and commit.
+Runs [Trivy](https://github.com/aquasecurity/trivy) 0.75.0 (`trivy fs`) via the OASM Worker gRPC bridge. Scans one repository of a Git organization target (its capability declares `targetTypes: [git_org]`) for vulnerable dependencies and IaC misconfigurations, and optionally secrets, and reports each as a finding with its file, line and commit.
 
 ## Requirements
 

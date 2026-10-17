@@ -9,21 +9,22 @@ repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
 supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'
 shortDescription: 'Web crawler and endpoint discovery'
 description: 'Crawls a target website with Katana (ProjectDiscovery) up to a configurable depth and streams every discovered HTTP/HTTPS URL as a finding for URL discovery.'
-capabilities: [url_discovery]
-targetTypes: [domain]
+capabilities:
+  - name: url_discovery
+    targetTypes: [domain]
+    inputsSchema:
+      type: object
+      required: [target]
+      properties:
+        target:
+          type: string
+          format: uri
+          title: Target domain
+          description: 'Domain (or URL) to crawl. Scheme/path stripped to the host.'
+          examples: [example.com]
+          ui:placeholder: 'example.com'
+      additionalProperties: false
 agentTool: true
-inputsSchema:
-  type: object
-  required: [target]
-  properties:
-    target:
-      type: string
-      format: uri
-      title: Target domain
-      description: 'Domain (or URL) to crawl. Scheme/path stripped to the host.'
-      examples: [example.com]
-      ui:placeholder: 'example.com'
-  additionalProperties: false
 configSchema:
   type: object
   additionalProperties: false

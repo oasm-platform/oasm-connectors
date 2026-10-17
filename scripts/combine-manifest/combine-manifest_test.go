@@ -33,8 +33,9 @@ author: "oasm"
 pricingTier: [free]
 shortDescription: "Fast template-based vulnerability scanner"
 description: "Runs ProjectDiscovery Nuclei template-based scans against a target URL."
-capabilities: [vulnerabilities]
-targetTypes: [domain, ip, cidr]
+capabilities:
+  - name: vulnerabilities
+    targetTypes: [domain, ip, cidr]
 `
 
 func TestDiscoverCategoryLayout(t *testing.T) {
@@ -64,7 +65,7 @@ func TestSkipNonCategoryDirs(t *testing.T) {
 
 func TestValidateRejectsEmptyName(t *testing.T) {
 	m := &Manifest{Name: "   ", Slug: "nuclei", Version: "1.0.0", Image: "x",
-		ShortDescription: "short", Description: "long", Capabilities: []string{"c"}}
+		ShortDescription: "short", Description: "long", Capabilities: []Capability{{Name: "c", TargetTypes: []string{"domain"}}}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for empty/whitespace-only name")
@@ -76,7 +77,7 @@ func TestValidateRejectsEmptyName(t *testing.T) {
 
 func TestValidateRejectsMissingSlug(t *testing.T) {
 	m := &Manifest{Name: "Nuclei Scanner", Version: "3.3.0", Image: "x",
-		ShortDescription: "short", Description: "long", Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
+		ShortDescription: "short", Description: "long", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for missing slug")
@@ -89,7 +90,7 @@ func TestValidateRejectsMissingSlug(t *testing.T) {
 func TestValidateRejectsBadSlug(t *testing.T) {
 	for _, bad := range []string{"Nuclei", "bad_slug", "nuclei scanner"} {
 		m := &Manifest{Name: "Nuclei Scanner", Slug: bad, Version: "3.3.0", Image: "x",
-			ShortDescription: "short", Description: "long", Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
+			ShortDescription: "short", Description: "long", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
 		err := validate(m, "test")
 		if err == nil {
 			t.Fatalf("expected error for bad slug %q", bad)
@@ -102,7 +103,7 @@ func TestValidateRejectsBadSlug(t *testing.T) {
 
 func TestValidateAllowsSpacedUppercaseName(t *testing.T) {
 	m := &Manifest{Name: "Nuclei Scanner v2", Slug: "nuclei", Version: "3.3.0", Image: "x",
-		ShortDescription: "short", Description: "long", Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"},
+		ShortDescription: "short", Description: "long", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}},
 		Author: "oasm", PricingTier: []string{"free"}}
 	if err := validate(m, "test"); err != nil {
 		t.Fatalf("spaced uppercase display name should be valid, got %v", err)
@@ -111,7 +112,7 @@ func TestValidateAllowsSpacedUppercaseName(t *testing.T) {
 
 func TestValidateRejectsMissingDescription(t *testing.T) {
 	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x",
-		ShortDescription: "short", Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
+		ShortDescription: "short", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for missing description")
@@ -123,7 +124,7 @@ func TestValidateRejectsMissingDescription(t *testing.T) {
 
 func TestValidateRejectsMissingShortDescription(t *testing.T) {
 	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x",
-		Description: "long description", Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
+		Description: "long description", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for missing shortDescription")
@@ -136,7 +137,7 @@ func TestValidateRejectsMissingShortDescription(t *testing.T) {
 func TestValidateRejectsMissingAuthor(t *testing.T) {
 	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", PricingTier: []string{"free"},
 		ShortDescription: "short", Description: "long description",
-		Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
+		Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for missing author")
@@ -151,7 +152,7 @@ func TestValidateRejectsMissingPricingTier(t *testing.T) {
 		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 			PricingTier:      tiers,
 			ShortDescription: "short", Description: "long description",
-			Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
+			Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
 		err := validate(m, "test")
 		if err == nil {
 			t.Fatalf("expected error for missing/empty pricingTier (%v)", tiers)
@@ -167,7 +168,7 @@ func TestValidateRejectsInvalidPricingTier(t *testing.T) {
 		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 			PricingTier:      []string{bad},
 			ShortDescription: "short", Description: "long description",
-			Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
+			Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
 		err := validate(m, "test")
 		if err == nil {
 			t.Fatalf("expected error for invalid pricingTier %q", bad)
@@ -183,7 +184,7 @@ func TestValidateAcceptsPricingTierCaseInsensitiveTrim(t *testing.T) {
 		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 			PricingTier:      []string{ok},
 			ShortDescription: "short", Description: "long description",
-			Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
+			Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
 		if err := validate(m, "test"); err != nil {
 			t.Fatalf("pricingTier %q should be valid, got %v", ok, err)
 		}
@@ -194,7 +195,7 @@ func TestValidateAcceptsBothTiers(t *testing.T) {
 	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 		PricingTier:      []string{"free", "paid"},
 		ShortDescription: "short", Description: "long description",
-		Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
+		Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
 	if err := validate(m, "test"); err != nil {
 		t.Fatalf("pricingTier [free paid] should be valid, got %v", err)
 	}
@@ -209,12 +210,12 @@ func validManifest() *Manifest {
 	return &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 		PricingTier:      []string{"free"},
 		ShortDescription: "short", Description: "long description",
-		Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain", "ip", "cidr"}}
+		Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain", "ip", "cidr"}}}}
 }
 
 func TestValidateAcceptsEveryTargetType(t *testing.T) {
 	m := validManifest()
-	m.TargetTypes = []string{"domain", "ip", "cidr", "git_org"}
+	m.Capabilities[0].TargetTypes = []string{"domain", "ip", "cidr", "git_org"}
 	if err := validate(m, "test"); err != nil {
 		t.Fatalf("all known target types should be valid, got %v", err)
 	}
@@ -222,7 +223,7 @@ func TestValidateAcceptsEveryTargetType(t *testing.T) {
 
 func TestValidateRejectsMissingTargetTypes(t *testing.T) {
 	m := validManifest()
-	m.TargetTypes = nil
+	m.Capabilities[0].TargetTypes = nil
 	err := validate(m, "test")
 	if err == nil || !strings.Contains(err.Error(), "at least one targetType required") {
 		t.Fatalf("expected missing targetTypes error, got %v", err)
@@ -232,7 +233,7 @@ func TestValidateRejectsMissingTargetTypes(t *testing.T) {
 func TestValidateRejectsUnknownTargetType(t *testing.T) {
 	for _, bad := range []string{"DOMAIN", "url", "repository", ""} {
 		m := validManifest()
-		m.TargetTypes = []string{bad}
+		m.Capabilities[0].TargetTypes = []string{bad}
 		err := validate(m, "test")
 		if err == nil || !strings.Contains(err.Error(), "invalid targetType") {
 			t.Fatalf("targetType %q: expected invalid targetType error, got %v", bad, err)
@@ -242,7 +243,7 @@ func TestValidateRejectsUnknownTargetType(t *testing.T) {
 
 func TestValidateRejectsDuplicateTargetType(t *testing.T) {
 	m := validManifest()
-	m.TargetTypes = []string{"domain", "domain"}
+	m.Capabilities[0].TargetTypes = []string{"domain", "domain"}
 	err := validate(m, "test")
 	if err == nil || !strings.Contains(err.Error(), "duplicate targetType") {
 		t.Fatalf("expected duplicate targetType error, got %v", err)
@@ -251,7 +252,7 @@ func TestValidateRejectsDuplicateTargetType(t *testing.T) {
 
 func TestValidateRejectsUnknownCapability(t *testing.T) {
 	m := validManifest()
-	m.Capabilities = []string{"magic"}
+	m.Capabilities[0].Name = "magic"
 	err := validate(m, "test")
 	if err == nil || !strings.Contains(err.Error(), "invalid capability") {
 		t.Fatalf("expected invalid capability error, got %v", err)
@@ -263,7 +264,7 @@ func TestValidateRejectsBlankOptionalURLs(t *testing.T) {
 		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 			PricingTier:      []string{"free"},
 			ShortDescription: "short", Description: "long description",
-			Capabilities: []string{"vulnerabilities"}, TargetTypes: []string{"domain"}}
+			Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
 		switch field {
 		case "homepage":
 			m.Homepage = "   "
@@ -587,7 +588,7 @@ func TestRunOmitsLogoWhenMissing(t *testing.T) {
 // while false is omitted from both.
 func TestAgentToolRoundTripsYamlToJson(t *testing.T) {
 	root := t.TempDir()
-	flagged := strings.Replace(validYAML, "capabilities: [vulnerabilities]", "capabilities: [vulnerabilities]\nagentTool: true", 1)
+	flagged := strings.Replace(validYAML, "pricingTier: [free]", "pricingTier: [free]\nagentTool: true", 1)
 	p := writeManifest(t, filepath.Join(root, "vulnerabilities", "nuclei"), flagged)
 	m, err := loadManifest(p)
 	if err != nil {
@@ -637,5 +638,100 @@ func TestAgentToolRoundTripsYamlToJson(t *testing.T) {
 	}
 	if _, present := doc2.Connectors[0]["agentTool"]; present {
 		t.Fatalf("expected no agentTool key when false, got %v", doc2.Connectors[0])
+	}
+}
+
+// loadYAML writes src as a manifest and runs the CLI's strict load + validate.
+func loadYAML(t *testing.T, src string) (*Manifest, error) {
+	t.Helper()
+	return loadManifest(writeManifest(t, filepath.Join(t.TempDir(), "vulnerabilities", "nuclei"), src))
+}
+
+const validCapabilityYAML = `capabilities:
+  - name: vulnerabilities
+    targetTypes: [domain, ip, cidr]
+`
+
+func TestMultipleCapabilitiesWithSharedAnchor(t *testing.T) {
+	m, err := loadYAML(t, strings.Replace(validYAML, validCapabilityYAML, `capabilities:
+  - name: ports_scanner
+    targetTypes: [domain, ip, cidr]
+    inputsSchema: &target {type: object}
+  - name: vulnerabilities
+    targetTypes: [domain]
+    inputsSchema: *target
+`, 1))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if m.Capabilities[0].Name != "ports_scanner" || m.Capabilities[1].Name != "vulnerabilities" {
+		t.Fatalf("names = %+v", m.Capabilities)
+	}
+	if got := m.Capabilities[1].TargetTypes; len(got) != 1 || got[0] != "domain" {
+		t.Fatalf("targetTypes = %v", got)
+	}
+	if m.Capabilities[1].InputsSchema["type"] != "object" {
+		t.Fatalf("anchor not resolved: %+v", m.Capabilities[1].InputsSchema)
+	}
+}
+
+func TestCapabilityRequiresTargetTypes(t *testing.T) {
+	_, err := loadYAML(t, strings.Replace(validYAML, "    targetTypes: [domain, ip, cidr]\n", "", 1))
+	if err == nil || !strings.Contains(err.Error(), `capability "vulnerabilities": at least one targetType required`) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestCapabilityRejectsBadTargetType(t *testing.T) {
+	_, err := loadYAML(t, strings.Replace(validYAML, "[domain, ip, cidr]", "[moon]", 1))
+	if err == nil || !strings.Contains(err.Error(), `invalid targetType "moon"`) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestValidateRejectsDuplicateCapability(t *testing.T) {
+	_, err := loadYAML(t, strings.Replace(validYAML, validCapabilityYAML, validCapabilityYAML+"  - name: vulnerabilities\n    targetTypes: [ip]\n", 1))
+	if err == nil || !strings.Contains(err.Error(), `duplicate capability "vulnerabilities"`) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestCapabilityRejectsUnknownKey(t *testing.T) {
+	_, err := loadYAML(t, strings.Replace(validYAML, validCapabilityYAML, validCapabilityYAML+"    colour: red\n", 1))
+	if err == nil || !strings.Contains(err.Error(), "colour") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// A stale manifest that still uses the old top-level keys must fail, not be half-read.
+func TestRejectsTopLevelTargetTypes(t *testing.T) {
+	if _, err := loadYAML(t, validYAML+"targetTypes: [domain]\n"); err == nil || !strings.Contains(err.Error(), "targetTypes") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestRejectsTopLevelInputsSchema(t *testing.T) {
+	if _, err := loadYAML(t, validYAML+"inputsSchema: {type: object}\n"); err == nil || !strings.Contains(err.Error(), "inputsSchema") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestRejectsBareCapabilityString(t *testing.T) {
+	if _, err := loadYAML(t, strings.Replace(validYAML, validCapabilityYAML, "capabilities: [vulnerabilities]\n", 1)); err == nil {
+		t.Fatal("bare capability string must be rejected")
+	}
+}
+
+// secrets and sca both run as the platform's "vulnerabilities" category: the
+// connector could not tell which one it was asked to run.
+func TestValidateRejectsCapabilitiesSharingAPlatformCategory(t *testing.T) {
+	_, err := loadYAML(t, strings.Replace(validYAML, validCapabilityYAML, `capabilities:
+  - name: secrets
+    targetTypes: [git_org]
+  - name: sca
+    targetTypes: [git_org]
+`, 1))
+	if err == nil || !strings.Contains(err.Error(), `capabilities "secrets" and "sca" both run as category "vulnerabilities"`) {
+		t.Fatalf("got %v", err)
 	}
 }

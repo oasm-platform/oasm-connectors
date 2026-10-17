@@ -56,7 +56,7 @@ a non-integer value. A missing `url` or `apiKey` fails with
 Worker connection (`WORKER_GRPC_ADDR`, `WORKER_TOKEN`) and `EXECUTION_ID` are
 injected by the Worker.
 
-`inputsSchema` (see `manifest.yaml`): `{target: string (uri)}`.
+The capability's `inputsSchema` (see `manifest.yaml`): `{target: string (uri)}`.
 
 ## Deployment
 
@@ -89,7 +89,7 @@ Files:
 - `acunetix.go` — config loader (`OASM_CONFIG` / `ACUNETIX_*`), Acunetix REST client, DTOs, cursor pagination
 - `findings.go` — finding mapping, severity legend, CVE/CWE extraction, bounded-pool collection
 - `main.go` — wires `AcunetixAdapter` + SDK (`sdk/connector`, `sdk/runtime`)
-- `manifest.yaml` — source of truth for `manifest.json` (`inputsSchema`, `configSchema`)
+- `manifest.yaml` — source of truth for `manifest.json` (capability `inputsSchema`, `configSchema`)
 - `Dockerfile` — `golang:1.26-alpine` builder → `alpine:3.20` non-root; no bundled tool binary
 
 ## Testing

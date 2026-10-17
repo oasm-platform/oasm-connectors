@@ -149,19 +149,19 @@ func TestValidate(t *testing.T) {
 func TestBuildNmapArgs_FullAndDefaults(t *testing.T) {
 	full := &nmapConfig{Ports: "22,80,443", TopPorts: 100, HostTimeout: 300, Retries: 2}
 	wantFull := []string{"-Pn", "-n", "-oX", "-", "-p", "22,80,443", "--host-timeout", "300s", "--max-retries", "2", "10.0.0.1"}
-	if got := buildNmapArgs("10.0.0.1", full); !slices.Equal(got, wantFull) {
+	if got := buildNmapArgs("10.0.0.1", full, false); !slices.Equal(got, wantFull) {
 		t.Errorf("full cfg argv:\n got %v\nwant %v", got, wantFull)
 	}
 
 	// Zero config: no -p and no --top-ports, so nmap keeps its own default list.
 	wantZero := []string{"-Pn", "-n", "-oX", "-", "10.0.0.1"}
-	if got := buildNmapArgs("10.0.0.1", &nmapConfig{}); !slices.Equal(got, wantZero) {
+	if got := buildNmapArgs("10.0.0.1", &nmapConfig{}, false); !slices.Equal(got, wantZero) {
 		t.Errorf("zero cfg argv:\n got %v\nwant %v", got, wantZero)
 	}
 
 	// topPorts applies only when ports is empty.
 	topOnly := []string{"-Pn", "-n", "-oX", "-", "--top-ports", "50", "10.0.0.1"}
-	if got := buildNmapArgs("10.0.0.1", &nmapConfig{TopPorts: 50}); !slices.Equal(got, topOnly) {
+	if got := buildNmapArgs("10.0.0.1", &nmapConfig{TopPorts: 50}, false); !slices.Equal(got, topOnly) {
 		t.Errorf("topPorts argv:\n got %v\nwant %v", got, topOnly)
 	}
 }
@@ -238,6 +238,43 @@ func TestExecute_StreamsOpenPortFindings(t *testing.T) {
 	if !slices.Contains(findings[0].Tags, "http") || !slices.Contains(findings[0].Tags, "nginx") ||
 		!slices.Contains(findings[0].Tags, "1.27.0") || !slices.Contains(findings[0].Tags, "tcp") {
 		t.Errorf("finding 0 tags missing service metadata: %v", findings[0].Tags)
+	}
+}
+
+// The vulnerabilities category adds -sV --script vulners and emits one Finding
+// per distinct CVE instead of one per open port.
+func TestExecute_VulnerabilitiesCategory(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args.json")
+	t.Setenv("NMAP_BIN", ensureFakeNmap(t))
+	t.Setenv("FAKE_MODE", "vulners")
+	t.Setenv("FAKE_ARGS_FILE", argsFile)
+	t.Setenv("OASM_CONFIG", "")
+
+	out := make(chan connector.Finding, 64)
+	ctx := connector.WithCategory(context.Background(), "vulnerabilities")
+	if err := (NmapAdapter{}).Execute(ctx, map[string]any{"target": "localhost"}, out); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	close(out)
+	var findings []connector.Finding
+	for f := range out {
+		findings = append(findings, f)
+	}
+
+	raw, _ := os.ReadFile(argsFile)
+	if !strings.Contains(string(raw), `"-sV","--script","vulners"`) {
+		t.Errorf("argv missing vulners script: %s", raw)
+	}
+	if len(findings) != 1 {
+		t.Fatalf("expected 1 CVE finding, got %d: %+v", len(findings), findings)
+	}
+	f := findings[0]
+	if f.Name != "CVE-2023-38408 on tcp/22" || f.Severity != "critical" || f.CVSSScore != 9.8 ||
+		!slices.Equal(f.CVEID, []string{"CVE-2023-38408"}) || f.MatchedAt != "localhost:22" {
+		t.Errorf("unexpected finding: %+v", f)
+	}
+	if err := f.Validate(); err != nil {
+		t.Errorf("finding invalid: %v", err)
 	}
 }
 
