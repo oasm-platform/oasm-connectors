@@ -4,7 +4,11 @@ go 1.26
 
 require github.com/oasm-platform/oasm-connectors/sdk v0.0.0
 
-require github.com/projectdiscovery/nuclei/v3 v3.11.1
+require (
+	github.com/projectdiscovery/hmap v0.0.101
+	github.com/projectdiscovery/httpx v1.10.0
+	github.com/projectdiscovery/nuclei/v3 v3.11.1
+)
 
 require (
 	aead.dev/minisign v0.3.0 // indirect
@@ -273,8 +277,6 @@ require (
 	github.com/projectdiscovery/gostruct v0.0.2 // indirect
 	github.com/projectdiscovery/govaluate v0.0.0-20260615100919-5ee2581bbf7e // indirect
 	github.com/projectdiscovery/gozero v0.1.1-0.20260530071156-fa1dad563d76 // indirect
-	github.com/projectdiscovery/hmap v0.0.101 // indirect
-	github.com/projectdiscovery/httpx v1.10.0 // indirect
 	github.com/projectdiscovery/interactsh v1.3.1 // indirect
 	github.com/projectdiscovery/ldapserver v1.0.2-0.20240219154113-dcc758ebc0cb // indirect
 	github.com/projectdiscovery/machineid v0.0.0-20250715113114-c77eb3567582 // indirect

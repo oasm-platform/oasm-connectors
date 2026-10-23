@@ -10,8 +10,11 @@ import (
 	"time"
 
 	"github.com/oasm-platform/oasm-connectors/sdk/connector"
+	"github.com/projectdiscovery/hmap/store/hybrid"
+	"github.com/projectdiscovery/httpx/common/httpx"
 	nuclei "github.com/projectdiscovery/nuclei/v3/lib"
 	nucleiOutput "github.com/projectdiscovery/nuclei/v3/pkg/output"
+	nucleiUtils "github.com/projectdiscovery/nuclei/v3/pkg/utils"
 )
 
 // NucleiAdapter implements Validate/Execute for nuclei as a thin wrapper:
@@ -168,9 +171,6 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 	if target == "" {
 		return fmt.Errorf("target required")
 	}
-	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
-		target = "https://" + target
-	}
 
 	dir := templateDir()
 	st, statErr := os.Stat(dir)
@@ -199,6 +199,12 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 
 	engine.Options().FollowRedirects = p.followRedirects
 	engine.LoadTargets([]string{target}, false)
+	if !strings.Contains(target, "://") {
+		if hm := probeHTTPInput(target); hm != nil {
+			defer hm.Close()
+			engine.GetExecuterOptions().InputHelper.InputsHTTP = hm
+		}
+	}
 
 	findings, skipped := 0, 0
 	defer func() { log.Printf("nuclei: done findings=%d skipped=%d", findings, skipped) }()
@@ -233,6 +239,34 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 		return fmt.Errorf("nuclei scan: 0 findings but %d template results were skipped (target marked unresponsive) — check target reachability and container network egress", skipped)
 	}
 	return nil
+}
+
+// probeHTTPInput does what `nuclei -u host` does and the SDK skips: find the
+// scheme that answers so http templates use it, while the bare host stays the
+// input for dns/ssl/network templates. Nil on a miss — nuclei then falls back
+// to https:// for http templates, as before.
+func probeHTTPInput(target string) *hybrid.HybridMap {
+	opts := httpx.DefaultOptions
+	opts.Timeout = 5 * time.Second // same as the SDK's own probe client
+	client, err := httpx.New(&opts)
+	if err != nil {
+		log.Printf("nuclei: http probe client: %v", err)
+		return nil
+	}
+	defer client.Dialer.Close()
+
+	probed := nucleiUtils.ProbeURL(target, client)
+	if probed == "" {
+		return nil
+	}
+	hm, err := hybrid.New(hybrid.DefaultMemoryOptions)
+	if err != nil {
+		log.Printf("nuclei: http probe map: %v", err)
+		return nil
+	}
+	_ = hm.Set(target, []byte(probed))
+	log.Printf("nuclei: http probe %s -> %s", target, probed)
+	return hm
 }
 
 // normalizeSeverity maps a scanner severity onto the Finding enum; anything
