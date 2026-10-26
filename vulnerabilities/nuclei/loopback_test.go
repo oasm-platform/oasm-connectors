@@ -243,4 +243,52 @@ http:
 			t.Fatal("ctx_cancel: Execute did not return within 5s after context cancellation")
 		}
 	})
+
+	// ── Sub-case E: scheme-less target served over HTTP only (#751) ─────────
+	// core-api sends bare host assets; forcing https:// made every http
+	// template hit a dead TLS port and failed the job as unresponsive.
+	t.Run("schemeless_http_only", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, "hello")
+		}))
+		defer srv.Close()
+
+		tmplDir := t.TempDir()
+		writeTemplate(t, tmplDir, "probe.yaml", `id: loopback-probe-schemeless
+info:
+  name: Loopback Probe Schemeless
+  author: oasm-test
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+    matchers:
+      - type: dsl
+        dsl:
+          - status_code == 200
+`)
+		setupLoopbackEnv(t, tmplDir)
+
+		host := strings.TrimPrefix(srv.URL, "http://")
+		ch := make(chan connector.Finding, 64)
+		err := a.Execute(context.Background(), map[string]any{"target": host}, ch)
+		close(ch)
+
+		var findings []connector.Finding
+		for f := range ch {
+			findings = append(findings, f)
+		}
+
+		if err != nil {
+			t.Fatalf("Execute returned error: %v", err)
+		}
+		if len(findings) == 0 {
+			t.Fatal("expected at least 1 finding, got 0")
+		}
+		if want := "http://" + host; !strings.HasPrefix(findings[0].MatchedAt, want) {
+			t.Errorf("MatchedAt = %q, want prefix %q", findings[0].MatchedAt, want)
+		}
+	})
 }

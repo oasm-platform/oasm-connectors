@@ -91,13 +91,6 @@ func TestDebugLiveScan(t *testing.T) {
 	t.Logf("filters: severity=%q tags=%v excludeTags=%v ids=%v", p.filters.Severity, p.filters.Tags, p.filters.ExcludeTags, p.filters.IDs)
 	t.Logf("rateLimit=%d concurrency=%d followRedirects=%v noInteractsh=%v", p.rateLimit, p.concurrency, p.followRedirects, p.noInteractsh)
 
-	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
-		// mirror Execute(): bare host gets https://
-		if !strings.Contains(target, ":") {
-			target = "https://" + target
-		}
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -118,6 +111,12 @@ func TestDebugLiveScan(t *testing.T) {
 
 	engine.Options().FollowRedirects = p.followRedirects
 	engine.LoadTargets([]string{target}, false)
+	if !strings.Contains(target, "://") {
+		if hm := probeHTTPInput(target); hm != nil {
+			defer hm.Close()
+			engine.GetExecuterOptions().InputHelper.InputsHTTP = hm
+		}
+	}
 
 	var findings []connector.Finding
 	scanErr := engine.ExecuteCallbackWithCtx(ctx, func(ev *nucleiOutput.ResultEvent) {
