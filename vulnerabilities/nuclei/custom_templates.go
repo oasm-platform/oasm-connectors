@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,7 +32,46 @@ var customTemplateCacheDir = filepath.Join(os.TempDir(), "oasm-templates")
 
 var cacheKeyPattern = regexp.MustCompile(`^[A-Za-z0-9-]{1,128}$`)
 
-var templateHTTPClient = &http.Client{Timeout: 30 * time.Second}
+// loopbackFallbackHost is retried when a loopback template URL refuses: in
+// local dev core-api signs URLs against http://localhost:9000, which inside
+// this container is the container itself; the worker maps this name to the
+// Docker host. A var so tests can point it elsewhere.
+var loopbackFallbackHost = "host.docker.internal"
+
+var templateHTTPClient = newTemplateHTTPClient()
+
+func newTemplateHTTPClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = dialWithLoopbackFallback
+	return &http.Client{Timeout: 30 * time.Second, Transport: transport}
+}
+
+// dialWithLoopbackFallback only swaps the dial target: the URL and Host
+// header stay as signed, so the presigned signature still verifies.
+func dialWithLoopbackFallback(ctx context.Context, network, addr string) (net.Conn, error) {
+	var d net.Dialer
+	conn, err := d.DialContext(ctx, network, addr)
+	if err == nil {
+		return conn, nil
+	}
+	host, port, splitErr := net.SplitHostPort(addr)
+	if splitErr != nil || !isLoopbackHost(host) {
+		return nil, err
+	}
+	conn, fallbackErr := d.DialContext(ctx, network, net.JoinHostPort(loopbackFallbackHost, port))
+	if fallbackErr != nil {
+		return nil, errors.Join(err, fallbackErr)
+	}
+	return conn, nil
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
 
 // stageCustomTemplates writes this job's templates into a fresh directory and
 // returns it; the caller removes it. File names are generated (0.yaml, ...)

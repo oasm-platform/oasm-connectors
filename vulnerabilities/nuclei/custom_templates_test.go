@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -134,5 +136,35 @@ func TestScanParamsCustomTemplatesDropFilters(t *testing.T) {
 	}
 	if p.idMode {
 		t.Errorf("idMode = true, want false")
+	}
+}
+
+// In local dev core-api signs template URLs against http://localhost:9000,
+// which inside the connector container is the container itself.
+func TestDownloadTemplateLoopbackFallsBackToHostGateway(t *testing.T) {
+	var gotHost atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHost.Store(r.Host)
+		w.Write([]byte("id: via-gateway\n"))
+	}))
+	defer srv.Close()
+	port := srv.Listener.Addr().(*net.TCPAddr).Port
+
+	// Nothing listens on 127.0.0.2; the "gateway" is the server on 127.0.0.1.
+	prev := loopbackFallbackHost
+	loopbackFallbackHost = "127.0.0.1"
+	t.Cleanup(func() { loopbackFallbackHost = prev })
+
+	signedHost := fmt.Sprintf("127.0.0.2:%d", port)
+	data, err := downloadTemplate(context.Background(), "http://"+signedHost+"/t.yaml")
+	if err != nil {
+		t.Fatalf("download: %v", err)
+	}
+	if string(data) != "id: via-gateway\n" {
+		t.Errorf("data = %q", data)
+	}
+	// The presigned signature covers Host: only the dial target may change.
+	if gotHost.Load() != signedHost {
+		t.Errorf("Host = %v, want %s", gotHost.Load(), signedHost)
 	}
 }
