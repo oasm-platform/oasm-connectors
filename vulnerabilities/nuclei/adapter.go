@@ -36,6 +36,8 @@ type Config struct {
 	// public interactsh server). Absent → enabled, so a plain scan matches
 	// `nuclei -u <target>`; set false in air-gapped/no-egress environments.
 	Interactsh *bool `json:"interactsh"`
+	// CustomTemplates, when set, replace the baked collection: only these run.
+	CustomTemplates []CustomTemplate `json:"customTemplates"`
 }
 
 // defaultTemplateDir is where the Dockerfile bakes the template collection
@@ -71,13 +73,18 @@ type params struct {
 // scanParams maps a Config + templates directory into a params struct.
 // When TemplateIds is set, only filters.IDs is populated: severity/tags/excludeTags
 // are dropped because mixing -id with template selection filters made nuclei
-// silently match nothing. When no config is provided the manifest.yaml defaults
-// apply: rateLimit=150, concurrency=25, interactsh=enabled.
+// silently match nothing. Custom templates drop every filter: the user picked
+// exactly what to run, and a profile's severity filter would silently skip it.
+// When no config is provided the manifest.yaml defaults apply: rateLimit=150,
+// concurrency=25, interactsh=enabled.
 func scanParams(cfg Config, dir string) params {
 	templates := []string{dir}
 	var filters nuclei.TemplateFilters
 	idMode := len(cfg.TemplateIds) > 0
-	if idMode {
+	if len(cfg.CustomTemplates) > 0 {
+		log.Printf("nuclei: %d custom templates — ignoring severity/tags/excludeTags/templateIds", len(cfg.CustomTemplates))
+		idMode = false
+	} else if idMode {
 		filters.IDs = cfg.TemplateIds
 		if len(cfg.Severity) > 0 || len(cfg.Tags) > 0 || len(cfg.ExcludeTags) > 0 {
 			log.Printf("nuclei: templateIds set — dropping -severity/-tags/-etags (incompatible with -id)")
@@ -188,8 +195,20 @@ func (a *NucleiAdapter) Execute(ctx context.Context, inputs map[string]any, out 
 		return err
 	}
 
-	p := scanParams(*cfg, dir)
-	nuclei.DefaultConfig.SetTemplatesDir(p.templates[0])
+	scanDir := dir
+	if len(cfg.CustomTemplates) > 0 {
+		staged, err := stageCustomTemplates(ctx, cfg.CustomTemplates)
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(staged)
+		scanDir = staged
+	}
+
+	p := scanParams(*cfg, scanDir)
+	// The engine's templates dir stays the baked collection; custom templates
+	// are only the scan source.
+	nuclei.DefaultConfig.SetTemplatesDir(dir)
 
 	engine, err := nuclei.NewNucleiEngineCtx(ctx, sdkOptions(ctx, p)...)
 	if err != nil {
