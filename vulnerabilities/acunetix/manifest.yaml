@@ -12,6 +12,8 @@ description: 'Connects to an Acunetix instance, runs a scan against a target, an
 capabilities:
   - name: vulnerabilities
     targetTypes: [domain, ip, cidr]
+    inputs: [web, host]
+    produces: [vulnerability]
     inputsSchema:
       type: object
       required: [target]

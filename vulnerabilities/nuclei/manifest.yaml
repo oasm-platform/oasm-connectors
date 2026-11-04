@@ -13,6 +13,8 @@ description: 'Runs ProjectDiscovery Nuclei template-based scans against a target
 capabilities:
   - name: vulnerabilities
     targetTypes: [domain, ip, cidr]
+    inputs: [host, web]
+    produces: [vulnerability]
     inputsSchema:
       type: object
       required: [target]

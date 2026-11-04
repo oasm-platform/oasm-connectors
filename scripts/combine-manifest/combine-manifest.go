@@ -54,14 +54,21 @@ type Manifest struct {
 
 // Capability is one mode a connector runs in. TargetTypes lists the platform
 // target types whose assets this mode can scan (see allowedTargetTypes); the
-// platform never dispatches an asset of any other target type to it.
+// platform never dispatches an asset of any other target type to it. Inputs
+// are the kinds of data it takes, best first, and Produces the kinds its
+// findings add for the workflow steps after it (see allowedInputs and
+// allowedProduces).
 type Capability struct {
 	Name         string         `yaml:"name"                   json:"name"`
 	TargetTypes  []string       `yaml:"targetTypes"            json:"targetTypes"`
+	Inputs       []string       `yaml:"inputs"                 json:"inputs"`
+	Produces     []string       `yaml:"produces"               json:"produces"`
 	InputsSchema map[string]any `yaml:"inputsSchema,omitempty" json:"inputsSchema,omitempty"`
 }
 
-var capabilityKeys = map[string]bool{"name": true, "targetTypes": true, "inputsSchema": true}
+var capabilityKeys = map[string]bool{
+	"name": true, "targetTypes": true, "inputs": true, "produces": true, "inputsSchema": true,
+}
 
 // UnmarshalYAML enforces the same strictness as the top level: node.Decode
 // does not inherit the decoder's KnownFields(true), so unknown keys and
@@ -76,7 +83,24 @@ func (c *Capability) UnmarshalYAML(n *yaml.Node) error {
 		}
 	}
 	type plain Capability
-	return n.Decode((*plain)(c))
+	if err := n.Decode((*plain)(c)); err != nil {
+		return err
+	}
+	// "produces: []" (finds nothing other steps use) is a valid answer; a
+	// missing key is not, so it decodes to nil and validate rejects it.
+	if c.Produces == nil && hasKey(n, "produces") {
+		c.Produces = []string{}
+	}
+	return nil
+}
+
+func hasKey(n *yaml.Node, key string) bool {
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if n.Content[i].Value == key {
+			return true
+		}
+	}
+	return false
 }
 
 var (
@@ -94,6 +118,20 @@ var (
 	// to match workflow trigger names (e.g. `domain.create`).
 	allowedTargetTypes = map[string]bool{
 		"domain": true, "ip": true, "cidr": true, "git_org": true,
+	}
+	// allowedInputs mirrors the platform's input kinds (core-api DataKind,
+	// docs/workflows.md). The value is what the connector gets in `target`.
+	allowedInputs = map[string]string{
+		"target":     "the domain or IP a target was created with",
+		"host":       "a hostname or IP address",
+		"service":    "host:port of an open port",
+		"web":        "the base URL of a web service, port kept (https://host:8443)",
+		"url":        "a discovered URL with its path",
+		"repository": "a repository of a git_org target (repository/ref inputs)",
+	}
+	// allowedProduces mirrors the kinds a tool's findings can add.
+	allowedProduces = map[string]bool{
+		"host": true, "service": true, "web": true, "url": true, "vulnerability": true,
 	}
 	nameRe   = regexp.MustCompile(`^[a-z0-9-]+$`)
 	skipDirs = map[string]bool{
@@ -148,6 +186,9 @@ func validate(m *Manifest, path string) error {
 		if err := validateTargetTypes(c.TargetTypes); err != nil {
 			return fmt.Errorf("capability %q: %w", c.Name, err)
 		}
+		if err := validateKinds(c); err != nil {
+			return fmt.Errorf("capability %q: %w", c.Name, err)
+		}
 	}
 	if m.Author == "" {
 		return fmt.Errorf("author required")
@@ -192,6 +233,57 @@ func validateTargetTypes(types []string) error {
 			return fmt.Errorf("duplicate targetType %q", tt)
 		}
 		seen[tt] = true
+	}
+	return nil
+}
+
+// validateKinds checks what a capability takes and what it finds. Inputs are
+// a preference list, so order matters and duplicates are mistakes. A
+// repository is the only thing a git_org target has, and the only thing a
+// host scanner never sees.
+func validateKinds(c Capability) error {
+	if len(c.Inputs) == 0 {
+		return fmt.Errorf("at least one input required (one of %s)", sortedKeys(allowedInputs))
+	}
+	if err := validateList("input", c.Inputs, func(k string) bool { _, ok := allowedInputs[k]; return ok }, sortedKeys(allowedInputs)); err != nil {
+		return err
+	}
+	if c.Produces == nil {
+		return fmt.Errorf("produces required (an empty list when the findings feed no other step)")
+	}
+	if err := validateList("produces", c.Produces, func(k string) bool { return allowedProduces[k] }, sortedKeys(allowedProduces)); err != nil {
+		return err
+	}
+	scansRepos := false
+	scansHosts := false
+	for _, tt := range c.TargetTypes {
+		if tt == "git_org" {
+			scansRepos = true
+		} else {
+			scansHosts = true
+		}
+	}
+	for _, in := range c.Inputs {
+		if in == "repository" && !scansRepos {
+			return fmt.Errorf("input \"repository\" needs targetType git_org")
+		}
+		if in != "repository" && !scansHosts {
+			return fmt.Errorf("input %q needs a domain, ip or cidr targetType; git_org targets only have repositories", in)
+		}
+	}
+	return nil
+}
+
+func validateList(field string, values []string, allowed func(string) bool, choices string) error {
+	seen := make(map[string]bool, len(values))
+	for _, v := range values {
+		if !allowed(v) {
+			return fmt.Errorf("invalid %s %q (must be one of %s)", field, v, choices)
+		}
+		if seen[v] {
+			return fmt.Errorf("duplicate %s %q", field, v)
+		}
+		seen[v] = true
 	}
 	return nil
 }

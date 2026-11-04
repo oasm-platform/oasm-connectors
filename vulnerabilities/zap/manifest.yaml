@@ -12,6 +12,8 @@ description: 'Runs OWASP ZAP (Zed Attack Proxy) against a target web application
 capabilities:
   - name: vulnerabilities
     targetTypes: [domain, ip, cidr]
+    inputs: [web, host]
+    produces: [vulnerability]
     inputsSchema:
       type: object
       required: [target]

@@ -12,6 +12,8 @@ description: 'Scans WordPress sites using WPScan to enumerate vulnerable plugins
 capabilities:
   - name: vulnerabilities
     targetTypes: [domain, ip, cidr]
+    inputs: [web, host]
+    produces: [vulnerability]
     inputsSchema:
       type: object
       required: [target]

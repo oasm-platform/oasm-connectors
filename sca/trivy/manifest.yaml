@@ -13,6 +13,8 @@ description: 'Scans the repositories of a Git organization with Aqua Security Tr
 capabilities:
   - name: vulnerabilities
     targetTypes: [git_org]
+    inputs: [repository]
+    produces: [vulnerability]
     # Filled by the platform for each repository (sdk/gitrepo contract).
     inputsSchema:
       type: object

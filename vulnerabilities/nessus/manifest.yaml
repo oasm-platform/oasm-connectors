@@ -12,6 +12,8 @@ description: 'Connects to a Tenable Nessus instance, creates and runs a scan aga
 capabilities:
   - name: vulnerabilities
     targetTypes: [domain, ip, cidr]
+    inputs: [host]
+    produces: [vulnerability]
     inputsSchema:
       type: object
       required: [target]
