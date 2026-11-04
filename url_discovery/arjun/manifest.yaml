@@ -12,6 +12,8 @@ description: 'Discovers hidden HTTP parameters for a URL using Arjun, probing a 
 capabilities:
   - name: url_discovery
     targetTypes: [domain, ip, cidr]
+    inputs: [url, web]
+    produces: [url]
     inputsSchema:
       type: object
       required: [target]

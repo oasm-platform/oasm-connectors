@@ -12,6 +12,8 @@ description: 'Scans a single host with Nmap (Nmap Security Scanner) and streams 
 capabilities:
   - name: ports_scanner
     targetTypes: [domain, ip, cidr]
+    inputs: [host]
+    produces: [service]
     inputsSchema:
       type: object
       required: [target]
@@ -26,6 +28,8 @@ capabilities:
       additionalProperties: false
   - name: vulnerabilities
     targetTypes: [domain, ip, cidr]
+    inputs: [host]
+    produces: [vulnerability]
     inputsSchema:
       type: object
       required: [target]

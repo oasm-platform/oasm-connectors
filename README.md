@@ -123,7 +123,7 @@ Written by hand, validated at aggregation time. Unknown fields are rejected, so 
 | `pricingTier` | yes | Non-empty list of `free` / `paid` (case-normalized). |
 | `shortDescription` | yes | One line, shown in list views. |
 | `description` | yes | Full paragraph for the detail view. |
-| `capabilities` | yes | Ordered list of modes; the first is the default when a workflow step names no category. Each entry is a mapping: `name` (one of `subdomains`, `http_probe`, `ports_scanner`, `vulnerabilities`, `screenshot`, `url_discovery`, or — for repository scanners — `secrets`, `sca`, `sast`; no duplicates), `targetTypes` (required: one or more of `domain`, `ip`, `cidr`, `git_org`, no duplicates — the platform never dispatches an asset of another target type to this mode, whichever workflow runs it), `inputsSchema` (optional JSON Schema for this mode's per-run inputs, validated upstream by Core/Worker). Use YAML anchors to share a schema between modes. The first capability also drives directory grouping by category. |
+| `capabilities` | yes | Ordered list of modes; the first is the default when a workflow step names no category. Each entry is a mapping: `name` (one of `subdomains`, `http_probe`, `ports_scanner`, `vulnerabilities`, `screenshot`, `url_discovery`, or — for repository scanners — `secrets`, `sca`, `sast`; no duplicates), `targetTypes` (required: one or more of `domain`, `ip`, `cidr`, `git_org`, no duplicates — the platform never dispatches an asset of another target type to this mode, whichever workflow runs it), `inputs` (required: the kinds of data this mode takes, best first — see [Inputs and outputs](#inputs-and-outputs)), `produces` (required: the kinds its findings add, `[]` when they feed no other step), `inputsSchema` (optional JSON Schema for this mode's per-run inputs, validated upstream by Core/Worker). Use YAML anchors to share a schema between modes. The first capability also drives directory grouping by category. |
 | `agentTool` | no | Set `true` to expose the connector as a callable tool to the OASM AI agent. |
 | `homepage` | no | Non-empty string when set. |
 | `repositoryUrl` | no | Non-empty string when set. |
@@ -214,7 +214,7 @@ Every line carries `trace_id` plus `execution_id`, `job_id`, `tool` and `image` 
 
 1. **Create the module directory** as `<category>/<slug>`. The category is free-form and should match the connector's `capabilities` entry; it becomes the grouping in the catalog.
 2. **Create the Go module.** Its own `go.mod`, module path `<repo module path>/<category>/<slug>`, requiring the SDK at `v0.0.0` with `replace <sdk module path> => ../../sdk`. Run `go mod tidy` with `GOWORK=off`.
-3. **Write `manifest.yaml`** against the contract above, plus an optional `logo.png`. Declare each capability's `targetTypes` deliberately: it is what keeps a host scanner away from repositories (and a code scanner away from hosts).
+3. **Write `manifest.yaml`** against the contract above, plus an optional `logo.png`. Declare each capability's `targetTypes` deliberately: it is what keeps a host scanner away from repositories (and a code scanner away from hosts). Declare `inputs` as what the adapter really accepts in `target`: a connector that lists `web` must handle a URL with a port.
 4. **Write a multi-stage `Dockerfile`.** Build context is the repo root, so copy `sdk/` and the connector directory explicitly. Drop both `go.mod`/`go.sum` files first and run `go mod download` before copying sources so dependency layers cache. Build statically (`CGO_ENABLED=0`), land a single binary on a minimal base image, create an unprivileged user, and `USER` it. The image must not expose ports or require a shell.
 5. **Implement the adapter.** `Validate` should reject malformed inputs early and cheaply. `Execute` should stream findings as they are produced rather than buffering the whole run, return on `ctx.Done()`, and never close `out`. Keep tool-specific code in this package and nowhere else.
 6. **Wire `main.go`** — construct the adapter, wrap it, run it, and treat a cancelled context as a clean exit rather than a failure.
@@ -237,6 +237,8 @@ A connector may declare several capabilities, each with its own `targetTypes` an
 capabilities:
   - name: ports_scanner
     targetTypes: [domain, ip, cidr]
+    inputs: [host]
+    produces: [service]
     inputsSchema: &target
       type: object
       required: [target]
@@ -244,12 +246,49 @@ capabilities:
         target: { type: string, title: Target host }
   - name: vulnerabilities
     targetTypes: [domain, ip]
+    inputs: [host]
+    produces: [vulnerability]
     inputsSchema: *target
 ```
 
 A workflow step picks one with `category:`. The adapter reads the category it was asked to run with `connector.Category(ctx)`: the platform category (`secrets`, `sca` and `sast` all arrive as `vulnerabilities`, so a connector may declare at most one capability per platform category), or empty for the connector's first capability.
 
 Workers older than the release that introduced `ExecuteJob.category` never send it, so the adapter falls back to its first capability while the platform still syncs the result as the requested category. Do not ship a connector with more than one capability until every worker runs a release that sends the category.
+
+### Inputs and outputs
+
+A workflow chains tools: a port scanner finds services, an HTTP probe finds web
+services among them, a web scanner scans those. `inputs` and `produces` tell the
+platform how a connector fits in that chain.
+
+`inputs` is a preference list. For every asset of a run, the platform takes the
+first kind that has something for it and runs the connector once per item. With
+`inputs: [web, host]`, a host with web services on 443 and 8443 gets two runs,
+on `https://host` and `https://host:8443`; a host nothing has probed yet gets one
+run on the bare host. A workflow step may narrow or reorder the list with
+`input:`, but never add to it.
+
+| Kind | As input, `target` holds | As output |
+| --- | --- | --- |
+| `target` | the domain or IP a target was created with | — |
+| `host` | a hostname or IP (`app.example.com`) | new hosts (subdomains) |
+| `service` | `host:port` of an open port | open ports |
+| `web` | the base URL of a web service, port kept (`https://app.example.com:8443`) | services that answer HTTP |
+| `url` | a discovered URL with its path | discovered URLs |
+| `repository` | — (see [Repository scanners](#repository-scanners)) | — |
+| `vulnerability` | — | findings |
+
+The connector still receives one `target` input, as before; only its content
+depends on the kind. Choose `inputs` by what the adapter does with `target`:
+
+- strips it to a host (gau, katana): `[host]`, so a host is not crawled once per port;
+- scans one web application (nikto, zap, dirsearch): `[web, host]`;
+- probes the host itself and also takes a URL (nuclei): `[host, web]`;
+- needs pages that exist (arjun): `[url, web]`.
+
+A repository scanner takes `[repository]`, and only it may: the validator
+rejects `repository` without `git_org`, and any other input on a `git_org`-only
+capability.
 
 ### Repository scanners
 

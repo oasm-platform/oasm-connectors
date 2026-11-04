@@ -12,6 +12,8 @@ description: 'Scans a web server for 7,000+ known issues: dangerous files and CG
 capabilities:
   - name: vulnerabilities
     targetTypes: [domain, ip, cidr]
+    inputs: [web, host]
+    produces: [vulnerability]
     inputsSchema:
       type: object
       required: [target]

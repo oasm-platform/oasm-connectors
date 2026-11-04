@@ -36,6 +36,8 @@ description: "Runs ProjectDiscovery Nuclei template-based scans against a target
 capabilities:
   - name: vulnerabilities
     targetTypes: [domain, ip, cidr]
+    inputs: [host]
+    produces: [vulnerability]
 `
 
 func TestDiscoverCategoryLayout(t *testing.T) {
@@ -65,7 +67,7 @@ func TestSkipNonCategoryDirs(t *testing.T) {
 
 func TestValidateRejectsEmptyName(t *testing.T) {
 	m := &Manifest{Name: "   ", Slug: "nuclei", Version: "1.0.0", Image: "x",
-		ShortDescription: "short", Description: "long", Capabilities: []Capability{{Name: "c", TargetTypes: []string{"domain"}}}}
+		ShortDescription: "short", Description: "long", Capabilities: []Capability{{Name: "c", TargetTypes: []string{"domain"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for empty/whitespace-only name")
@@ -77,7 +79,7 @@ func TestValidateRejectsEmptyName(t *testing.T) {
 
 func TestValidateRejectsMissingSlug(t *testing.T) {
 	m := &Manifest{Name: "Nuclei Scanner", Version: "3.3.0", Image: "x",
-		ShortDescription: "short", Description: "long", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
+		ShortDescription: "short", Description: "long", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for missing slug")
@@ -90,7 +92,7 @@ func TestValidateRejectsMissingSlug(t *testing.T) {
 func TestValidateRejectsBadSlug(t *testing.T) {
 	for _, bad := range []string{"Nuclei", "bad_slug", "nuclei scanner"} {
 		m := &Manifest{Name: "Nuclei Scanner", Slug: bad, Version: "3.3.0", Image: "x",
-			ShortDescription: "short", Description: "long", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
+			ShortDescription: "short", Description: "long", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}}}
 		err := validate(m, "test")
 		if err == nil {
 			t.Fatalf("expected error for bad slug %q", bad)
@@ -103,7 +105,7 @@ func TestValidateRejectsBadSlug(t *testing.T) {
 
 func TestValidateAllowsSpacedUppercaseName(t *testing.T) {
 	m := &Manifest{Name: "Nuclei Scanner v2", Slug: "nuclei", Version: "3.3.0", Image: "x",
-		ShortDescription: "short", Description: "long", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}},
+		ShortDescription: "short", Description: "long", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}},
 		Author: "oasm", PricingTier: []string{"free"}}
 	if err := validate(m, "test"); err != nil {
 		t.Fatalf("spaced uppercase display name should be valid, got %v", err)
@@ -112,7 +114,7 @@ func TestValidateAllowsSpacedUppercaseName(t *testing.T) {
 
 func TestValidateRejectsMissingDescription(t *testing.T) {
 	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x",
-		ShortDescription: "short", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
+		ShortDescription: "short", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for missing description")
@@ -124,7 +126,7 @@ func TestValidateRejectsMissingDescription(t *testing.T) {
 
 func TestValidateRejectsMissingShortDescription(t *testing.T) {
 	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x",
-		Description: "long description", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
+		Description: "long description", Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for missing shortDescription")
@@ -137,7 +139,7 @@ func TestValidateRejectsMissingShortDescription(t *testing.T) {
 func TestValidateRejectsMissingAuthor(t *testing.T) {
 	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", PricingTier: []string{"free"},
 		ShortDescription: "short", Description: "long description",
-		Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
+		Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}}}
 	err := validate(m, "test")
 	if err == nil {
 		t.Fatal("expected error for missing author")
@@ -152,7 +154,7 @@ func TestValidateRejectsMissingPricingTier(t *testing.T) {
 		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 			PricingTier:      tiers,
 			ShortDescription: "short", Description: "long description",
-			Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
+			Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}}}
 		err := validate(m, "test")
 		if err == nil {
 			t.Fatalf("expected error for missing/empty pricingTier (%v)", tiers)
@@ -168,7 +170,7 @@ func TestValidateRejectsInvalidPricingTier(t *testing.T) {
 		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 			PricingTier:      []string{bad},
 			ShortDescription: "short", Description: "long description",
-			Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
+			Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}}}
 		err := validate(m, "test")
 		if err == nil {
 			t.Fatalf("expected error for invalid pricingTier %q", bad)
@@ -184,7 +186,7 @@ func TestValidateAcceptsPricingTierCaseInsensitiveTrim(t *testing.T) {
 		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 			PricingTier:      []string{ok},
 			ShortDescription: "short", Description: "long description",
-			Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
+			Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}}}
 		if err := validate(m, "test"); err != nil {
 			t.Fatalf("pricingTier %q should be valid, got %v", ok, err)
 		}
@@ -195,7 +197,7 @@ func TestValidateAcceptsBothTiers(t *testing.T) {
 	m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 		PricingTier:      []string{"free", "paid"},
 		ShortDescription: "short", Description: "long description",
-		Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
+		Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}}}
 	if err := validate(m, "test"); err != nil {
 		t.Fatalf("pricingTier [free paid] should be valid, got %v", err)
 	}
@@ -210,7 +212,7 @@ func validManifest() *Manifest {
 	return &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 		PricingTier:      []string{"free"},
 		ShortDescription: "short", Description: "long description",
-		Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain", "ip", "cidr"}}}}
+		Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain", "ip", "cidr"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}}}
 }
 
 func TestValidateAcceptsEveryTargetType(t *testing.T) {
@@ -264,7 +266,7 @@ func TestValidateRejectsBlankOptionalURLs(t *testing.T) {
 		m := &Manifest{Name: "nuclei", Slug: "nuclei", Version: "3.3.0", Image: "x", Author: "oasm",
 			PricingTier:      []string{"free"},
 			ShortDescription: "short", Description: "long description",
-			Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}}}}
+			Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}}}
 		switch field {
 		case "homepage":
 			m.Homepage = "   "
@@ -650,15 +652,21 @@ func loadYAML(t *testing.T, src string) (*Manifest, error) {
 const validCapabilityYAML = `capabilities:
   - name: vulnerabilities
     targetTypes: [domain, ip, cidr]
+    inputs: [host]
+    produces: [vulnerability]
 `
 
 func TestMultipleCapabilitiesWithSharedAnchor(t *testing.T) {
 	m, err := loadYAML(t, strings.Replace(validYAML, validCapabilityYAML, `capabilities:
   - name: ports_scanner
     targetTypes: [domain, ip, cidr]
+    inputs: [host]
+    produces: [service]
     inputsSchema: &target {type: object}
   - name: vulnerabilities
     targetTypes: [domain]
+    inputs: [host]
+    produces: [vulnerability]
     inputsSchema: *target
 `, 1))
 	if err != nil {
@@ -728,10 +736,66 @@ func TestValidateRejectsCapabilitiesSharingAPlatformCategory(t *testing.T) {
 	_, err := loadYAML(t, strings.Replace(validYAML, validCapabilityYAML, `capabilities:
   - name: secrets
     targetTypes: [git_org]
+    inputs: [repository]
+    produces: [vulnerability]
   - name: sca
     targetTypes: [git_org]
+    inputs: [repository]
+    produces: [vulnerability]
 `, 1))
 	if err == nil || !strings.Contains(err.Error(), `capabilities "secrets" and "sca" both run as category "vulnerabilities"`) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestCapabilityKinds(t *testing.T) {
+	cases := []struct {
+		name    string
+		mutate  func(c *Capability)
+		wantErr string
+	}{
+		{"web then host is fine", func(c *Capability) { c.Inputs = []string{"web", "host"} }, ""},
+		{"empty produces is fine", func(c *Capability) { c.Produces = []string{} }, ""},
+		{"inputs required", func(c *Capability) { c.Inputs = nil }, "at least one input required"},
+		{"produces required", func(c *Capability) { c.Produces = nil }, "produces required"},
+		{"unknown input", func(c *Capability) { c.Inputs = []string{"packet"} }, `invalid input "packet"`},
+		{"vulnerability is no input", func(c *Capability) { c.Inputs = []string{"vulnerability"} }, `invalid input "vulnerability"`},
+		{"duplicate input", func(c *Capability) { c.Inputs = []string{"web", "web"} }, `duplicate input "web"`},
+		{"target is never produced", func(c *Capability) { c.Produces = []string{"target"} }, `invalid produces "target"`},
+		{"repository needs git_org", func(c *Capability) { c.Inputs = []string{"repository"} }, "needs targetType git_org"},
+		{"git_org has only repositories", func(c *Capability) { c.TargetTypes = []string{"git_org"} }, "git_org targets only have repositories"},
+		{"repository scanner", func(c *Capability) {
+			c.TargetTypes = []string{"git_org"}
+			c.Inputs = []string{"repository"}
+		}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &Manifest{Name: "n", Slug: "n", Version: "1", Image: "i", Author: "a", PricingTier: []string{"free"},
+				ShortDescription: "short", Description: "long",
+				Capabilities: []Capability{{Name: "vulnerabilities", TargetTypes: []string{"domain"}, Inputs: []string{"host"}, Produces: []string{"vulnerability"}}}}
+			tc.mutate(&m.Capabilities[0])
+			err := validate(m, "x")
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("want valid, got %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("want error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestProducesKeyMustBePresent(t *testing.T) {
+	// An explicit empty list is an answer; a missing key is not.
+	if _, err := loadYAML(t, strings.Replace(validYAML, "    produces: [vulnerability]\n", "    produces: []\n", 1)); err != nil {
+		t.Fatalf("produces: [] should be valid, got %v", err)
+	}
+	_, err := loadYAML(t, strings.Replace(validYAML, "    produces: [vulnerability]\n", "", 1))
+	if err == nil || !strings.Contains(err.Error(), "produces required") {
+		t.Fatalf("want produces required, got %v", err)
 	}
 }

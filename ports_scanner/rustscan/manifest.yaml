@@ -12,6 +12,8 @@ description: 'Scans a single host with RustScan in greppable mode and streams ev
 capabilities:
   - name: ports_scanner
     targetTypes: [domain, ip, cidr]
+    inputs: [host]
+    produces: [service]
     inputsSchema:
       type: object
       required: [target]

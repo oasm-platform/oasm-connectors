@@ -12,6 +12,8 @@ description: 'Fuzzes a target path base with ffuf wordlists to discover director
 capabilities:
   - name: url_discovery
     targetTypes: [domain, ip, cidr]
+    inputs: [web, host]
+    produces: [url]
     inputsSchema:
       type: object
       required: [target]

@@ -12,6 +12,8 @@ description: 'Crawls a target website with Katana (ProjectDiscovery) up to a con
 capabilities:
   - name: url_discovery
     targetTypes: [domain]
+    inputs: [host]
+    produces: [url]
     inputsSchema:
       type: object
       required: [target]

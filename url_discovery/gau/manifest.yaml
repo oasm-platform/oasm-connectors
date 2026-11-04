@@ -12,6 +12,8 @@ description: 'Discovers historical/archived URLs for a domain using Gau (GetAllU
 capabilities:
   - name: url_discovery
     targetTypes: [domain]
+    inputs: [host]
+    produces: [url]
     inputsSchema:
       type: object
       required: [target]

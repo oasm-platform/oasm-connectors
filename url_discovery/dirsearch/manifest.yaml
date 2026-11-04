@@ -12,6 +12,8 @@ description: 'Discovers hidden files, directories and endpoints on a web target 
 capabilities:
   - name: url_discovery
     targetTypes: [domain, ip, cidr]
+    inputs: [web, host]
+    produces: [url]
     inputsSchema:
       type: object
       required: [target]
