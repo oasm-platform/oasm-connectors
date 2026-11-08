@@ -15,7 +15,7 @@ import (
 )
 
 // TestKatanaE2E_RealCrawl is the real-surface artifact: it crawls a live target
-// through KatanaAdapter with a pinned katana v1.7.0 binary, and writes every
+// through KatanaAdapter with a pinned katana v1.8.0 binary, and writes every
 // finding to e2e-findings.jsonl.
 //
 // It is build-tagged (`//go:build e2e`) so `go test ./...` never runs it. It
@@ -25,11 +25,11 @@ import (
 //
 // Run:
 //
-//	KATANA_BIN=/path/to/katana-v1.7.0 go test -tags e2e -run TestKatanaE2E_RealCrawl -v -count=1
+//	KATANA_BIN=/path/to/katana-v1.8.0 go test -tags e2e -run TestKatanaE2E_RealCrawl -v -count=1
 func TestKatanaE2E_RealCrawl(t *testing.T) {
 	bin := os.Getenv("KATANA_BIN")
 	if bin == "" {
-		t.Fatalf("KATANA_BIN must be set to a pinned katana v1.7.0 binary")
+		t.Fatalf("KATANA_BIN must be set to a pinned katana v1.8.0 binary")
 	}
 	target := os.Getenv("E2E_TARGET")
 	if target == "" {
