@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-04T04:37:52.2457627Z",
+  "generatedAt": "2026-11-08T19:01:37.6423364Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -1474,8 +1474,8 @@
     {
       "name": "Trivy - Dependency \u0026 IaC Scanner",
       "slug": "trivy",
-      "version": "0.75.0",
-      "image": "ghcr.io/oasm-platform/connector-trivy:0.75.0",
+      "version": "0.76.2",
+      "image": "ghcr.io/oasm-platform/connector-trivy:0.76.2",
       "author": "oasm",
       "pricingTier": [
         "free"

@@ -1,11 +1,11 @@
 # Trivy Connector
 
-Runs [Trivy](https://github.com/aquasecurity/trivy) 0.75.0 (`trivy fs`) via the OASM Worker gRPC bridge. Scans one repository of a Git organization target (its capability declares `targetTypes: [git_org]`) for vulnerable dependencies and IaC misconfigurations, and optionally secrets, and reports each as a finding with its file, line and commit.
+Runs [Trivy](https://github.com/aquasecurity/trivy) 0.76.2 (`trivy fs`) via the OASM Worker gRPC bridge. Scans one repository of a Git organization target (its capability declares `targetTypes: [git_org]`) for vulnerable dependencies and IaC misconfigurations, and optionally secrets, and reports each as a finding with its file, line and commit.
 
 ## Requirements
 
 - Go 1.26+, Docker, Worker reachable at `WORKER_GRPC_ADDR`
-- `trivy` and `git` bundled in the image via multi-stage `FROM aquasec/trivy:0.75.0` (pinned by digest)
+- `trivy` and `git` bundled in the image via multi-stage `FROM aquasec/trivy:0.76.2` (pinned by digest)
 - Outbound access to `mirror.gcr.io` for the vulnerability DB (and the Java DB, only for repositories containing `.jar`/`.war`/`.ear`/`.par` files). Misconfiguration checks use the bundle embedded in the trivy binary.
 
 ## Database cache

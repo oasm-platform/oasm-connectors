@@ -1,8 +1,8 @@
 # connector image (SDK+tool) — built from ./Dockerfile, not upstream image
 name: Trivy - Dependency & IaC Scanner
 slug: trivy
-version: 0.75.0
-image: ghcr.io/oasm-platform/connector-trivy:0.75.0
+version: 0.76.2
+image: ghcr.io/oasm-platform/connector-trivy:0.76.2
 author: 'oasm'
 pricingTier: [free]
 homepage: 'https://trivy.dev'
