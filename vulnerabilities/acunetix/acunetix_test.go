@@ -613,3 +613,16 @@ func TestPaginateAllEscapesCursor(t *testing.T) {
 		t.Errorf("decoded cursor = %q, want %q", gotCursor, "a b&c")
 	}
 }
+
+// The client transport must honor the standard proxy environment (worker
+// egress proxy) instead of bypassing it with a bespoke transport.
+func TestAcunetixClientTransportUsesProxyFromEnvironment(t *testing.T) {
+	c := newAcunetixClient(&acunetixConfig{URL: "https://av.example", APIKey: "k"})
+	tr, ok := c.hc.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport type = %T, want *http.Transport", c.hc.Transport)
+	}
+	if tr.Proxy == nil {
+		t.Fatal("acunetix transport Proxy must be set (ProxyFromEnvironment)")
+	}
+}
