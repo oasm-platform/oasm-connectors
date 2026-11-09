@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-09T01:47:17.8602414Z",
+  "generatedAt": "2026-11-09T01:51:11.0986782Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -489,8 +489,8 @@
     {
       "name": "Katana - Web Crawler",
       "slug": "katana",
-      "version": "1.7.0",
-      "image": "ghcr.io/oasm-platform/connector-katana:1.7.0",
+      "version": "1.8.0",
+      "image": "ghcr.io/oasm-platform/connector-katana:1.8.0",
       "author": "oasm",
       "pricingTier": [
         "free"

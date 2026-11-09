@@ -1,11 +1,11 @@
 # katana Connector
 
-Runs [projectdiscovery/katana](https://github.com/projectdiscovery/katana) 1.7.0 via the OASM Worker gRPC bridge. Crawls a target website and discovers HTTP/HTTPS URLs (links, JS-derived endpoints).
+Runs [projectdiscovery/katana](https://github.com/projectdiscovery/katana) 1.8.0 via the OASM Worker gRPC bridge. Crawls a target website and discovers HTTP/HTTPS URLs (links, JS-derived endpoints).
 
 ## Requirements
 
 - Go 1.26+, Docker, Worker reachable at `WORKER_GRPC_ADDR`
-- Tool binary `katana` compiled from source and pinned to `v1.7.0` in the image builder stage
+- Tool binary `katana` compiled from source and pinned to `v1.8.0` in the image builder stage
 - **Network egress required at scan time**: katana fetches the target site directly.
 - **Writable `$HOME`**: katana writes `$HOME/.config/katana/{field-config,form-config}.yaml` on every run. The image sets `ENV HOME=/home/connector` (owned by uid 10001) for this reason; manual runs as a read-only user can log config-write errors.
 
@@ -65,7 +65,7 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 ```yaml
 # Connector profile submitted to the Worker (ExecutionCommand spec)
 slug: katana
-image: ghcr.io/oasm-platform/connector-katana:1.7.0
+image: ghcr.io/oasm-platform/connector-katana:1.8.0
 inputs:
   target: example.com
 config:
@@ -78,9 +78,9 @@ config:
 ### Docker
 
 ```bash
-docker build -t ghcr.io/oasm-platform/connector-katana:1.7.0 -f url_discovery/katana/Dockerfile .
+docker build -t ghcr.io/oasm-platform/connector-katana:1.8.0 -f url_discovery/katana/Dockerfile .
 docker run --rm -e WORKER_GRPC_ADDR=worker:50051 -e EXECUTION_ID=job-1 \
-  ghcr.io/oasm-platform/connector-katana:1.7.0
+  ghcr.io/oasm-platform/connector-katana:1.8.0
 ```
 
 ### Manual
@@ -94,8 +94,8 @@ cd url_discovery/katana && go run .
 - `adapter.go` — `KatanaAdapter` streams one `Finding` per unique discovered `http(s)` URL (`Name`=`MatchedAt`=URL, `Severity=info`, `Host`=target); wraps katana in a hard 10m timeout; caps output at `maxUrls`; treats the unreliable katana exit codes per the policy below
 - `main.go` — wires `KatanaAdapter` + SDK (`sdk/connector`, `sdk/runtime`)
 - `katana.go` — `OASM_CONFIG` parsing + `buildKatanaArgs` argv assembly (`-duc` always first)
-- `manifest.yaml` — source of truth for `manifest.json` (capability `url_discovery`; image `ghcr.io/oasm-platform/connector-katana:1.7.0` is SDK+tool bundle, not upstream)
-- `Dockerfile` — `golang:1.26-alpine` builder (connector + `katana@v1.7.0` from source, `CGO_ENABLED=0`) → `alpine:3.20` non-root final stage with `HOME=/home/connector`. katana is built through a throwaway module rather than `go install katana@v1.7.0`, so a `replace` can pin `jackc/pgx/v5` to 5.11.0 and clear CVE-2026-33815/33816 — `go install pkg@version` ignores the main module, and v1.7.0 is the newest katana release, so no upstream tag carries the fix.
+- `manifest.yaml` — source of truth for `manifest.json` (capability `url_discovery`; image `ghcr.io/oasm-platform/connector-katana:1.8.0` is SDK+tool bundle, not upstream)
+- `Dockerfile` — `golang:1.26-alpine` builder (connector + `katana@v1.8.0` from source, `CGO_ENABLED=0`) → `alpine:3.20` non-root final stage with `HOME=/home/connector`. katana is built through a throwaway module rather than `go install katana@v1.8.0`, so a `replace` can pin `jackc/pgx/v5` to 5.11.0 and clear CVE-2026-33815/33816 — `go install pkg@version` ignores the main module, and v1.8.0 still pulls pgx v5.7.2 via `projectdiscovery/dsl`, so no upstream tag carries the fix yet.
 - `testdata/fake-katana/` — test stub driven by `FAKE_MODE` (`default`, `empty`, `fail`, `partial-fail`, `runner-fail`, `hang`, `many`)
 
 ### Exit-code policy
@@ -114,8 +114,8 @@ A nonzero exit **with** output is success (partial results are useful), as is a 
 cd url_discovery/katana && go test ./... -v -count=1
 cd url_discovery/katana && go vet ./...
 
-# Real crawl against a pinned katana v1.7.0 (build-tagged, writes e2e-findings.jsonl):
-cd url_discovery/katana && KATANA_BIN=/path/to/katana-v1.7.0 go test -tags e2e -run TestKatanaE2E_RealCrawl -v -count=1
+# Real crawl against a pinned katana v1.8.0 (build-tagged, writes e2e-findings.jsonl):
+cd url_discovery/katana && KATANA_BIN=/path/to/katana-v1.8.0 go test -tags e2e -run TestKatanaE2E_RealCrawl -v -count=1
 ```
 
 The E2E test fatals when `KATANA_BIN` is unset: a stale PATH katana (e.g. v1.2.1) lacks `-duc`/`-mdp`/`-fsu` and would exit 2 rather than exercise the adapter.
