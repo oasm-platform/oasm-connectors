@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	httphelper "github.com/oasm-platform/oasm-connectors/sdk/http"
 )
 
 // dirsearchConfig mirrors manifest.yaml configSchema. Keys are camelCase to
@@ -107,8 +109,8 @@ func buildDirsearchArgs(baseURL, wordlistPath, outFile string, cfg *dirsearchCon
 	for _, h := range cfg.Headers {
 		args = append(args, "-H", h)
 	}
-	if cfg.Proxy != "" {
-		args = append(args, "-p", cfg.Proxy)
+	if proxy := httphelper.ProxyOrEnv(cfg.Proxy); proxy != "" {
+		args = append(args, "-p", proxy)
 	}
 	if cfg.Timeout > 0 {
 		args = append(args, "--timeout", strconv.Itoa(cfg.Timeout))

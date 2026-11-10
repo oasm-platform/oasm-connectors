@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	httphelper "github.com/oasm-platform/oasm-connectors/sdk/http"
 )
 
 // ffufConfig mirrors manifest.yaml configSchema. Keys are camelCase to match the
@@ -146,8 +148,8 @@ func buildFfufArgs(baseURL, wordlistPath string, cfg *ffufConfig) []string {
 	for _, h := range cfg.Headers {
 		args = append(args, "-H", h)
 	}
-	if cfg.Proxy != "" {
-		args = append(args, "-x", cfg.Proxy)
+	if proxy := httphelper.ProxyOrEnv(cfg.Proxy); proxy != "" {
+		args = append(args, "-x", proxy)
 	}
 
 	return args

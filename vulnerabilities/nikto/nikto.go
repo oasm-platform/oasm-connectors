@@ -1,9 +1,25 @@
 package main
 
 import (
+	"net/url"
 	"strconv"
 	"strings"
+
+	httphelper "github.com/oasm-platform/oasm-connectors/sdk/http"
 )
+
+// niktoProxyArgs passes the proxy as -useproxy scheme://host:port. nikto takes
+// proxy credentials from PROXYUSER/PROXYPASS, so URL userinfo moves there.
+func niktoProxyArgs(proxy string) []string {
+	u, err := url.Parse(proxy)
+	if err != nil || u.User == nil {
+		return []string{"-useproxy", proxy}
+	}
+	pass, _ := u.User.Password()
+	user := u.User.Username()
+	u.User = nil
+	return []string{"-useproxy", u.String(), "-Option", "PROXYUSER=" + user, "-Option", "PROXYPASS=" + pass}
+}
 
 // niktoConfig mirrors manifest.yaml configSchema. Keys are camelCase to match
 // the OASM_CONFIG JSON shape the Worker ships per job.
@@ -145,8 +161,8 @@ func buildNiktoArgs(target string, cfg *niktoConfig, configPath string) []string
 	if cfg.Plugins != "" {
 		args = append(args, "-Plugins", cfg.Plugins)
 	}
-	if cfg.Proxy != "" {
-		args = append(args, "-useproxy", cfg.Proxy)
+	if proxy := httphelper.ProxyOrEnv(cfg.Proxy); proxy != "" {
+		args = append(args, niktoProxyArgs(proxy)...)
 	}
 	if cfg.Username != "" {
 		args = append(args, "-id", cfg.Username+":"+cfg.Password)

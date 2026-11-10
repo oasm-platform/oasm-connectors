@@ -7,6 +7,7 @@ package httphelper
 import (
 	"crypto/tls"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -46,4 +47,19 @@ func NewClient(opts ...Option) *http.Client {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: o.InsecureSkipVerify},
 		},
 	}
+}
+
+// ProxyOrEnv returns configured when set, else the proxy the worker injected
+// (HTTPS_PROXY, then HTTP_PROXY, either case), else "". For tools that take a
+// proxy flag instead of reading the environment.
+func ProxyOrEnv(configured string) string {
+	if configured != "" {
+		return configured
+	}
+	for _, k := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"} {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return ""
 }
