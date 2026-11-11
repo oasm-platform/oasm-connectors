@@ -46,6 +46,10 @@ type Manifest struct {
 	AgentTool        bool           `yaml:"agentTool,omitempty" json:"agentTool,omitempty"`
 	ConfigSchema     map[string]any `yaml:"configSchema,omitempty"    json:"configSchema,omitempty"`
 	ResourceDefaults map[string]any `yaml:"resourceDefaults,omitempty" json:"resourceDefaults,omitempty"`
+	// Egress is how the container reaches targets: "proxy" (default, omitted)
+	// through the worker egress proxy, or "direct" for raw TCP/UDP probes a
+	// proxy cannot carry (port scanners).
+	Egress string `yaml:"egress,omitempty" json:"egress,omitempty"`
 	// Logo is the base64-encoded logo.png sitting next to manifest.yaml.
 	// yaml:"-" keeps "logo:" in manifest.yaml an unknown-field error; the
 	// image itself never lives in YAML.
@@ -216,6 +220,13 @@ func validate(m *Manifest, path string) error {
 		if field.val != "" && strings.TrimSpace(field.val) == "" {
 			return fmt.Errorf("%s must be non-empty if set", field.key)
 		}
+	}
+	switch m.Egress {
+	case "", "direct":
+	case "proxy":
+		m.Egress = "" // the default; omitted from manifest.json
+	default:
+		return fmt.Errorf("invalid egress %q (must be proxy|direct)", m.Egress)
 	}
 	return nil
 }

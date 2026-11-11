@@ -130,6 +130,7 @@ Written by hand, validated at aggregation time. Unknown fields are rejected, so 
 | `supportUrl` | no | Non-empty string when set. |
 | `configSchema` | no | JSON Schema for the tool profile, shared by every capability. Adapters read it as `OASM_CONFIG`. |
 | `resourceDefaults` | no | Scheduler hints, e.g. `cpu`, `memory`, `timeoutSeconds`. |
+| `egress` | no | `proxy` (default) routes the container's traffic through the worker egress proxy; `direct` skips it, for port scanners whose raw TCP/UDP probes a proxy cannot carry. |
 
 Schemas use plain JSON Schema plus two loosely-conventional annotation keys — `title` and `description` for labelling, and `ui:placeholder` for input hints. Only `type`, `required`, `properties`, `items`, `enum`, `default`, `examples` and `format` carry validation weight; annotations are for rendering.
 

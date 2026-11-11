@@ -4,6 +4,7 @@ version: 2.4.1
 image: ghcr.io/oasm-platform/connector-rustscan:2.4.1
 author: 'oasm'
 pricingTier: [free]
+egress: direct
 homepage: 'https://github.com/bee-san/RustScan'
 repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
 supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'

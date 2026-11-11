@@ -799,3 +799,26 @@ func TestProducesKeyMustBePresent(t *testing.T) {
 		t.Fatalf("want produces required, got %v", err)
 	}
 }
+
+// TestEgressValues checks egress: proxy normalizes to the omitted default,
+// direct survives, and anything else is rejected.
+func TestEgressValues(t *testing.T) {
+	for in, want := range map[string]string{"": "", "proxy": "", "direct": "direct", "Direct": "!", "none": "!"} {
+		m := &Manifest{Name: "nmap", Slug: "nmap", Version: "7.97", Image: "x", Author: "oasm",
+			PricingTier: []string{"free"}, ShortDescription: "short", Description: "long description", Egress: in,
+			Capabilities: []Capability{{Name: "ports_scanner", TargetTypes: []string{"ip"}, Inputs: []string{"host"}, Produces: []string{"service"}}}}
+		err := validate(m, "test")
+		if want == "!" {
+			if err == nil || !strings.Contains(err.Error(), "egress") {
+				t.Fatalf("egress %q: expected egress error, got %v", in, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("egress %q: %v", in, err)
+		}
+		if m.Egress != want {
+			t.Fatalf("egress %q: got %q, want %q", in, m.Egress, want)
+		}
+	}
+}
