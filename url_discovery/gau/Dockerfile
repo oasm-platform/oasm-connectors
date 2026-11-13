@@ -29,7 +29,7 @@ RUN set -eux; \
       github.com/klauspost/compress@v1.20.4; \
     GOWORK=off CGO_ENABLED=0 go build -mod=mod -trimpath -o /out/gau github.com/lc/gau/v2/cmd/gau; \
     rm -rf /src/gau-toolchain
-FROM alpine:3.22 AS runtime
+FROM alpine:3.24 AS runtime
 # Named `runtime` so CI rebuilds this stage uncached (`no-cache-filters` in
 # scan-and-push.yml): `apk upgrade` pulls alpine fixes published after the
 # base tag, and a cached layer would keep shipping the first build's set.

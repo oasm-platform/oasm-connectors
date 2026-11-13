@@ -33,7 +33,7 @@ RUN set -eux; \
       golang.org/x/crypto@v0.59.0 golang.org/x/net@v0.62.0; \
     GOWORK=off CGO_ENABLED=0 go build -mod=mod -trimpath -o /out/katana github.com/projectdiscovery/katana/cmd/katana; \
     rm -rf /src/katana-toolchain
-FROM alpine:3.22 AS runtime
+FROM alpine:3.24 AS runtime
 # Named `runtime` so CI rebuilds this stage uncached (`no-cache-filters` in
 # scan-and-push.yml): `apk upgrade` pulls alpine fixes published after the
 # base tag, and a cached layer would keep shipping the first build's set.
