@@ -1,0 +1,81 @@
+# Dependabot version updates. Security updates (alerts → PRs) are configured in
+# repository settings and also honour these directories and groups.
+#
+# Every connector is its own Go module with its own copy of the SDK's
+# dependencies, so one golang.org/x/net release touches seventeen go.mod files.
+# `group-by: dependency-name` folds those into one pull request per dependency
+# instead of one per directory. The directory lists are explicit rather than
+# globbed so a new connector is added on purpose, next to its go.work entry.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directories:
+      - /
+      - /sdk
+      - /ports_scanner/nmap
+      - /ports_scanner/rustscan
+      - /sca/trivy
+      - /secrets/gitleaks
+      - /url_discovery/arjun
+      - /url_discovery/dirsearch
+      - /url_discovery/ffuf
+      - /url_discovery/gau
+      - /url_discovery/katana
+      - /vulnerabilities/acunetix
+      - /vulnerabilities/nessus
+      - /vulnerabilities/nikto
+      - /vulnerabilities/nuclei
+      - /vulnerabilities/wpscan
+      - /vulnerabilities/zap
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      go-modules:
+        patterns: ["*"]
+        group-by: dependency-name
+
+  # Base and builder image tags. Upstream tool images (zap-stable, wpscan,
+  # gitleaks, trivy, nikto) are pinned deliberately and each Dockerfile notes
+  # what else has to move with the tag — read that note before merging.
+  - package-ecosystem: docker
+    directories:
+      - /ports_scanner/nmap
+      - /ports_scanner/rustscan
+      - /sca/trivy
+      - /secrets/gitleaks
+      - /url_discovery/arjun
+      - /url_discovery/dirsearch
+      - /url_discovery/ffuf
+      - /url_discovery/gau
+      - /url_discovery/katana
+      - /vulnerabilities/acunetix
+      - /vulnerabilities/nessus
+      - /vulnerabilities/nikto
+      - /vulnerabilities/nuclei
+      - /vulnerabilities/wpscan
+      - /vulnerabilities/zap
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(images)"
+    groups:
+      docker-images:
+        patterns: ["*"]
+        group-by: dependency-name
+
+  # scan-and-push.yml pins actions to commit SHAs with a `# vX.Y.Z` comment;
+  # Dependabot updates both. The other workflows use major tags.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      github-actions:
+        patterns: ["*"]

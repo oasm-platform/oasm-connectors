@@ -4,6 +4,15 @@ name: Build & Push All Connectors
 #
 #   pull_request        build + test only what the PR changed, publish nothing
 #   workflow_dispatch   build + test the whole catalogue, then publish
+#   schedule            same as a dispatch with default inputs, weekly
+#
+# The schedule exists because every image pulls OS and package fixes at build
+# time (`apk upgrade` / `apt-get upgrade` in the `runtime` stage). Without a
+# rebuild those fixes only reach GHCR when someone happens to touch the
+# connector, and the Security tab keeps reporting what the last build saw. A
+# weekly run republishes each connector's current version tag with whatever
+# has been fixed since, refreshes code scanning, and fails loudly through the
+# gate when a new fixable CRITICAL appears.
 #
 # Both derive their matrix from the same detector the push-to-main pipeline
 # uses (.github/scripts/detect-changed-connectors.sh), so a PR that touches one
@@ -37,6 +46,10 @@ on:
       - 'LICENSE'
       - 'NOTICE'
       - '.playwright-mcp/**'
+  schedule:
+    # Mondays 02:00 UTC (09:00 ICT), off the top of the hour that every other
+    # scheduled workflow on GitHub queues on.
+    - cron: '17 2 * * 1'
 
 permissions:
   contents: read
@@ -80,9 +93,10 @@ jobs:
         id: detect
         shell: bash
         env:
-          # A dispatch has no baseline to diff against — it rebuilds the whole
-          # catalogue on purpose. A pull request is scoped to what it changed.
-          FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' }}
+          # A dispatch or scheduled run has no baseline to diff against — it
+          # rebuilds the whole catalogue on purpose. A pull request is scoped to
+          # what it changed.
+          FORCE_ALL: ${{ github.event_name != 'pull_request' }}
           BASE: ${{ github.event.pull_request.base.sha }}
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
@@ -106,7 +120,7 @@ jobs:
   # an independent Go module, so an untouched one cannot regress from a change
   # in its neighbour, and its dependency tree is the slowest part of CI.
   #
-  # On a dispatch the detector selects the whole catalogue, so this never skips
+  # On a dispatch or schedule the detector selects the whole catalogue, so this never skips
   # while `push` is waiting on it.
   test:
     needs: discover
@@ -165,10 +179,10 @@ jobs:
 
   push:
     needs: [discover, test, build-test]
-    # Publish only on explicit dispatch (dry_run=false). On pull_request
-    # `inputs` is empty, so this guard also prevents accidental publishes
-    # from CI runs.
-    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.dry_run }}
+    # Publish only on an explicit dispatch (dry_run=false) or the weekly
+    # schedule. The event name is checked rather than `inputs`, which is empty
+    # on both pull_request and schedule, so a pull request can never publish.
+    if: ${{ (github.event_name == 'workflow_dispatch' && !inputs.dry_run) || github.event_name == 'schedule' }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}

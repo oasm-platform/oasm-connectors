@@ -95,6 +95,10 @@ jobs:
       # a gate that never fires. `docker` restricts it to the local daemon and
       # fails closed when the image is missing.
       TRIVY_IMAGE_SRC: docker
+      # Path-scoped allow rules for the secret scanner (nuclei-templates is a
+      # detection corpus full of example keys by design). Read by every Trivy
+      # step below; vulnerability scanning ignores it.
+      TRIVY_SECRET_CONFIG: ${{ github.workspace }}/trivy-secret.yaml
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -266,10 +270,11 @@ jobs:
       # not leaks, and they blocked the nuclei publish.
       #
       # Secret scanning is deliberately left enabled on the reporting steps
-      # above, which run with `exit-code: 0` and so surface those findings
-      # without being able to fail the build. Gating on secrets is a separate
-      # policy and needs its own ignore list; it does not belong to a severity
-      # gate.
+      # above, which run with `exit-code: 0` and so surface findings without
+      # being able to fail the build. The nuclei-templates corpus is excluded
+      # there by path through trivy-secret.yaml (TRIVY_SECRET_CONFIG), so a
+      # secret that does show up in the Security tab is worth a look. Gating on
+      # secrets is a separate policy; it does not belong to a severity gate.
       - name: Enforce vulnerability gate
         if: ${{ inputs.fail_on != 'NONE' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
