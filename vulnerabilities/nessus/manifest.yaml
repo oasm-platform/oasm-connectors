@@ -1,7 +1,7 @@
 name: Nessus
 slug: nessus
-version: 0.1.0
-image: ghcr.io/oasm-platform/connector-nessus:0.1.0
+version: 0.2.0
+image: ghcr.io/oasm-platform/connector-nessus:0.2.0
 author: 'oasm'
 pricingTier: [free]
 homepage: 'https://www.tenable.com'
@@ -63,6 +63,10 @@ configSchema:
       title: Folder ID
       description: 'ID of the Nessus folder that will contain the scan.'
       ui:placeholder: 'e.g. 1'
+    disableTlsChecks:
+      type: boolean
+      title: Disable TLS checks
+      description: 'Skip TLS certificate verification (only for a Nessus instance still serving its default self-signed certificate).'
   additionalProperties: false
 resourceDefaults:
   cpu: 500m

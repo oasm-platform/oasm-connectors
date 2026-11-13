@@ -2,15 +2,16 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/oasm-platform/oasm-connectors/sdk/connector"
+	httphelper "github.com/oasm-platform/oasm-connectors/sdk/http"
 	"github.com/tencat-dev/nessus-client-go/nessus"
 )
 
@@ -22,17 +23,21 @@ type nessusConfig struct {
 	TemplateUUID string
 	PolicyID     string
 	FolderID     string
+	// DisableTLSChecks skips certificate verification for an on-prem Nessus
+	// that serves its default self-signed certificate. Off unless asked for.
+	DisableTLSChecks bool
 }
 
 // configProfile is the OASM_CONFIG JSON shape the Worker ships per job.
 // Keys are camelCase to mirror manifest.yaml configSchema.
 type configProfile struct {
-	URL          string `json:"url"`
-	AccessKey    string `json:"accessKey"`
-	SecretKey    string `json:"secretKey"`
-	TemplateUUID string `json:"templateUuid"`
-	PolicyID     string `json:"policyId"`
-	FolderID     string `json:"folderId"`
+	URL              string `json:"url"`
+	AccessKey        string `json:"accessKey"`
+	SecretKey        string `json:"secretKey"`
+	TemplateUUID     string `json:"templateUuid"`
+	PolicyID         string `json:"policyId"`
+	FolderID         string `json:"folderId"`
+	DisableTLSChecks bool   `json:"disableTlsChecks"`
 }
 
 // loadNessusConfig reads the Nessus connection + scan settings. The primary
@@ -54,6 +59,7 @@ func loadNessusConfig(ctx context.Context) (*nessusConfig, error) {
 		cfg.TemplateUUID = p.TemplateUUID
 		cfg.PolicyID = p.PolicyID
 		cfg.FolderID = p.FolderID
+		cfg.DisableTLSChecks = p.DisableTLSChecks
 	} else {
 		cfg.URL = os.Getenv("NESSUS_URL")
 		cfg.AccessKey = os.Getenv("NESSUS_ACCESS_KEY")
@@ -61,6 +67,14 @@ func loadNessusConfig(ctx context.Context) (*nessusConfig, error) {
 		cfg.TemplateUUID = os.Getenv("NESSUS_TEMPLATE_UUID")
 		cfg.PolicyID = os.Getenv("NESSUS_POLICY_ID")
 		cfg.FolderID = os.Getenv("NESSUS_FOLDER_ID")
+
+		if raw := strings.TrimSpace(os.Getenv("NESSUS_INSECURE")); raw != "" {
+			v, err := strconv.ParseBool(raw)
+			if err != nil {
+				return nil, fmt.Errorf("invalid NESSUS_INSECURE: %w", err)
+			}
+			cfg.DisableTLSChecks = v
+		}
 	}
 
 	if cfg.URL == "" {
@@ -78,22 +92,25 @@ func loadNessusConfig(ctx context.Context) (*nessusConfig, error) {
 // Nessus server would block the connector until the container is killed.
 const nessusHTTPTimeout = 60 * time.Second
 
+// newNessusHTTPClient is the transport every Nessus API call goes through:
+// the shared proxy-aware client, bounded by nessusHTTPTimeout, verifying the
+// server certificate unless cfg.DisableTLSChecks is set.
+func newNessusHTTPClient(cfg *nessusConfig) *http.Client {
+	return httphelper.NewClient(
+		httphelper.WithTimeout(nessusHTTPTimeout),
+		httphelper.WithInsecureSkipVerify(cfg.DisableTLSChecks),
+	)
+}
+
 // newNessusClient builds a client that authenticates every request with the
 // API access/secret key pair (X-ApiKeys header), then gates on
 // ServerStatus()=="ready" before returning it.
 func newNessusClient(cfg *nessusConfig) (*nessus.Client, error) {
 	// The dependency installs its own retryablehttp client with
-	// InsecureSkipVerify and no timeout; supplying our own keeps the timeout
-	// while preserving today's TLS behaviour (on-prem Nessus commonly serves a
-	// self-signed certificate).
-	// ponytail: no CA knob yet — expose a cert/config option when the SDK or
-	// the connector config grows one.
+	// InsecureSkipVerify and no timeout; supplying our own adds the timeout and
+	// verifies the certificate unless the profile opts out.
 	req := retryablehttp.NewClient()
-	req.HTTPClient.Timeout = nessusHTTPTimeout
-	req.HTTPClient.Transport = &http.Transport{
-		Proxy:           http.ProxyFromEnvironment,
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // #nosec G402 — see above
-	}
+	req.HTTPClient = newNessusHTTPClient(cfg)
 
 	client, err := nessus.NewClient(
 		nessus.WithAPIURL(cfg.URL),
