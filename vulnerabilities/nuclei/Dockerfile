@@ -8,7 +8,7 @@ COPY sdk/ sdk/
 COPY vulnerabilities/nuclei/ vulnerabilities/nuclei/
 RUN cd vulnerabilities/nuclei && CGO_ENABLED=0 GOWORK=off go build -trimpath -o /out/connector .
 RUN cd vulnerabilities/nuclei && CGO_ENABLED=0 GOWORK=off go run ./cmd/templates /opt/nuclei-templates
-FROM alpine:3.22 AS runtime
+FROM alpine:3.24 AS runtime
 # Named `runtime` so CI rebuilds this stage uncached (`no-cache-filters` in
 # scan-and-push.yml): `apk upgrade` pulls alpine fixes published after the
 # base tag, and a cached layer would keep shipping the first build's set.
