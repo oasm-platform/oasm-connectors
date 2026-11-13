@@ -11,7 +11,20 @@ RUN cd url_discovery/ffuf && CGO_ENABLED=0 GOWORK=off go build -trimpath -o /out
 # is installed so the CLI lands at /out/ffuf. Upstream's Docker Hub image is
 # tagless (unpinnable); building from source keeps multi-arch builds and a
 # deterministic v2.3.0 pin. CGO_ENABLED=0 keeps the binary static for alpine.
-RUN GOWORK=off GOBIN=/out CGO_ENABLED=0 go install github.com/ffuf/ffuf/v2@v2.3.0
+#
+# Built through a throwaway module rather than `go install ffuf@v2.3.0`, because
+# `go install pkg@version` ignores the main module and so cannot move a
+# dependency. v2.3.0 is the newest ffuf release and its go.mod still pins
+# golang.org/x/net v0.7.0, which carries two dozen advisories fixed up to
+# v0.62.0. `go get` lifts it by minimum version selection; ffuf's own code is
+# untouched. Revisit when ffuf tags a release with a newer x/net.
+RUN set -eux; \
+    mkdir -p /src/ffuf-toolchain; \
+    cd /src/ffuf-toolchain; \
+    GOWORK=off go mod init oasm.local/ffuf-toolchain; \
+    GOWORK=off go get github.com/ffuf/ffuf/v2@v2.3.0 golang.org/x/net@v0.62.0; \
+    GOWORK=off CGO_ENABLED=0 go build -mod=mod -trimpath -o /out/ffuf github.com/ffuf/ffuf/v2; \
+    rm -rf /src/ffuf-toolchain
 RUN apk add --no-cache curl
 # Bundled wordlists pinned to one SecLists commit (2026.1) so image builds are
 # reproducible and no full tarball ships. `test -s` fails the build on any empty
