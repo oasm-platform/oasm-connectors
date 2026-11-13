@@ -113,8 +113,9 @@ jobs:
           file: ${{ inputs.dir }}/Dockerfile
           load: true
           push: false
-          # `runtime` is the final stage of the images that run `apk upgrade` to
-          # pull alpine security fixes released after their upstream tag. That
+          # `runtime` is the final stage of the images that run `apk upgrade` /
+          # `apt-get upgrade` to pull OS security fixes released after their
+          # upstream tag. That
           # layer's content depends on the package index at build time, not on
           # anything in the repo, so its cache key never changes: a warm cache
           # keeps shipping the packages the first build saw and the scanner then

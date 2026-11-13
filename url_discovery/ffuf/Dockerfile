@@ -17,8 +17,11 @@ RUN apk add --no-cache curl
 # reproducible and no full tarball ships. `test -s` fails the build on any empty
 # download (a moved file would otherwise land as a 0-byte "wordlist").
 RUN mkdir -p /out/wordlists/ffuf && cd /out/wordlists/ffuf && for f in common.txt raft-small-directories.txt raft-medium-directories.txt big.txt DirBuster-2007_directory-list-2.3-small.txt DirBuster-2007_directory-list-2.3-medium.txt; do curl -fsSL -O "https://raw.githubusercontent.com/danielmiessler/SecLists/190c6f7bd58c847ceadfe57d9853592737f059e8/Discovery/Web-Content/$f"; done && for f in *.txt; do test -s "$f"; done
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates && adduser -D -u 10001 connector
+FROM alpine:3.22 AS runtime
+# Named `runtime` so CI rebuilds this stage uncached (`no-cache-filters` in
+# scan-and-push.yml): `apk upgrade` pulls alpine fixes published after the
+# base tag, and a cached layer would keep shipping the first build's set.
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates && adduser -D -u 10001 connector
 # ffuf needs no writable HOME (unlike katana); the env only points the adapter at
 # the bundled wordlists. HOME stays set for consistency across connectors.
 ENV HOME=/home/connector FFUF_WORDLIST_DIR=/opt/wordlists/ffuf

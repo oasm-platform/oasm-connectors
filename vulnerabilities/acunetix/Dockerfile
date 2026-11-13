@@ -7,8 +7,11 @@ RUN cd vulnerabilities/acunetix && GOWORK=off go mod download
 COPY sdk/ sdk/
 COPY vulnerabilities/acunetix/ vulnerabilities/acunetix/
 RUN cd vulnerabilities/acunetix && CGO_ENABLED=0 GOWORK=off go build -trimpath -o /out/connector .
-FROM alpine:3.22
+FROM alpine:3.22 AS runtime
+# Named `runtime` so CI rebuilds this stage uncached (`no-cache-filters` in
+# scan-and-push.yml): `apk upgrade` pulls alpine fixes published after the
+# base tag, and a cached layer would keep shipping the first build's set.
 COPY --from=builder /out/connector /usr/local/bin/connector
-RUN adduser -D -u 10001 connector
+RUN apk upgrade --no-cache && adduser -D -u 10001 connector
 USER 10001
 ENTRYPOINT ["/usr/local/bin/connector"]

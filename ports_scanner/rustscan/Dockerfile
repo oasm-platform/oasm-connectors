@@ -26,11 +26,14 @@ RUN apk add --no-cache curl unzip \
  && unzip -p /tmp/rustscan.zip | tar -xz -C /out \
  && curl -fsSL -o /out/LICENSE "https://raw.githubusercontent.com/bee-san/RustScan/${RUSTSCAN_VERSION}/LICENSE"
 
-FROM alpine:3.22
+FROM alpine:3.22 AS runtime
+# Named `runtime` so CI rebuilds this stage uncached (`no-cache-filters` in
+# scan-and-push.yml): `apk upgrade` pulls alpine fixes published after the
+# base tag, and a cached layer would keep shipping the first build's set.
 # rustscan is GPL-3.0: the licence text ships with the binary the image conveys.
 COPY --from=rustscan /out/rustscan /usr/local/bin/rustscan
 COPY --from=rustscan /out/LICENSE /usr/share/licenses/rustscan/LICENSE
-RUN apk add --no-cache ca-certificates && adduser -D -u 10001 connector
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates && adduser -D -u 10001 connector
 # The connector only ever runs rustscan with -n (no config file), but a writable
 # HOME keeps the tool from failing on any path that still wants $HOME.
 ENV HOME=/home/connector
