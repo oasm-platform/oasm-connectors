@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
 
 func clearNessusEnv(t *testing.T) {
 	t.Helper()
@@ -8,6 +12,7 @@ func clearNessusEnv(t *testing.T) {
 		"OASM_CONFIG",
 		"NESSUS_URL", "NESSUS_ACCESS_KEY", "NESSUS_SECRET_KEY",
 		"NESSUS_TEMPLATE_UUID", "NESSUS_POLICY_ID", "NESSUS_FOLDER_ID",
+		"NESSUS_INSECURE",
 	} {
 		t.Setenv(k, "")
 	}
@@ -91,5 +96,100 @@ func TestLoadNessusConfig_MissingKeys(t *testing.T) {
 
 	if _, err := loadNessusConfig(t.Context()); err == nil {
 		t.Fatal("expected error for access key without secret key")
+	}
+}
+
+func TestLoadNessusConfig_TLSChecksOnByDefault(t *testing.T) {
+	clearNessusEnv(t)
+	t.Setenv("OASM_CONFIG", `{"url":"https://nessus.example.com:8834","accessKey":"ak","secretKey":"sk"}`)
+
+	cfg, err := loadNessusConfig(t.Context())
+	if err != nil {
+		t.Fatalf("loadNessusConfig: %v", err)
+	}
+	if cfg.DisableTLSChecks {
+		t.Error("DisableTLSChecks = true, want false when the profile omits disableTlsChecks")
+	}
+}
+
+func TestLoadNessusConfig_DisableTLSChecksFromOASMConfig(t *testing.T) {
+	clearNessusEnv(t)
+	t.Setenv("OASM_CONFIG", `{"url":"https://nessus.example.com:8834","accessKey":"ak","secretKey":"sk","disableTlsChecks":true}`)
+
+	cfg, err := loadNessusConfig(t.Context())
+	if err != nil {
+		t.Fatalf("loadNessusConfig: %v", err)
+	}
+	if !cfg.DisableTLSChecks {
+		t.Error("DisableTLSChecks = false, want true from disableTlsChecks")
+	}
+}
+
+func TestLoadNessusConfig_DisableTLSChecksEnvFallback(t *testing.T) {
+	clearNessusEnv(t)
+	t.Setenv("NESSUS_URL", "https://nessus.example.com:8834")
+	t.Setenv("NESSUS_ACCESS_KEY", "ak")
+	t.Setenv("NESSUS_SECRET_KEY", "sk")
+	t.Setenv("NESSUS_INSECURE", "true")
+
+	cfg, err := loadNessusConfig(t.Context())
+	if err != nil {
+		t.Fatalf("loadNessusConfig: %v", err)
+	}
+	if !cfg.DisableTLSChecks {
+		t.Error("DisableTLSChecks = false, want true from NESSUS_INSECURE")
+	}
+}
+
+func TestLoadNessusConfig_InvalidInsecureEnv(t *testing.T) {
+	clearNessusEnv(t)
+	t.Setenv("NESSUS_URL", "https://nessus.example.com:8834")
+	t.Setenv("NESSUS_ACCESS_KEY", "ak")
+	t.Setenv("NESSUS_SECRET_KEY", "sk")
+	t.Setenv("NESSUS_INSECURE", "maybe")
+
+	if _, err := loadNessusConfig(t.Context()); err == nil {
+		t.Fatal("expected error for a non-boolean NESSUS_INSECURE")
+	}
+}
+
+func TestNewNessusHTTPClient_RejectsUntrustedCertificateByDefault(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	defer srv.Close()
+
+	hc := newNessusHTTPClient(&nessusConfig{})
+
+	resp, err := hc.Get(srv.URL)
+	if err == nil {
+		resp.Body.Close()
+		t.Fatal("request to a self-signed server succeeded, want a certificate error")
+	}
+}
+
+func TestNewNessusHTTPClient_AcceptsUntrustedCertificateWhenChecksDisabled(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	defer srv.Close()
+
+	hc := newNessusHTTPClient(&nessusConfig{DisableTLSChecks: true})
+
+	resp, err := hc.Get(srv.URL)
+	if err != nil {
+		t.Fatalf("request with TLS checks disabled: %v", err)
+	}
+	resp.Body.Close()
+}
+
+func TestNewNessusHTTPClient_KeepsTimeoutAndProxy(t *testing.T) {
+	hc := newNessusHTTPClient(&nessusConfig{})
+
+	if hc.Timeout != nessusHTTPTimeout {
+		t.Errorf("Timeout = %v, want %v", hc.Timeout, nessusHTTPTimeout)
+	}
+	tr, ok := hc.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("Transport = %T, want *http.Transport", hc.Transport)
+	}
+	if tr.Proxy == nil {
+		t.Error("Transport.Proxy is nil, want the worker-injected proxy honoured")
 	}
 }

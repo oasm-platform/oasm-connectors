@@ -25,7 +25,8 @@ This is the new-SDK path that makes warm-pool reuse work: the SDK overrides
   "secretKey": "your-secret-key",
   "templateUuid": "",
   "policyId": "",
-  "folderId": ""
+  "folderId": "",
+  "disableTlsChecks": false
 }
 ```
 
@@ -37,6 +38,11 @@ This is the new-SDK path that makes warm-pool reuse work: the SDK overrides
 | `templateUuid` | `NESSUS_TEMPLATE_UUID` | `TemplateBasic` | no | Nessus scan template |
 | `policyId` | `NESSUS_POLICY_ID` | `` | no | Nessus scan policy |
 | `folderId` | `NESSUS_FOLDER_ID` | `` (auto) | no | Nessus folder for scans; empty discovers/creates `oasm-scan` |
+| `disableTlsChecks` | `NESSUS_INSECURE` | `false` | no | Skip TLS certificate verification. Only for a Nessus that still serves its default self-signed certificate; installing a trusted certificate on Nessus is the better fix |
+
+TLS certificates are verified by default. Before 0.2.0 the connector skipped
+verification unconditionally; a Nessus behind its stock self-signed
+certificate now needs `disableTlsChecks: true` (or a trusted certificate).
 
 Worker connection (`WORKER_GRPC_ADDR`, `WORKER_TOKEN`) and `EXECUTION_ID` are
 injected by the Worker; the scan name is derived from the target per execution.

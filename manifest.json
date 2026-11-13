@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-11T02:45:09.177609279Z",
+  "generatedAt": "2026-11-13T03:57:53.5479466Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -674,8 +674,8 @@
     {
       "name": "Nessus",
       "slug": "nessus",
-      "version": "0.1.0",
-      "image": "ghcr.io/oasm-platform/connector-nessus:0.1.0",
+      "version": "0.2.0",
+      "image": "ghcr.io/oasm-platform/connector-nessus:0.2.0",
       "author": "oasm",
       "pricingTier": [
         "free"
@@ -728,6 +728,11 @@
             "title": "API access key",
             "type": "string",
             "ui:placeholder": "Enter API access key"
+          },
+          "disableTlsChecks": {
+            "description": "Skip TLS certificate verification (only for a Nessus instance still serving its default self-signed certificate).",
+            "title": "Disable TLS checks",
+            "type": "boolean"
           },
           "folderId": {
             "description": "ID of the Nessus folder that will contain the scan.",
