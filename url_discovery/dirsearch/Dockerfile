@@ -31,14 +31,17 @@ RUN apt-get update -qq \
 # neither package itself, so both move past the pin (pip warns about the pin
 # and installs anyway). `dirsearch --version` proves it still starts.
 #
-# native/ is the Rust source of dirsearch's optional native backend. It needs
-# Python >= 3.14 plus a Rust toolchain to compile, so on this image it can
-# never be built or loaded; its Cargo.lock only feeds the scanner. pip itself
+# native/ is the Rust source of dirsearch's optional native backend. It has to
+# be compiled with a Rust toolchain (`dirsearch-build-native`), which this image
+# does not ship, so it can never be built or loaded; its Cargo.lock only feeds
+# the scanner. The path is resolved from the interpreter, and `test -d` fails
+# the build if a dirsearch release ever moves it. pip itself
 # is not needed at runtime and vendors its own urllib3/msgpack/setuptools, so
 # it goes too.
 RUN pip install --no-cache-dir --break-system-packages dirsearch==0.5.0 \
  && pip install --no-cache-dir --break-system-packages pyopenssl==26.4.0 cryptography==50.0.2 \
- && rm -rf /usr/local/lib/python3.13/site-packages/dirsearch/native \
+ && native_dir="$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')/dirsearch/native" \
+ && test -d "$native_dir" && rm -rf "$native_dir" \
  && pip uninstall -y --break-system-packages pip \
  && command -v dirsearch && dirsearch --version
 # dirsearch writes per-run state (session/report cache) under $HOME; give the
