@@ -30,14 +30,37 @@ USER root
 # lives under /zap and is not a Debian package, so the upgrade cannot move it.
 # -qq keeps the build log readable, and the base image ships no apt index.
 #
-# The pip the base image installs over Debian's python3-pip is removed
-# afterwards: the connector drives zap.sh, not the Python helper scripts, and
-# that pip vendors its own setuptools/urllib3 copies the scanner reports. The
-# Debian pip underneath stays and is covered by apt.
+# The base image is built for interactive and scripted use: a C toolchain
+# (make, autoconf, gcc, g++), the full JDK, git, Python packaging, and the
+# openbox/xterm/x11vnc/xvfb desktop behind its Webswing UI. The connector only
+# runs `zap.sh -cmd -autorun` on the JRE, plus firefox-esr in headless mode for
+# the optional AJAX spider (ZAP's default browserId is firefox-headless, which
+# needs no X server). Everything else is purged with its now-orphaned
+# dependencies. That drops ~190 of ~520 packages, linux-libc-dev among them,
+# whose kernel-header advisories alone were over 60% of this image's findings,
+# none of them fixable by an upgrade.
+#
+# The JRE is a dependency of the JDK, so it is marked manual first or the
+# autoremove would take it too. netbase (/etc/services, /etc/protocols) is kept
+# as a precaution: it is a few KB, carries no advisories, and ZAP scripts or
+# add-ons may look up service names. The pip the base image installs over Debian's
+# python3-pip goes as well: it vendors setuptools/urllib3 copies the scanner
+# reports, and nothing here runs pip.
+#
+# The trailing checks fail the build if the purge ever takes something the
+# connector needs.
 RUN apt-get update -qq \
  && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq \
+ && pip3 uninstall -y --break-system-packages pip \
+ && apt-mark manual openjdk-17-jre-headless netbase >/dev/null \
+ && DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq --auto-remove \
+      make automake autoconf gcc g++ git \
+      openjdk-17-jdk openjdk-17-jdk-headless openjdk-17-jre \
+      openbox xterm x11vnc xvfb python3-pip \
  && rm -rf /var/lib/apt/lists/* \
- && pip3 uninstall -y --break-system-packages pip
+ && java -version \
+ && firefox-esr --version \
+ && ! dpkg -s linux-libc-dev >/dev/null 2>&1
 COPY --from=builder /out/connector /usr/local/bin/connector
 USER zap
 ENV HOME=/home/zap
