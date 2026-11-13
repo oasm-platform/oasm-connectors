@@ -16,7 +16,7 @@ RUN cd ports_scanner/rustscan && CGO_ENABLED=0 GOWORK=off go build -trimpath -o 
 # adapter stays in greppable mode, which is what disables rustscan's nmap pass).
 # ponytail: x86_64 only, matching what CI builds; add the aarch64 asset
 # (aarch64-linux-rustscan.zip + its digest) when an arm64 image is needed.
-FROM alpine:3.22 AS rustscan
+FROM alpine:3.24 AS rustscan
 ARG RUSTSCAN_VERSION=2.4.1
 ARG RUSTSCAN_SHA256=f3a4365d939e3b81f25ba8c37852ce9ac9e938c3cc882c5b3e6fff6152c740be
 RUN apk add --no-cache curl unzip \
@@ -26,7 +26,7 @@ RUN apk add --no-cache curl unzip \
  && unzip -p /tmp/rustscan.zip | tar -xz -C /out \
  && curl -fsSL -o /out/LICENSE "https://raw.githubusercontent.com/bee-san/RustScan/${RUSTSCAN_VERSION}/LICENSE"
 
-FROM alpine:3.22 AS runtime
+FROM alpine:3.24 AS runtime
 # Named `runtime` so CI rebuilds this stage uncached (`no-cache-filters` in
 # scan-and-push.yml): `apk upgrade` pulls alpine fixes published after the
 # base tag, and a cached layer would keep shipping the first build's set.
