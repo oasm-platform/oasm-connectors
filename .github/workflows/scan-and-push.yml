@@ -113,6 +113,15 @@ jobs:
           file: ${{ inputs.dir }}/Dockerfile
           load: true
           push: false
+          # `runtime` is the final stage of the images that run `apk upgrade` to
+          # pull alpine security fixes released after their upstream tag. That
+          # layer's content depends on the package index at build time, not on
+          # anything in the repo, so its cache key never changes: a warm cache
+          # keeps shipping the packages the first build saw and the scanner then
+          # fails on a CRITICAL that already has a fix. Re-running that stage
+          # costs seconds; a stale base costs a red main. Connectors without a
+          # `runtime` stage are unaffected — buildx ignores unknown filter names.
+          no-cache-filters: runtime
           tags: ${{ env.IMAGE_REF }}
           cache-from: type=gha,scope=${{ inputs.slug }}
           cache-to: type=gha,mode=max,scope=${{ inputs.slug }}

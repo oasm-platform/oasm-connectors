@@ -10,11 +10,17 @@ RUN cd secrets/gitleaks && CGO_ENABLED=0 GOWORK=off go build -trimpath -o /out/c
 
 # Final stage is the official gitleaks image, pinned by tag: it ships the
 # gitleaks binary and the git client sdk/gitrepo clones with.
-FROM zricethezav/gitleaks:v8.30.1
+FROM zricethezav/gitleaks:v8.30.1 AS runtime
 # The base image runs as root; package management happens first, then the
 # connector drops to an unprivileged user. `apk update` first: the base image
 # carries no package index. Upgrading picks up alpine security fixes released
 # after the upstream tag (scan-and-push fails on unpatched CRITICALs).
+#
+# Named `runtime` on purpose: CI builds this stage with `no-cache-filters:
+# runtime` (see .github/workflows/scan-and-push.yml). The upgrade layer's
+# content depends on what the package index served at build time, which is not
+# in the Dockerfile, so the layer cache would otherwise keep shipping whatever
+# the first build saw long after a fix is published.
 USER root
 RUN apk update --no-cache && apk upgrade --no-cache \
  && adduser -D -H -u 10001 connector

@@ -12,7 +12,7 @@ RUN cd vulnerabilities/nikto && CGO_ENABLED=0 GOWORK=off go build -trimpath -o /
 # databases must sit together, so inheriting the upstream /opt/nikto layout
 # beats hand-rolling a Perl install. `sullo/nikto` does not exist on Docker Hub
 # — this is the repository the upstream Dockerfile publishes to.
-FROM hackllc/nikto:2.6.1
+FROM hackllc/nikto:2.6.1 AS runtime
 # The base image already runs as the non-root `nikto` user (uid 100) and puts
 # /opt/nikto on PATH, so `nikto.pl` resolves by name. Package management must
 # happen as root (the base image's default USER is nikto, and apk cannot write

@@ -11,7 +11,7 @@ RUN cd sca/trivy && CGO_ENABLED=0 GOWORK=off go build -trimpath -o /out/connecto
 # Final stage is the official trivy image, pinned by tag and digest (Trivy
 # release tags have been hijacked before): it ships the trivy binary and the
 # git client sdk/gitrepo clones with.
-FROM aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+FROM aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb AS runtime
 # The base image runs as root; package management happens first, then the
 # connector drops to an unprivileged user. Upgrading picks up alpine security
 # fixes released after the upstream tag (scan-and-push fails on unpatched
