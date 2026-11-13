@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,9 +11,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/oasm-platform/oasm-connectors/sdk/connector"
+	httphelper "github.com/oasm-platform/oasm-connectors/sdk/http"
 )
 
 // defaultProfileID is the built-in "Full Scan" profile. A profile id is
@@ -302,12 +301,7 @@ func newAcunetixClient(cfg *acunetixConfig) *acunetixClient {
 	return &acunetixClient{
 		baseURL: normalizeBaseURL(cfg.URL),
 		apiKey:  cfg.APIKey,
-		hc: &http.Client{
-			Timeout: 30 * time.Second,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: cfg.DisableTLSChecks},
-			},
-		},
+		hc:      httphelper.NewClient(httphelper.WithInsecureSkipVerify(cfg.DisableTLSChecks)),
 	}
 }
 

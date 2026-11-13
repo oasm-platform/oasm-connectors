@@ -4,6 +4,7 @@ version: 7.97
 image: ghcr.io/oasm-platform/connector-nmap:7.97
 author: 'oasm'
 pricingTier: [free]
+egress: direct
 homepage: 'https://nmap.org'
 repositoryUrl: 'https://github.com/oasm-platform/oasm-connectors'
 supportUrl: 'https://github.com/oasm-platform/oasm-connectors/issues'

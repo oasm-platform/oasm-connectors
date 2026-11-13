@@ -5,6 +5,8 @@ import (
 	"encoding/csv"
 	"strconv"
 	"strings"
+
+	httphelper "github.com/oasm-platform/oasm-connectors/sdk/http"
 )
 
 // katanaConfig mirrors manifest.yaml configSchema. Keys are camelCase to match
@@ -146,8 +148,8 @@ func buildKatanaArgs(target string, cfg *katanaConfig) []string {
 	if len(cfg.ExtensionFilter) > 0 {
 		args = append(args, "-ef", strings.Join(cfg.ExtensionFilter, ","))
 	}
-	if cfg.Proxy != "" {
-		args = append(args, "-proxy", cfg.Proxy)
+	if proxy := httphelper.ProxyOrEnv(cfg.Proxy); proxy != "" {
+		args = append(args, "-proxy", proxy)
 	}
 	for _, h := range cfg.Headers {
 		args = append(args, "-H", csvQuoteHeader(h))

@@ -3,6 +3,8 @@ package main
 import (
 	"strconv"
 	"strings"
+
+	httphelper "github.com/oasm-platform/oasm-connectors/sdk/http"
 )
 
 // gauConfig mirrors manifest.yaml configSchema. Keys are camelCase to match the
@@ -51,8 +53,8 @@ func buildGauArgs(target string, cfg *gauConfig) []string {
 	if cfg.Subs {
 		args = append(args, "--subs")
 	}
-	if cfg.Proxy != "" {
-		args = append(args, "--proxy", cfg.Proxy)
+	if proxy := httphelper.ProxyOrEnv(cfg.Proxy); proxy != "" {
+		args = append(args, "--proxy", proxy)
 	}
 	if cfg.From != "" {
 		args = append(args, "--from", cfg.From)

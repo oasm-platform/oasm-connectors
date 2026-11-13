@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
 
 	"github.com/oasm-platform/oasm-connectors/sdk/connector"
+	httphelper "github.com/oasm-platform/oasm-connectors/sdk/http"
 )
 
 // ZapAdapter runs OWASP ZAP via the Automation Framework and streams the
@@ -87,8 +90,12 @@ func (a *ZapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 		return fmt.Errorf("zap: create home dir: %w", err)
 	}
 
-	cmd := exec.CommandContext(runCtx, bin, "-cmd", "-silent", "-nostdout",
-		"-autorun", planPath, "-dir", homeDir)
+	args := []string{"-cmd", "-silent", "-nostdout", "-autorun", planPath, "-dir", homeDir}
+	// ZAP's JVM ignores HTTP_PROXY; route it through the worker egress proxy.
+	if proxy := httphelper.ProxyOrEnv(""); proxy != "" {
+		args = append(args, zapProxyArgs(proxy)...)
+	}
+	cmd := exec.CommandContext(runCtx, bin, args...)
 	cmd.Stderr = stderr
 	// ZAP is a shell script that spawns a JVM; kill the whole process group on
 	// cancel/timeout or the JVM survives the container's warm-pool reuse.
@@ -131,4 +138,25 @@ func (a *ZapAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 	}
 
 	return nil
+}
+
+// zapProxyArgs sets ZAP's outbound HTTP proxy (network add-on options) from a
+// proxy URL, moving URL userinfo into the proxy auth options.
+func zapProxyArgs(proxy string) []string {
+	u, err := url.Parse(proxy)
+	if err != nil || u.Host == "" {
+		return nil
+	}
+	host, port, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		host, port = u.Host, "80"
+	}
+	const k = "network.connection.httpProxy."
+	args := []string{"-config", k + "enabled=true", "-config", k + "host=" + host, "-config", k + "port=" + port}
+	if u.User != nil {
+		pass, _ := u.User.Password()
+		args = append(args, "-config", k+"authEnabled=true",
+			"-config", k+"username="+u.User.Username(), "-config", k+"password="+pass)
+	}
+	return args
 }

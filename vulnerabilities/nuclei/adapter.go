@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/oasm-platform/oasm-connectors/sdk/connector"
+	httphelper "github.com/oasm-platform/oasm-connectors/sdk/http"
 	"github.com/projectdiscovery/hmap/store/hybrid"
 	"github.com/projectdiscovery/httpx/common/httpx"
 	nuclei "github.com/projectdiscovery/nuclei/v3/lib"
@@ -144,6 +145,10 @@ func sdkOptions(ctx context.Context, p params) []nuclei.NucleiSDKOptions {
 		TemplatePayloadConcurrency:    25,
 		ProbeConcurrency:              50,
 	}))
+	// nuclei ignores HTTP_PROXY; pass the worker's egress proxy explicitly.
+	if proxy := httphelper.ProxyOrEnv(""); proxy != "" {
+		opts = append(opts, nuclei.WithProxy([]string{proxy}, false))
+	}
 	if p.noInteractsh {
 		// NoInteractsh:true alone panics (CacheSize=0 → gcache Build).
 		// Backfill the SDK's DefaultOptions cache fields so init() succeeds
