@@ -6,11 +6,17 @@
 # `group-by: dependency-name` folds those into one pull request per dependency
 # instead of one per directory. The directory lists are explicit rather than
 # globbed so a new connector is added on purpose, next to its go.work entry.
+#
+# The repo root is deliberately not listed. It holds go.work, and Dependabot
+# treats a directory with go.work as the whole workspace: its PRs re-synced
+# every module's indirect versions and added unrelated requirements to the root
+# go.mod. Every image builds with GOWORK=off from its own module, so the
+# per-module directories below are what ships. The root module only carries
+# the manifest scripts.
 version: 2
 updates:
   - package-ecosystem: gomod
     directories:
-      - /
       - /sdk
       - /ports_scanner/nmap
       - /ports_scanner/rustscan
@@ -32,6 +38,13 @@ updates:
       day: monday
     commit-message:
       prefix: "chore(deps)"
+    # The nuclei connector imports hmap and httpx next to the nuclei library,
+    # and they must stay on the versions that nuclei release builds against:
+    # hmap 0.0.104 alone pulls a zcrypto that breaks nuclei's tlsx. They move
+    # when github.com/projectdiscovery/nuclei/v3 moves.
+    ignore:
+      - dependency-name: github.com/projectdiscovery/hmap
+      - dependency-name: github.com/projectdiscovery/httpx
     groups:
       go-modules:
         patterns: ["*"]
@@ -42,7 +55,6 @@ updates:
   # what else has to move with the tag — read that note before merging.
   - package-ecosystem: docker
     directories:
-      - /ports_scanner/nmap
       - /ports_scanner/rustscan
       - /sca/trivy
       - /secrets/gitleaks
@@ -66,6 +78,22 @@ updates:
       docker-images:
         patterns: ["*"]
         group-by: dependency-name
+
+  # nmap comes from the alpine package set, so the alpine tag *is* the nmap
+  # version: alpine 3.24 ships nmap 7.99 while manifest.yaml publishes 7.97.
+  # That bump is held on blocked/nmap-7.99 and has to land together with the
+  # manifest version, so alpine stays below 3.23 here until it does. Drop the
+  # ignore and fold this directory back into the block above then.
+  - package-ecosystem: docker
+    directory: /ports_scanner/nmap
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(images)"
+    ignore:
+      - dependency-name: alpine
+        versions: [">=3.23"]
 
   # scan-and-push.yml pins actions to commit SHAs with a `# vX.Y.Z` comment;
   # Dependabot updates both. The other workflows use major tags.
