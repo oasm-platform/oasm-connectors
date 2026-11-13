@@ -14,7 +14,7 @@ RUN cd url_discovery/dirsearch && CGO_ENABLED=0 GOWORK=off go build -trimpath -o
 # build if any file came back empty, so a bad pin is caught at build time.
 RUN apk add --no-cache curl
 RUN mkdir -p /out/wordlists/dirsearch && cd /out/wordlists/dirsearch && curl -fsSL -o dicc.txt "https://raw.githubusercontent.com/maurosoria/dirsearch/v0.5.0/db/dicc.txt" && for f in common web conf extensions backups vcs db logs keys; do curl -fsSL -o "$f.txt" "https://raw.githubusercontent.com/maurosoria/dirsearch/v0.5.0/db/categories/$f.txt"; done && for f in *.txt; do test -s "$f"; done
-FROM python:3.13-slim AS runtime
+FROM python:3.15-slim AS runtime
 # Named `runtime` so CI rebuilds this stage uncached (`no-cache-filters` in
 # scan-and-push.yml): the upgrade pulls debian-security fixes published after
 # the base tag, and a cached layer would keep shipping the first build's set.
