@@ -13,7 +13,7 @@ RUN cd url_discovery/arjun && CGO_ENABLED=0 GOWORK=off go build -trimpath -o /ou
 # and no separate wordlist volume are shipped. Installed as root into the
 # system site-packages; the `arjun` console script lands in /usr/local/bin,
 # which the non-root user resolves via PATH (ARJUN_BIN defaults to "arjun").
-FROM python:3.13-slim AS runtime
+FROM python:3.15-slim AS runtime
 # Named `runtime` so CI rebuilds this stage uncached (`no-cache-filters` in
 # scan-and-push.yml): the upgrade pulls debian-security fixes published after
 # the base tag, and a cached layer would keep shipping the first build's set.
