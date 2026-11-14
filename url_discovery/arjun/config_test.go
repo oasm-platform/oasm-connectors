@@ -7,7 +7,7 @@ import (
 
 func TestLoadArjunConfig_UnsetIsZeroConfig(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "")
-	cfg, err := loadArjunConfig()
+	cfg, err := loadArjunConfig(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -20,7 +20,7 @@ func TestLoadArjunConfig_UnsetIsZeroConfig(t *testing.T) {
 
 func TestLoadArjunConfig_ParsesCamelCaseKeys(t *testing.T) {
 	t.Setenv("OASM_CONFIG", `{"wordlist":"large","method":"POST","threads":10,"chunkSize":500,"timeout":20,"delay":1.5,"stable":true,"rateLimit":100,"disableRedirects":true,"headers":["X-A: 1","X-B: 2"],"include":"status,body","maxUrls":50}`)
-	cfg, err := loadArjunConfig()
+	cfg, err := loadArjunConfig(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestLoadArjunConfig_ParsesCamelCaseKeys(t *testing.T) {
 
 func TestLoadArjunConfig_InvalidJSONErrors(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "{not json")
-	if _, err := loadArjunConfig(); err == nil {
+	if _, err := loadArjunConfig(t.Context()); err == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
 }

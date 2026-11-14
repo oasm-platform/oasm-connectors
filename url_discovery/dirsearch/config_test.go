@@ -7,7 +7,7 @@ import (
 
 func TestLoadDirsearchConfig_UnsetIsZeroConfig(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "")
-	cfg, err := loadDirsearchConfig()
+	cfg, err := loadDirsearchConfig(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -19,7 +19,7 @@ func TestLoadDirsearchConfig_UnsetIsZeroConfig(t *testing.T) {
 
 func TestLoadDirsearchConfig_ParsesCamelCaseKeys(t *testing.T) {
 	t.Setenv("OASM_CONFIG", `{"wordlist":"common","extensions":["php","html"],"threads":10,"recursive":true,"maxRecursionDepth":3,"includeStatus":"200,301","excludeStatus":"404","excludeExtensions":["js","css"],"method":"GET","headers":["X-A: 1"],"proxy":"http://p","timeout":30,"randomUserAgent":true,"maxTime":300,"maxUrls":500}`)
-	cfg, err := loadDirsearchConfig()
+	cfg, err := loadDirsearchConfig(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestLoadDirsearchConfig_ParsesCamelCaseKeys(t *testing.T) {
 
 func TestLoadDirsearchConfig_InvalidJSONErrors(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "{not json")
-	if _, err := loadDirsearchConfig(); err == nil {
+	if _, err := loadDirsearchConfig(t.Context()); err == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
 }

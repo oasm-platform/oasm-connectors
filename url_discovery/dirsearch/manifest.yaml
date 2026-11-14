@@ -109,6 +109,26 @@ configSchema:
       maximum: 1100
       title: Max scan time
       description: 'Maximum scan duration in seconds (dirsearch --max-time).'
+    matchRegex:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+        minLength: 1
+        maxLength: 512
+      title: Match URL regex
+      description: 'Only report URLs matching at least one regex (Go RE2 syntax, matched against the full URL; prefix (?i) for case-insensitive). dirsearch --exclude-regex matches the response body instead, so the adapter filters the report.'
+      ui:placeholder: '/(login|signin|admin)(/|\?|$)'
+    filterRegex:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+        minLength: 1
+        maxLength: 512
+      title: Filter URL regex
+      description: 'Drop URLs matching any regex (Go RE2 syntax, matched against the full URL). Wins over Match URL regex. Applied by the adapter.'
+      ui:placeholder: '\.(css|js|png|svg|woff2?)(\?|$)'
     maxUrls:
       type: integer
       minimum: 1

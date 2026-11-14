@@ -1,11 +1,11 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
+	"context"
 	"strconv"
 	"strings"
+
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 )
 
 // arjunConfig mirrors manifest.yaml configSchema. Keys are camelCase to match
@@ -22,22 +22,17 @@ type arjunConfig struct {
 	DisableRedirects bool     `json:"disableRedirects"` // --disable-redirects
 	Headers          []string `json:"headers"`          // --headers, joined with \n; omitted when empty
 	Include          string   `json:"include"`          // --include, only when set
+	MatchRegex       []string `json:"matchRegex"`       // adapter-side filter on "<url>?<param>=" (Arjun has no URL regex flag)
+	FilterRegex      []string `json:"filterRegex"`      // adapter-side filter on "<url>?<param>="
 	MaxUrls          int      `json:"maxUrls"`          // adapter-level cap, default 10000 when <= 0
 }
 
-// loadArjunConfig reads the per-job config profile from OASM_CONFIG. An unset or
-// empty value yields a zero config (defaults applied in buildArjunArgs), not an
-// error; malformed JSON is an error.
-func loadArjunConfig() (*arjunConfig, error) {
-	raw := strings.TrimSpace(os.Getenv("OASM_CONFIG"))
-	if raw == "" {
-		return &arjunConfig{}, nil
-	}
-	var cfg arjunConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
-	}
-	return &cfg, nil
+// loadArjunConfig reads the per-job config profile: the job's own config on ctx
+// first (a warm-pool container keeps its first run's OASM_CONFIG env), then
+// OASM_CONFIG. An unset or empty value yields a zero config (defaults applied
+// in buildArjunArgs), not an error; malformed JSON is an error.
+func loadArjunConfig(ctx context.Context) (*arjunConfig, error) {
+	return connector.LoadConfig[arjunConfig](ctx)
 }
 
 // buildArjunArgs assembles the Arjun CLI arg vector in a fixed, deterministic

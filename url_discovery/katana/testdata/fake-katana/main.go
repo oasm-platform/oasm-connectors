@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -23,6 +24,34 @@ func main() {
 		}
 		if err := os.WriteFile(argsFile, raw, 0644); err != nil {
 			fmt.Fprintln(os.Stderr, "write args:", err)
+			os.Exit(1)
+		}
+	}
+	// The adapter deletes its -mr/-fr pattern files once katana exits, so the
+	// fake copies their lines out while they still exist. It does NOT apply
+	// the patterns, so the tests also prove the adapter filters katana's
+	// output itself.
+	if patternsFile := os.Getenv("FAKE_PATTERNS_FILE"); patternsFile != "" {
+		patterns := map[string][]string{}
+		args := os.Args[1:]
+		for i := 0; i+1 < len(args); i++ {
+			if args[i] != "-mr" && args[i] != "-fr" {
+				continue
+			}
+			raw, err := os.ReadFile(args[i+1])
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "read pattern file:", err)
+				os.Exit(1)
+			}
+			patterns[args[i]] = strings.Split(string(raw), "\n")
+		}
+		raw, err := json.Marshal(patterns)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "marshal patterns:", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(patternsFile, raw, 0644); err != nil {
+			fmt.Fprintln(os.Stderr, "write patterns:", err)
 			os.Exit(1)
 		}
 	}
@@ -49,6 +78,14 @@ func main() {
 	case "hang":
 		// Simulates katana wedging; the adapter's hard timeout must kill it.
 		time.Sleep(60 * time.Second)
+		os.Exit(0)
+	case "pages":
+		// A mix of page kinds for the matchRegex / filterRegex tests.
+		fmt.Println("https://example.com/login")
+		fmt.Println("https://example.com/admin/login?next=%2F")
+		fmt.Println("https://example.com/about")
+		fmt.Println("https://example.com/static/login.css")
+		fmt.Println("https://example.com/#/admin")
 		os.Exit(0)
 	case "many":
 		// Endless URL stream with no repeats: drives the adapter's maxUrls cap.

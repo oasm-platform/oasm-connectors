@@ -7,7 +7,7 @@ import (
 
 func TestLoadFfufConfig_UnsetIsZeroConfig(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "")
-	cfg, err := loadFfufConfig()
+	cfg, err := loadFfufConfig(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -20,7 +20,7 @@ func TestLoadFfufConfig_UnsetIsZeroConfig(t *testing.T) {
 
 func TestLoadFfufConfig_ParsesCamelCaseKeys(t *testing.T) {
 	t.Setenv("OASM_CONFIG", `{"wordlist":"big","extensions":["php"],"matchCodes":"200","filterCodes":"404","filterSize":"0","recursion":true,"recursionDepth":2,"threads":50,"rate":100,"delay":"0.1","timeout":15,"followRedirects":true,"autoCalibration":true,"headers":["X-A: b"],"proxy":"http://p","method":"POST","data":"a=b","maxTime":300,"maxUrls":5000}`)
-	cfg, err := loadFfufConfig()
+	cfg, err := loadFfufConfig(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestLoadFfufConfig_ParsesCamelCaseKeys(t *testing.T) {
 
 func TestLoadFfufConfig_InvalidJSONErrors(t *testing.T) {
 	t.Setenv("OASM_CONFIG", "{not json")
-	if _, err := loadFfufConfig(); err == nil {
+	if _, err := loadFfufConfig(t.Context()); err == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
 }

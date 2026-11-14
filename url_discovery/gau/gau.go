@@ -10,14 +10,16 @@ import (
 // gauConfig mirrors manifest.yaml configSchema. Keys are camelCase to match the
 // OASM_CONFIG JSON shape the Worker ships per job.
 type gauConfig struct {
-	Providers []string `json:"providers"` // wayback|commoncrawl|otx|urlscan
-	Subs      bool     `json:"subs"`
-	Threads   int      `json:"threads"` // gau --threads, default 5 when 0
-	Timeout   int      `json:"timeout"` // gau --timeout seconds, default 45 when 0
-	Retries   int      `json:"retries"` // gau --retries, default 5 when 0
-	Proxy     string   `json:"proxy"`
-	From      string   `json:"from"` // YYYYMM
-	To        string   `json:"to"`   // YYYYMM
+	Providers   []string `json:"providers"` // wayback|commoncrawl|otx|urlscan
+	Subs        bool     `json:"subs"`
+	Threads     int      `json:"threads"` // gau --threads, default 5 when 0
+	Timeout     int      `json:"timeout"` // gau --timeout seconds, default 45 when 0
+	Retries     int      `json:"retries"` // gau --retries, default 5 when 0
+	Proxy       string   `json:"proxy"`
+	From        string   `json:"from"`        // YYYYMM
+	To          string   `json:"to"`          // YYYYMM
+	MatchRegex  []string `json:"matchRegex"`  // adapter-side URL filter (gau has no URL regex flag)
+	FilterRegex []string `json:"filterRegex"` // adapter-side URL filter
 }
 
 // buildGauArgs assembles the gau CLI arg vector. Threads/timeout/retries are

@@ -57,9 +57,13 @@ func (a FfufAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 		bin = "ffuf"
 	}
 
-	cfg, err := loadFfufConfig()
+	cfg, err := loadFfufConfig(ctx)
 	if err != nil {
 		return err
+	}
+	urlFilter, err := connector.NewURLFilter(cfg.MatchRegex, cfg.FilterRegex)
+	if err != nil {
+		return fmt.Errorf("ffuf: %w", err)
 	}
 
 	wordlist := resolveFfufWordlist(cfg)
@@ -113,6 +117,10 @@ func (a FfufAdapter) Execute(ctx context.Context, inputs map[string]any, out cha
 			continue
 		}
 		seen[u] = true
+		// Before the cap check: maxUrls bounds the URLs the user asked for.
+		if !urlFilter.Allow(u) {
+			continue
+		}
 		if emitted >= maxUrls {
 			_ = cmd.Process.Kill()
 			break

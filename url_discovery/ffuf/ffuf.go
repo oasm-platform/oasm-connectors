@@ -1,13 +1,13 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 	httphelper "github.com/oasm-platform/oasm-connectors/sdk/http"
 )
 
@@ -31,8 +31,10 @@ type ffufConfig struct {
 	Proxy           string   `json:"proxy"`
 	Method          string   `json:"method"`
 	Data            string   `json:"data"`
-	MaxTime         int      `json:"maxTime"` // -maxtime, only when >0
-	MaxUrls         int      `json:"maxUrls"` // adapter-level cap, default 10000 when <=0
+	MaxTime         int      `json:"maxTime"`     // -maxtime, only when >0
+	MatchRegex      []string `json:"matchRegex"`  // adapter-side URL filter (-mr/-fr match the body, not the URL)
+	FilterRegex     []string `json:"filterRegex"` // adapter-side URL filter
+	MaxUrls         int      `json:"maxUrls"`     // adapter-level cap, default 10000 when <=0
 }
 
 // ffufWordlistFiles maps the configSchema enum to the wordlist file name.
@@ -60,19 +62,12 @@ func resolveFfufWordlist(cfg *ffufConfig) string {
 	return filepath.Join(dir, file)
 }
 
-// loadFfufConfig reads the per-job config profile from OASM_CONFIG. An unset or
-// empty value yields a zero config (defaults applied in buildFfufArgs), not an
-// error; malformed JSON is an error.
-func loadFfufConfig() (*ffufConfig, error) {
-	raw := strings.TrimSpace(os.Getenv("OASM_CONFIG"))
-	if raw == "" {
-		return &ffufConfig{}, nil
-	}
-	var cfg ffufConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
-	}
-	return &cfg, nil
+// loadFfufConfig reads the per-job config profile: the job's own config on ctx
+// first (a warm-pool container keeps its first run's OASM_CONFIG env), then
+// OASM_CONFIG. An unset or empty value yields a zero config (defaults applied
+// in buildFfufArgs), not an error; malformed JSON is an error.
+func loadFfufConfig(ctx context.Context) (*ffufConfig, error) {
+	return connector.LoadConfig[ffufConfig](ctx)
 }
 
 // buildFfufArgs assembles the ffuf CLI arg vector in a fixed deterministic

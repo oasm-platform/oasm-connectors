@@ -94,6 +94,26 @@ configSchema:
       title: Include params
       description: 'Comma-separated list of known parameters to include in every request (Arjun --include).'
       ui:placeholder: 'status,debug'
+    matchRegex:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+        minLength: 1
+        maxLength: 512
+      title: Match URL regex
+      description: 'Only report findings whose "<url>?<param>=" form matches at least one regex (Go RE2 syntax; prefix (?i) for case-insensitive). Arjun has no URL regex option, so the adapter filters its output.'
+      ui:placeholder: '[?&](redirect|url|next|return)='
+    filterRegex:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+        minLength: 1
+        maxLength: 512
+      title: Filter URL regex
+      description: 'Drop findings whose "<url>?<param>=" form matches any regex (Go RE2 syntax). Wins over Match URL regex. Applied by the adapter.'
+      ui:placeholder: '[?&](utm_[a-z]+|_)='
     maxUrls:
       type: integer
       minimum: 1

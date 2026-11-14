@@ -1,13 +1,13 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/oasm-platform/oasm-connectors/sdk/connector"
 	httphelper "github.com/oasm-platform/oasm-connectors/sdk/http"
 )
 
@@ -27,23 +27,18 @@ type dirsearchConfig struct {
 	Proxy             string   `json:"proxy"`
 	Timeout           int      `json:"timeout"` // dirsearch --timeout seconds
 	RandomUserAgent   bool     `json:"randomUserAgent"`
-	MaxTime           int      `json:"maxTime"` // dirsearch --max-time seconds
-	MaxUrls           int      `json:"maxUrls"` // adapter-level cap, default 10000 when <=0
+	MaxTime           int      `json:"maxTime"`     // dirsearch --max-time seconds
+	MatchRegex        []string `json:"matchRegex"`  // adapter-side URL filter (--exclude-regex matches the body, not the URL)
+	FilterRegex       []string `json:"filterRegex"` // adapter-side URL filter
+	MaxUrls           int      `json:"maxUrls"`     // adapter-level cap, default 10000 when <=0
 }
 
-// loadDirsearchConfig reads the per-job config profile from OASM_CONFIG. An
-// unset or empty value yields a zero config (defaults applied in
-// buildDirsearchArgs), not an error; malformed JSON is an error.
-func loadDirsearchConfig() (*dirsearchConfig, error) {
-	raw := strings.TrimSpace(os.Getenv("OASM_CONFIG"))
-	if raw == "" {
-		return &dirsearchConfig{}, nil
-	}
-	var cfg dirsearchConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return nil, fmt.Errorf("invalid OASM_CONFIG: %w", err)
-	}
-	return &cfg, nil
+// loadDirsearchConfig reads the per-job config profile: the job's own config on
+// ctx first (a warm-pool container keeps its first run's OASM_CONFIG env), then
+// OASM_CONFIG. An unset or empty value yields a zero config (defaults applied
+// in buildDirsearchArgs), not an error; malformed JSON is an error.
+func loadDirsearchConfig(ctx context.Context) (*dirsearchConfig, error) {
+	return connector.LoadConfig[dirsearchConfig](ctx)
 }
 
 // resolveDirsearchWordlist maps the config wordlist enum to an absolute path

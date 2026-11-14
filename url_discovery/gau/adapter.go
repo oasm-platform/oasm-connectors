@@ -64,6 +64,10 @@ func (a GauAdapter) Execute(ctx context.Context, inputs map[string]any, out chan
 	if err != nil {
 		return err
 	}
+	urlFilter, err := connector.NewURLFilter(cfg.MatchRegex, cfg.FilterRegex)
+	if err != nil {
+		return fmt.Errorf("gau: %w", err)
+	}
 
 	runCtx, cancel := context.WithTimeout(ctx, gauHardTimeout)
 	defer cancel()
@@ -91,6 +95,9 @@ func (a GauAdapter) Execute(ctx context.Context, inputs map[string]any, out chan
 			continue
 		}
 		seen[line] = true
+		if !urlFilter.Allow(line) {
+			continue
+		}
 		f := connector.Finding{
 			Name:      line,
 			Severity:  "info",
