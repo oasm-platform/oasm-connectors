@@ -63,9 +63,13 @@ func (a DirsearchAdapter) Execute(ctx context.Context, inputs map[string]any, ou
 		bin = "dirsearch"
 	}
 
-	cfg, err := loadDirsearchConfig()
+	cfg, err := loadDirsearchConfig(ctx)
 	if err != nil {
 		return err
+	}
+	urlFilter, err := connector.NewURLFilter(cfg.MatchRegex, cfg.FilterRegex)
+	if err != nil {
+		return fmt.Errorf("dirsearch: %w", err)
 	}
 	wordlist := resolveDirsearchWordlist(cfg)
 	maxUrls := cfg.MaxUrls
@@ -141,6 +145,10 @@ func (a DirsearchAdapter) Execute(ctx context.Context, inputs map[string]any, ou
 			continue
 		}
 		seen[u] = true
+		// Before the cap check: maxUrls bounds the URLs the user asked for.
+		if !urlFilter.Allow(u) {
+			continue
+		}
 		if emitted >= maxUrls {
 			break
 		}

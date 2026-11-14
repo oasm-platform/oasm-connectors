@@ -127,6 +127,26 @@ configSchema:
       maximum: 1100
       title: Max time (seconds)
       description: 'Maximum running time in seconds (ffuf -maxtime). The adapter also enforces a hard 20 minute timeout.'
+    matchRegex:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+        minLength: 1
+        maxLength: 512
+      title: Match URL regex
+      description: 'Only report URLs matching at least one regex (Go RE2 syntax, matched against the full URL; prefix (?i) for case-insensitive). ffuf -mr matches the response body instead, so the adapter filters the matched URLs.'
+      ui:placeholder: '/(login|signin|admin)(/|\?|$)'
+    filterRegex:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+        minLength: 1
+        maxLength: 512
+      title: Filter URL regex
+      description: 'Drop URLs matching any regex (Go RE2 syntax, matched against the full URL). Wins over Match URL regex. Applied by the adapter.'
+      ui:placeholder: '\.(css|js|png|svg|woff2?)(\?|$)'
     maxUrls:
       type: integer
       minimum: 1

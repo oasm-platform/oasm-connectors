@@ -76,6 +76,26 @@ configSchema:
       title: To
       description: 'End timestamp filter YYYYMM (gau --to).'
       ui:placeholder: '202601'
+    matchRegex:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+        minLength: 1
+        maxLength: 512
+      title: Match URL regex
+      description: 'Only report URLs matching at least one regex (Go RE2 syntax, matched against the full URL; prefix (?i) for case-insensitive). gau has no URL regex option, so the adapter filters its output.'
+      ui:placeholder: '/(login|signin|admin)(/|\?|$)'
+    filterRegex:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+        minLength: 1
+        maxLength: 512
+      title: Filter URL regex
+      description: 'Drop URLs matching any regex (Go RE2 syntax, matched against the full URL). Wins over Match URL regex. Applied by the adapter.'
+      ui:placeholder: '\.(css|js|png|svg|woff2?)(\?|$)'
 resourceDefaults:
   cpu: 250m
   memory: 256Mi

@@ -75,6 +75,20 @@ func (a KatanaAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 		return err
 	}
 
+	// The adapter filters every URL itself even when the patterns are pushed
+	// down as -mr/-fr: katana only gets the lists it evaluates verbatim (see
+	// katanaCanEvaluate), and both sides use Go RE2, so filtering twice is
+	// idempotent.
+	urlFilter, err := connector.NewURLFilter(cfg.MatchRegex, cfg.FilterRegex)
+	if err != nil {
+		return fmt.Errorf("katana: %w", err)
+	}
+	patternFiles, cleanupPatterns, err := writeKatanaPatternFiles(cfg)
+	defer cleanupPatterns()
+	if err != nil {
+		return err
+	}
+
 	// ponytail: adapter-side cap is the only real volume bound (measured: -mdp
 	// caps pages, not emitted rows, and 53k+ unique URLs are reachable in under
 	// 4 min); ceiling ~ tens of thousands of URLs per job; upgrade path =
@@ -90,7 +104,7 @@ func (a KatanaAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 
 	stderr := connector.NewTailWriter(2048)
 
-	cmd := exec.CommandContext(runCtx, bin, buildKatanaArgs(target, cfg)...)
+	cmd := exec.CommandContext(runCtx, bin, buildKatanaArgs(target, cfg, patternFiles)...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("katana: stdout pipe: %w", err)
@@ -121,6 +135,10 @@ func (a KatanaAdapter) Execute(ctx context.Context, inputs map[string]any, out c
 			continue
 		}
 		seen[line] = true
+		// Before the cap check: maxUrls bounds the URLs the user asked for.
+		if !urlFilter.Allow(line) {
+			continue
+		}
 		if emitted >= maxUrls {
 			_ = cmd.Process.Kill()
 			break

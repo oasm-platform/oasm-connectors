@@ -80,9 +80,13 @@ func (a ArjunAdapter) Execute(ctx context.Context, inputs map[string]any, out ch
 		bin = "arjun"
 	}
 
-	cfg, err := loadArjunConfig()
+	cfg, err := loadArjunConfig(ctx)
 	if err != nil {
 		return err
+	}
+	urlFilter, err := connector.NewURLFilter(cfg.MatchRegex, cfg.FilterRegex)
+	if err != nil {
+		return fmt.Errorf("arjun: %w", err)
 	}
 
 	// ponytail: adapter-side cap is the only real volume bound; ceiling ~ tens
@@ -157,6 +161,10 @@ func (a ArjunAdapter) Execute(ctx context.Context, inputs map[string]any, out ch
 					continue
 				}
 				seen[name] = true
+				// Before the cap check: maxUrls bounds the URLs the user asked for.
+				if !urlFilter.Allow(name) {
+					continue
+				}
 				if emitted >= maxUrls {
 					break parse
 				}

@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/csv"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -32,7 +35,34 @@ type katanaConfig struct {
 	ExtensionMatch         []string `json:"extensionMatch"`         // katana -em
 	ExtensionFilter        []string `json:"extensionFilter"`        // katana -ef
 	CrawlScope             string   `json:"crawlScope"`             // katana -cs
+	MatchRegex             []string `json:"matchRegex"`             // katana -mr (pattern file) + adapter filter
+	FilterRegex            []string `json:"filterRegex"`            // katana -fr (pattern file) + adapter filter
 	MaxUrls                int      `json:"maxUrls"`                // adapter-level cap, default 10000 when 0
+}
+
+// katanaPatternFiles holds the paths of the -mr / -fr pattern files; an empty
+// path omits the flag.
+type katanaPatternFiles struct {
+	match  string
+	filter string
+}
+
+// katanaCanEvaluate reports whether katana evaluates every pattern exactly as
+// written. katana declares -mr/-fr with goflags.FileStringSliceOptions, which
+// trims each entry and cuts it at the first '#' as a comment (goflags v0.2.1,
+// read on both the CLI and the file path), so "#/admin" would silently become
+// an empty pattern. Such a list is kept adapter-side only: pushing down part of
+// a match list would make katana drop URLs only the omitted patterns match.
+func katanaCanEvaluate(patterns []string) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+	for _, p := range patterns {
+		if strings.Contains(p, "#") || strings.TrimSpace(p) != p {
+			return false
+		}
+	}
+	return true
 }
 
 // katanaRunnerInitMarker is the stderr substring katana prints when the runner
@@ -44,6 +74,40 @@ const katanaRunnerInitMarker = "could not create runner"
 // defaults to true; an explicit false disables it.
 func jsCrawlEnabled(cfg *katanaConfig) bool {
 	return cfg.JsCrawl == nil || *cfg.JsCrawl
+}
+
+// writeKatanaPatternFiles writes the pattern lists katana can evaluate verbatim
+// to one-pattern-per-line files in a fresh temp dir. cleanup removes them and is
+// always safe to call, also on error.
+func writeKatanaPatternFiles(cfg *katanaConfig) (files katanaPatternFiles, cleanup func(), err error) {
+	cleanup = func() {}
+	pushMatch, pushFilter := katanaCanEvaluate(cfg.MatchRegex), katanaCanEvaluate(cfg.FilterRegex)
+	if !pushMatch && !pushFilter {
+		return files, cleanup, nil
+	}
+	dir, err := os.MkdirTemp("", "katana-patterns-*")
+	if err != nil {
+		return files, cleanup, fmt.Errorf("katana: pattern dir: %w", err)
+	}
+	cleanup = func() { _ = os.RemoveAll(dir) }
+	write := func(name string, patterns []string) (string, error) {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(strings.Join(patterns, "\n")), 0o600); err != nil {
+			return "", fmt.Errorf("katana: write %s: %w", name, err)
+		}
+		return path, nil
+	}
+	if pushMatch {
+		if files.match, err = write("match.txt", cfg.MatchRegex); err != nil {
+			return files, cleanup, err
+		}
+	}
+	if pushFilter {
+		if files.filter, err = write("filter.txt", cfg.FilterRegex); err != nil {
+			return files, cleanup, err
+		}
+	}
+	return files, cleanup, nil
 }
 
 // csvQuoteHeader quotes a header line when its value contains a comma or a
@@ -81,14 +145,18 @@ func csvQuoteHeader(h string) string {
 //     (and file output swallows stdout).
 //   - form/field extraction (-fx/-fc/-flc): not URL discovery; katana writes
 //     its own defaults under $HOME/.config/katana/.
-//   - match/filter regex/dsl and tuning flags (-mr/-fr/-mdc/-fdc/-iqp/-pc/-dr/
+//   - match/filter dsl and tuning flags (-mdc/-fdc/-iqp/-pc/-dr/
 //     -s/-kf/-r/-e/-td/-tlsi/-rd/-rlm/-hrl/-mrs/-time-stable/-duf/-ndef/-up/
 //     -resume/-health-check/-config/-v/-debug/-elog/-pprof-server): outside the
 //     URL-discovery contract; deterministic argv stays minimal.
 //
 // -fs is never emitted: katana's default -fs rdn (registered domain) is exactly
 // the scope we want.
-func buildKatanaArgs(target string, cfg *katanaConfig) []string {
+//
+// -mr/-fr always point at adapter-written pattern files, never at the raw
+// patterns: goflags reads a CLI value that names an existing file as that
+// file's lines, so a pattern such as "/etc/hosts" would load a local file.
+func buildKatanaArgs(target string, cfg *katanaConfig, files katanaPatternFiles) []string {
 	depth := cfg.Depth
 	if depth == 0 {
 		depth = 3
@@ -147,6 +215,12 @@ func buildKatanaArgs(target string, cfg *katanaConfig) []string {
 	}
 	if len(cfg.ExtensionFilter) > 0 {
 		args = append(args, "-ef", strings.Join(cfg.ExtensionFilter, ","))
+	}
+	if files.match != "" {
+		args = append(args, "-mr", files.match)
+	}
+	if files.filter != "" {
+		args = append(args, "-fr", files.filter)
 	}
 	if proxy := httphelper.ProxyOrEnv(cfg.Proxy); proxy != "" {
 		args = append(args, "-proxy", proxy)

@@ -96,12 +96,15 @@ func TestBuildKatanaArgs_FullAndDefaults(t *testing.T) {
 		"-cs", `.*\.example\.com`,
 		"-em", "php,html",
 		"-ef", "png,css",
+		"-mr", "/tmp/match.txt",
+		"-fr", "/tmp/filter.txt",
 		"-proxy", "http://127.0.0.1:8080",
 		"-H", "X-Api-Key: k1",
 		"-H", `"Accept: text/html,application/json"`,
 		"-u", "example.com",
 	}
-	if got := buildKatanaArgs("example.com", full); !slices.Equal(got, wantFull) {
+	files := katanaPatternFiles{match: "/tmp/match.txt", filter: "/tmp/filter.txt"}
+	if got := buildKatanaArgs("example.com", full, files); !slices.Equal(got, wantFull) {
 		t.Errorf("full cfg argv:\n got %v\nwant %v", got, wantFull)
 	}
 
@@ -118,7 +121,7 @@ func TestBuildKatanaArgs_FullAndDefaults(t *testing.T) {
 		"-jc",
 		"-u", "example.com",
 	}
-	if got := buildKatanaArgs("example.com", &katanaConfig{}); !slices.Equal(got, wantZero) {
+	if got := buildKatanaArgs("example.com", &katanaConfig{}, katanaPatternFiles{}); !slices.Equal(got, wantZero) {
 		t.Errorf("zero cfg argv:\n got %v\nwant %v", got, wantZero)
 	}
 }
