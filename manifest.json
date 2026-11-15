@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-14T03:55:02.7405477Z",
+  "generatedAt": "2026-11-15T17:02:37.0598677Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -1036,8 +1036,8 @@
     {
       "name": "Nmap",
       "slug": "nmap",
-      "version": "7.97",
-      "image": "ghcr.io/oasm-platform/connector-nmap:7.97",
+      "version": "7.99",
+      "image": "ghcr.io/oasm-platform/connector-nmap:7.99",
       "author": "oasm",
       "pricingTier": [
         "free"

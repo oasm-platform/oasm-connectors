@@ -73,7 +73,7 @@ func main() {
 func hostXML(ports string) string {
 	return `<?xml version="1.0" encoding="UTF-8"?>` +
 		`<!DOCTYPE nmaprun>` +
-		`<nmaprun scanner="nmap" args="nmap -Pn -n -oX - 127.0.0.1" start="1" startstr="x" version="7.97" xmloutputversion="1.05">` +
+		`<nmaprun scanner="nmap" args="nmap -Pn -n -oX - 127.0.0.1" start="1" startstr="x" version="7.99" xmloutputversion="1.05">` +
 		`<host starttime="1" endtime="2"><status state="up" reason="user-set"/>` +
 		`<address addr="127.0.0.1" addrtype="ipv4"/>` +
 		`<hostnames><hostname name="localhost" type="PTR"/></hostnames>` +
