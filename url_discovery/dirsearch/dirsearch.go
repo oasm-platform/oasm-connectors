@@ -104,7 +104,7 @@ func buildDirsearchArgs(baseURL, wordlistPath, outFile string, cfg *dirsearchCon
 	for _, h := range cfg.Headers {
 		args = append(args, "-H", h)
 	}
-	if proxy := httphelper.ProxyOrEnv(cfg.Proxy); proxy != "" {
+	if proxy := dirsearchProxy(cfg.Proxy); proxy != "" {
 		args = append(args, "-p", proxy)
 	}
 	if cfg.Timeout > 0 {
@@ -118,4 +118,22 @@ func buildDirsearchArgs(baseURL, wordlistPath, outFile string, cfg *dirsearchCon
 	}
 
 	return args
+}
+
+// dirsearchProxy is the proxy dirsearch gets with -p: the configured one,
+// else the worker's socks5h egress proxy (ALL_PROXY), else its HTTP one.
+// SOCKS comes first because over an HTTP proxy httpcore copies dirsearch's
+// request "target" extension, an absolute URL for its wildcard probe, into
+// the CONNECT line; the egress proxy then cannot dial it and answers 502, so
+// every request fails and dirsearch reports zero results.
+func dirsearchProxy(configured string) string {
+	if configured != "" {
+		return configured
+	}
+	for _, k := range []string{"ALL_PROXY", "all_proxy"} {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return httphelper.ProxyOrEnv("")
 }

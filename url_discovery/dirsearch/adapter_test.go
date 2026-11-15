@@ -314,3 +314,84 @@ func contains(s, substr string) bool {
 	}
 	return false
 }
+
+// runWithProxyEnv runs the fake in proxy-env mode under the variables the
+// worker injects for connectors behind its egress proxy, and returns the
+// findings, the error and the captured argv.
+func runWithProxyEnv(t *testing.T, cfgJSON string) ([]connector.Finding, error, []string) {
+	t.Helper()
+	argsFile := filepath.Join(t.TempDir(), "args.json")
+	t.Setenv("FAKE_ARGS_FILE", argsFile)
+	t.Setenv("HTTP_PROXY", "http://exec-tok@worker-1:26277")
+	t.Setenv("HTTPS_PROXY", "http://exec-tok@worker-1:26277")
+	t.Setenv("http_proxy", "http://exec-tok@worker-1:26277")
+	t.Setenv("https_proxy", "http://exec-tok@worker-1:26277")
+	t.Setenv("ALL_PROXY", "socks5h://exec-tok@worker-1:26277")
+	t.Setenv("all_proxy", "socks5h://exec-tok@worker-1:26277")
+
+	findings, err := runCollect(t, "proxy-env", "https://example.com", cfgJSON)
+
+	var args []string
+	if raw, readErr := os.ReadFile(argsFile); readErr == nil {
+		_ = json.Unmarshal(raw, &args)
+	}
+	return findings, err, args
+}
+
+func proxyFlag(args []string) string {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "-p" {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
+func TestDirsearchExecute_WorkerEgressProxyGoesThroughFlagOnly(t *testing.T) {
+	findings, err, args := runWithProxyEnv(t, "")
+
+	if err != nil {
+		t.Fatalf("dirsearch must not inherit the proxy variables: %v", err)
+	}
+	if len(findings) != 1 {
+		t.Fatalf("want 1 finding, got %d", len(findings))
+	}
+	// The socks5h side of the egress proxy: over its HTTP side httpcore puts
+	// dirsearch's absolute request target into the CONNECT line (502).
+	if got := proxyFlag(args); got != "socks5h://exec-tok@worker-1:26277" {
+		t.Errorf("-p = %q, want the worker's socks5h egress proxy", got)
+	}
+	// Only the child is cleaned: the adapter's own environment is untouched.
+	if os.Getenv("ALL_PROXY") == "" {
+		t.Error("the adapter's own ALL_PROXY must stay set")
+	}
+}
+
+func TestDirsearchExecute_FallsBackToHTTPEgressWithoutSocks(t *testing.T) {
+	t.Setenv("ALL_PROXY", "")
+	t.Setenv("all_proxy", "")
+	argsFile := filepath.Join(t.TempDir(), "args.json")
+	t.Setenv("FAKE_ARGS_FILE", argsFile)
+	t.Setenv("HTTPS_PROXY", "http://exec-tok@worker-1:26277")
+
+	if _, err := runCollect(t, "proxy-env", "https://example.com", ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	raw, _ := os.ReadFile(argsFile)
+	var args []string
+	_ = json.Unmarshal(raw, &args)
+	if got := proxyFlag(args); got != "http://exec-tok@worker-1:26277" {
+		t.Errorf("-p = %q, want the HTTP egress proxy", got)
+	}
+}
+
+func TestDirsearchExecute_ConfiguredProxyIsNotOverriddenByEnv(t *testing.T) {
+	_, err, args := runWithProxyEnv(t, `{"proxy":"socks5://127.0.0.1:9050"}`)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := proxyFlag(args); got != "socks5://127.0.0.1:9050" {
+		t.Errorf("-p = %q, want the configured proxy", got)
+	}
+}

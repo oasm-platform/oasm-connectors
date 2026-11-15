@@ -29,6 +29,19 @@ func main() {
 	outFile := outputFile()
 
 	switch os.Getenv("FAKE_MODE") {
+	case "proxy-env":
+		// The real dirsearch builds an httpx client with trust_env, which
+		// mounts a transport for every proxy variable it inherits and dies on
+		// the worker's socks5h ALL_PROXY (no socksio). Fail the same way when
+		// any of them leaks through; the proxy must come from -p alone.
+		for _, k := range []string{"ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"} {
+			if os.Getenv(k) != "" {
+				fmt.Fprintf(os.Stderr, "ImportError: Using SOCKS proxy, but the 'socksio' package is not installed (%s inherited)\n", k)
+				os.Exit(1)
+			}
+		}
+		writeReport(outFile, []byte(`{"results":[{"url":"https://example.com/login","status":200}]}`))
+		os.Exit(0)
 	case "empty":
 		// Exit 0 with an empty results array: a clean scan that found nothing.
 		writeReport(outFile, []byte(`{"results":[]}`))

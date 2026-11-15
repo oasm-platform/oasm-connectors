@@ -37,7 +37,7 @@ This connector is its own Go module. All dependencies, including the SDK (pulled
 | `excludeExtensions` | string[] | — | Extensions to exclude (`dirsearch --exclude-extensions`, comma-joined) |
 | `method` | string | — | HTTP method (`dirsearch -m`) |
 | `headers` | string[] | — | Extra request headers, one `-H` per entry (e.g. `X-Api-Key: abc`) |
-| `proxy` | string | — | Proxy URL, e.g. `http://127.0.0.1:8080` (`dirsearch -p`) |
+| `proxy` | string | — | Proxy URL, e.g. `http://127.0.0.1:8080` (`dirsearch -p`). Unset: the worker's socks5h egress proxy (`ALL_PROXY`), else its HTTP one (`HTTPS_PROXY`/`HTTP_PROXY`). SOCKS first because over an HTTP proxy httpcore puts dirsearch's absolute request target into the CONNECT line and the proxy answers 502. dirsearch itself runs without the proxy variables, so `-p` is the only proxy it uses |
 | `timeout` | integer (≥1) | — | Per-request timeout seconds (`dirsearch --timeout`) |
 | `randomUserAgent` | boolean | false | Random User-Agent per request (`dirsearch --random-agent`) |
 | `maxTime` | integer (1–1100) | — | Scan duration budget seconds (`dirsearch --max-time`). A 20 min hard timeout always applies |
