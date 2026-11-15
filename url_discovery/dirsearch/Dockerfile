@@ -38,8 +38,12 @@ RUN apt-get update -qq \
 # the build if a dirsearch release ever moves it. pip itself
 # is not needed at runtime and vendors its own urllib3/msgpack/setuptools, so
 # it goes too.
+#
+# socksio lets httpx speak SOCKS: the adapter hands dirsearch the worker's
+# socks5h egress proxy, because over an HTTP proxy httpcore copies dirsearch's
+# absolute request "target" into the CONNECT line and the proxy answers 502.
 RUN pip install --no-cache-dir --break-system-packages dirsearch==0.5.0 \
- && pip install --no-cache-dir --break-system-packages pyopenssl==26.4.0 cryptography==50.0.2 \
+ && pip install --no-cache-dir --break-system-packages pyopenssl==26.4.0 cryptography==50.0.2 socksio==1.0.0 \
  && native_dir="$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')/dirsearch/native" \
  && test -d "$native_dir" && rm -rf "$native_dir" \
  && pip uninstall -y --break-system-packages pip \

@@ -98,6 +98,7 @@ func (a DirsearchAdapter) Execute(ctx context.Context, inputs map[string]any, ou
 	errTail.limit = 2048
 
 	cmd := exec.CommandContext(runCtx, bin, buildDirsearchArgs(base, wordlist, outFile, cfg)...)
+	cmd.Env = withoutProxyEnv(os.Environ())
 	cmd.Stdout = &outTail
 	cmd.Stderr = &errTail
 
@@ -171,6 +172,31 @@ func (a DirsearchAdapter) Execute(ctx context.Context, inputs map[string]any, ou
 		return fmt.Errorf("dirsearch: %w: %s", waitErr, tailStr)
 	}
 	return nil
+}
+
+// proxyEnvKeys are the proxy variables the worker injects for a connector
+// behind its egress proxy (ALL_PROXY is socks5h://).
+var proxyEnvKeys = map[string]bool{
+	"HTTP_PROXY": true, "http_proxy": true,
+	"HTTPS_PROXY": true, "https_proxy": true,
+	"ALL_PROXY": true, "all_proxy": true,
+}
+
+// withoutProxyEnv drops the proxy variables from dirsearch's environment. The
+// proxy reaches it through -p (buildDirsearchArgs, which reads them first), so
+// nothing is lost. Inherited, they break it: dirsearch builds an httpx client
+// with trust_env, which mounts a transport for every proxy variable, fails on
+// the socks5h ALL_PROXY ("socksio is not installed") before any request, and
+// would let HTTPS_PROXY override a proxy set in the config.
+func withoutProxyEnv(environ []string) []string {
+	kept := make([]string, 0, len(environ))
+	for _, kv := range environ {
+		key, _, _ := strings.Cut(kv, "=")
+		if !proxyEnvKeys[key] {
+			kept = append(kept, kv)
+		}
+	}
+	return kept
 }
 
 // normalizeBaseURL turns a raw target into the base URL dirsearch scans (-u)
