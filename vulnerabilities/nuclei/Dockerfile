@@ -1,5 +1,5 @@
 # connector image (SDK) — build context: repo root
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27-alpine AS builder
 WORKDIR /src
 COPY sdk/go.mod sdk/go.sum sdk/
 COPY vulnerabilities/nuclei/go.mod vulnerabilities/nuclei/go.sum vulnerabilities/nuclei/
