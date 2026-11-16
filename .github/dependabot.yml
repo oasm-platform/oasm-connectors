@@ -53,8 +53,13 @@ updates:
   # Base and builder image tags. Upstream tool images (zap-stable, wpscan,
   # gitleaks, trivy, nikto) are pinned deliberately and each Dockerfile notes
   # what else has to move with the tag — read that note before merging.
+  #
+  # nmap comes from the alpine package set, so for /ports_scanner/nmap the
+  # alpine tag *is* the nmap version: an alpine bump must also move version and
+  # image in ports_scanner/nmap/manifest.yaml and the Dockerfile's nmap note.
   - package-ecosystem: docker
     directories:
+      - /ports_scanner/nmap
       - /ports_scanner/rustscan
       - /sca/trivy
       - /secrets/gitleaks
@@ -78,22 +83,6 @@ updates:
       docker-images:
         patterns: ["*"]
         group-by: dependency-name
-
-  # nmap comes from the alpine package set, so the alpine tag *is* the nmap
-  # version: alpine 3.24 ships nmap 7.99 while manifest.yaml publishes 7.97.
-  # That bump is held on blocked/nmap-7.99 and has to land together with the
-  # manifest version, so alpine stays below 3.23 here until it does. Drop the
-  # ignore and fold this directory back into the block above then.
-  - package-ecosystem: docker
-    directory: /ports_scanner/nmap
-    schedule:
-      interval: weekly
-      day: monday
-    commit-message:
-      prefix: "chore(images)"
-    ignore:
-      - dependency-name: alpine
-        versions: [">=3.23"]
 
   # scan-and-push.yml pins actions to commit SHAs with a `# vX.Y.Z` comment;
   # Dependabot updates both. The other workflows use major tags.
