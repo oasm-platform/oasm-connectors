@@ -513,6 +513,35 @@ func TestWpscanExecute_HeuristicSeverityWithoutCVSS(t *testing.T) {
 	}
 }
 
+// wpscan 4.2.1 adds a top-level truncated_responses array to its JSON output
+// when --max-response-size cut responses short. It carries no findings, so the
+// payload must still decode and yield exactly the vulnerabilities it reports.
+func TestExtractFindings_IgnoresTruncatedResponses(t *testing.T) {
+	payload := []byte(`{
+		"target_url": "https://example.com/",
+		"truncated_responses": [{"url": "https://example.com/huge.xml", "max_response_size": 16777216}],
+		"version": {"number": "6.5", "vulnerabilities": [
+			{"title": "WP < 6.5.2 - Stored XSS", "fixed_in": "6.5.2", "references": {"cve": ["2024-0001"]}}
+		]}
+	}`)
+
+	var result wpscanOutput
+	if err := json.Unmarshal(payload, &result); err != nil {
+		t.Fatalf("decode 4.2.1 payload: %v", err)
+	}
+	findings := extractFindings(result, "https://example.com")
+
+	if len(findings) != 1 {
+		t.Fatalf("got %d findings, want 1: %+v", len(findings), findings)
+	}
+	if findings[0].Name != "WP < 6.5.2 - Stored XSS" {
+		t.Errorf("finding name = %q", findings[0].Name)
+	}
+	if err := findings[0].Validate(); err != nil {
+		t.Errorf("finding failed Validate: %v", err)
+	}
+}
+
 // --- helpers ---
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && searchString(s, substr)

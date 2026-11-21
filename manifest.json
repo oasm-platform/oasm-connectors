@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-15T17:02:37.0598677Z",
+  "generatedAt": "2026-11-20T17:03:11.4188433Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -1684,8 +1684,8 @@
     {
       "name": "WPScan - WordPress Security Scanner",
       "slug": "wpscan",
-      "version": "4.2.0",
-      "image": "ghcr.io/oasm-platform/connector-wpscan:4.2.0",
+      "version": "4.2.1",
+      "image": "ghcr.io/oasm-platform/connector-wpscan:4.2.1",
       "author": "oasm",
       "pricingTier": [
         "free"
