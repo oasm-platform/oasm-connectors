@@ -51,8 +51,8 @@ configSchema:
     templateUuid:
       type: string
       title: Scan template UUID
-      description: 'UUID of the Nessus scan template to use.'
-      ui:placeholder: 'ad629e16-03b6-461c-94cf-736f3f1a1c2f'
+      description: 'UUID of the Nessus scan template to use. Leave empty to use Basic Network Scan.'
+      ui:placeholder: 'Leave empty for Basic Network Scan'
     policyId:
       type: string
       title: Policy ID
