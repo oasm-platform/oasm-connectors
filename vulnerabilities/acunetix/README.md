@@ -27,7 +27,6 @@ This is the new-SDK path that makes warm-pool reuse work: the SDK overrides
 {
   "url": "https://acunetix.local:3443",
   "apiKey": "your-api-key",
-  "profileId": "11111111-1111-1111-1111-111111111111",
   "criticality": 10,
   "targetDescription": "oasm-scan",
   "disableTlsChecks": false,
@@ -39,7 +38,7 @@ This is the new-SDK path that makes warm-pool reuse work: the SDK overrides
 |-----|---------------------|---------|-----------|-------------|
 | `url` | `ACUNETIX_URL` | — | yes | Acunetix base URL (`https://host:3443` on-premises, `https://app.invicti.com` Online). `/api/v1` is appended when absent |
 | `apiKey` | `ACUNETIX_API_KEY` | — | yes | API key sent in the `X-Auth` header |
-| `profileId` | `ACUNETIX_PROFILE_ID` | `11111111-1111-1111-1111-111111111111` (Full Scan) | no | Scan type (profile) UUID |
+| `profileId` | `ACUNETIX_PROFILE_ID` | built-in Full Scan profile | no | Scan type (profile) UUID; leave empty for Full Scan |
 | `criticality` | `ACUNETIX_CRITICALITY` | `10` | no | Target business criticality: `30` Critical, `20` High, `10` Normal, `0` Low |
 | `targetDescription` | `ACUNETIX_TARGET_DESCRIPTION` | `oasm-scan` | no | Description stored on the Acunetix target created for this scan |
 | `disableTlsChecks` | `ACUNETIX_INSECURE` | `false` | no | Skip TLS certificate verification (required for the self-signed cert Acunetix ships by default) |

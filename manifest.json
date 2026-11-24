@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-20T17:03:11.4188433Z",
+  "generatedAt": "2026-11-24T03:52:33.0302264Z",
   "connectors": [
     {
       "name": "Acunetix",
@@ -86,11 +86,10 @@
             "type": "integer"
           },
           "profileId": {
-            "default": "11111111-1111-1111-1111-111111111111",
-            "description": "Scan type (profile) UUID. Defaults to Full Scan.",
+            "description": "Scan type (profile) UUID. Leave empty to use the built-in Full Scan profile.",
             "title": "Scanning profile ID",
             "type": "string",
-            "ui:placeholder": "11111111-1111-1111-1111-111111111111"
+            "ui:placeholder": "Leave empty for Full Scan"
           },
           "targetDescription": {
             "description": "Description stored on the Acunetix target created for this scan. Defaults to oasm-scan.",
@@ -826,10 +825,10 @@
             "ui:widget": "password"
           },
           "templateUuid": {
-            "description": "UUID of the Nessus scan template to use.",
+            "description": "UUID of the Nessus scan template to use. Leave empty to use Basic Network Scan.",
             "title": "Scan template UUID",
             "type": "string",
-            "ui:placeholder": "ad629e16-03b6-461c-94cf-736f3f1a1c2f"
+            "ui:placeholder": "Leave empty for Basic Network Scan"
           },
           "url": {
             "description": "Base URL of the Nessus instance.",
